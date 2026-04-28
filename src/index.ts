@@ -142,6 +142,30 @@ export default {
           });
         }
 
+        case "/debug/session-biases": {
+          // Show context biases applied to the most recent session
+          const lastSession = await env.DB.prepare(
+            "SELECT session_id, mode, context_snapshot_id FROM sessions ORDER BY invoked_at DESC LIMIT 1"
+          ).first<{ session_id: string; mode: string; context_snapshot_id: number | null }>();
+          if (!lastSession) return Response.json({ error: "No sessions yet" });
+
+          const snap = lastSession.context_snapshot_id
+            ? await env.DB.prepare("SELECT * FROM context_snapshots WHERE id = ?")
+                .bind(lastSession.context_snapshot_id).first()
+            : null;
+
+          const tracks = await env.DB.prepare(
+            "SELECT track_id, source FROM session_tracks WHERE session_id = ? ORDER BY position"
+          ).bind(lastSession.session_id).all<{ track_id: string; source: string }>();
+
+          return Response.json({
+            sessionId: lastSession.session_id,
+            mode: lastSession.mode,
+            contextSnapshot: snap,
+            tracks: tracks.results,
+          });
+        }
+
         case "/debug/last-snapshot": {
           const row = await env.DB.prepare(
             "SELECT * FROM context_snapshots ORDER BY captured_at DESC LIMIT 1"

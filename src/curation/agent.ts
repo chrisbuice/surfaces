@@ -12,7 +12,8 @@ import { shouldBeFresh } from "./arc";
 import { SpotifyClient } from "../spotify/client";
 import { playTracks, queueTracks, createPlaylist, getActiveDevice } from "../spotify/playback";
 import { getTopFresh, markFreshUsed } from "../discovery/pool";
-import { captureContext, type ContextInput } from "../context/capture";
+import { captureContext, type ContextInput, type ContextSnapshot } from "../context/capture";
+import { computeContextMultiplier, summarizeBiases, type ScoredContext } from "./context_score";
 
 interface TrackCandidate {
   track_id: string;
@@ -39,6 +40,13 @@ interface SessionResult {
   familiarCount: number;
   freshCount: number;
   tracks: Array<{ id: string; name: string; artist: string; source: string }>;
+  contextSummary: {
+    daylightPhase: string;
+    weatherCondition: string | null;
+    tempF: number | null;
+    location: string | null;
+    biasesApplied: Array<{ dimension: string; bucket: string; reason: string; appliedToTracks: number; avgMultiplier: number }>;
+  };
   playlistId?: string;
 }
 
@@ -71,13 +79,40 @@ export async function startSession(
   const recentIds = new Set(recentRows.results.map(r => r.track_id));
 
   const familiarRows = await db.prepare(
-    "SELECT track_id, track_name, primary_artist_id, taste_score FROM track_taste WHERE taste_score > 0 ORDER BY taste_score DESC LIMIT 200"
+    `SELECT track_id, track_name, primary_artist_id, album_id, taste_score,
+            play_count, skip_count, complete_count, seasonal_playlist_count,
+            current_season_present
+     FROM track_taste WHERE taste_score > 0 ORDER BY taste_score DESC LIMIT 200`
   ).all<{
-    track_id: string; track_name: string; primary_artist_id: string; taste_score: number;
+    track_id: string; track_name: string; primary_artist_id: string; album_id: string | null;
+    taste_score: number; play_count: number; skip_count: number; complete_count: number;
+    seasonal_playlist_count: number; current_season_present: number;
   }>();
+
+  // Apply context multipliers to familiar tracks
+  const allBiases: Array<import("../context/rules").ContextBias> = [];
   const familiarPool: TrackCandidate[] = familiarRows.results
     .filter(t => !recentIds.has(t.track_id))
-    .map(t => ({ ...t, source: "familiar" }));
+    .map(t => {
+      const ctx = computeContextMultiplier(snapshot, mode, {
+        track_id: t.track_id,
+        play_count: t.play_count,
+        skip_count: t.skip_count,
+        complete_count: t.complete_count,
+        last_played_hour: null, // would need a join; skip for now
+        seasonal_playlist_count: t.seasonal_playlist_count,
+        current_season_present: t.current_season_present === 1,
+        album_id: t.album_id,
+      });
+      allBiases.push(...ctx.biases);
+      return {
+        track_id: t.track_id,
+        track_name: t.track_name,
+        primary_artist_id: t.primary_artist_id,
+        taste_score: t.taste_score * ctx.multiplier,
+        source: "familiar",
+      };
+    });
 
   // ── Build fresh candidate pool ──
   const freshEntries = await getTopFresh(db, 50);
@@ -186,22 +221,35 @@ export async function startSession(
       "UPDATE sessions SET spotify_playlist_id = ? WHERE session_id = ?"
     ).bind(playlistId, sessionId).run();
 
-    return {
-      sessionId, mode, output, trackCount: selected.length,
-      familiarCount, freshCount,
-      tracks: selected.map(t => ({
-        id: t.track_id, name: t.track_name, artist: t.primary_artist_id, source: t.source,
-      })),
-      playlistId,
-    };
+    return buildResult(selected, sessionId, mode, output, familiarCount, freshCount, snapshot, allBiases, playlistId);
   }
 
+  return buildResult(selected, sessionId, mode, output, familiarCount, freshCount, snapshot, allBiases);
+}
+
+function buildResult(
+  selected: TrackCandidate[],
+  sessionId: string, mode: string, output: string,
+  familiarCount: number, freshCount: number,
+  snapshot: ContextSnapshot,
+  allBiases: Array<import("../context/rules").ContextBias>,
+  playlistId?: string
+): SessionResult {
   return {
-    sessionId, mode, output, trackCount: selected.length,
+    sessionId, mode, output,
+    trackCount: selected.length,
     familiarCount, freshCount,
     tracks: selected.map(t => ({
       id: t.track_id, name: t.track_name, artist: t.primary_artist_id, source: t.source,
     })),
+    contextSummary: {
+      daylightPhase: snapshot.daylightPhase,
+      weatherCondition: snapshot.weatherCondition,
+      tempF: snapshot.weatherTempF,
+      location: snapshot.locationLabel,
+      biasesApplied: summarizeBiases(allBiases),
+    },
+    ...(playlistId ? { playlistId } : {}),
   };
 }
 
