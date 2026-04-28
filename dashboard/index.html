@@ -197,13 +197,24 @@
         }
         const capturedDate = new Date(snap.captured_at * 1000);
         const timeStr = capturedDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-        // Use live device from now-playing, fall back to snapshot
-        const deviceDisplay = nowPlaying.device_name ? `${nowPlaying.device_name} (${nowPlaying.device_type})` : snap.device_type || 'unknown';
+        // Device: prefer live from now-playing, then snapshot
+        const deviceDisplay = nowPlaying.device_name
+          ? `${nowPlaying.device_name} (${nowPlaying.device_type})`
+          : snap.device_type || 'No active device';
+        // Location: show label + source, or coords if no label
+        let locationDisplay;
+        if (snap.location_label) {
+          locationDisplay = `${snap.location_label} (${snap.location_source})`;
+        } else if (snap.location_lat && snap.location_lon) {
+          locationDisplay = `${snap.location_lat.toFixed(2)}, ${snap.location_lon.toFixed(2)} (${snap.location_source})`;
+        } else {
+          locationDisplay = 'No location data';
+        }
         const items = [
           { label: 'Captured', value: timeStr },
           { label: 'Daylight', value: snap.daylight_phase },
           { label: 'Weather', value: `${snap.weather_condition || 'unknown'}, ${snap.weather_temp_f ? snap.weather_temp_f + '\u00b0F' : '?'}` },
-          { label: 'Location', value: `${snap.location_label || 'unknown'} (${snap.location_source})` },
+          { label: 'Location', value: locationDisplay },
           { label: 'Device', value: deviceDisplay },
           { label: 'Wind', value: snap.weather_wind_mph ? snap.weather_wind_mph + ' mph' : '?' },
           { label: 'Cloud', value: snap.weather_cloud_pct != null ? snap.weather_cloud_pct + '%' : '?' },

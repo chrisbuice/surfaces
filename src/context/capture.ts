@@ -169,9 +169,24 @@ export async function captureContext(
     else daylightPhase = "night";
   }
 
-  // ── Device type + playback context from most recent poll observation ──
-  const lastObs = await getLastObservation(db);
-  const deviceType = lastObs?.device_type ?? null;
+  // ── Device type: try KV cache first (updated every poll), fall back to observation ──
+  let deviceType: string | null = null;
+  if (kv) {
+    const deviceRaw = await kv.get("context:current_device");
+    if (deviceRaw) {
+      try {
+        const device = JSON.parse(deviceRaw);
+        // Only use if recent (last 5 minutes)
+        if (now - device.updatedAt < 300) {
+          deviceType = device.type;
+        }
+      } catch { /* fall through */ }
+    }
+  }
+  if (!deviceType) {
+    const lastObs = await getLastObservation(db);
+    deviceType = lastObs?.device_type ?? null;
+  }
 
   // ── Build snapshot ──
   const snapshot: ContextSnapshot = {
