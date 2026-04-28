@@ -87,14 +87,67 @@ export default {
           const spotify = new SpotifyClient(env);
           const body = await request.json() as {
             mode?: string; output?: string; duration_min?: number; device_id?: string;
+            fresh_bias?: number; context?: Record<string, unknown>;
           };
           const result = await startSession(env.DB, spotify, {
             mode: body.mode,
             output: body.output as "play_now" | "queue" | "playlist" | undefined,
             durationMin: body.duration_min,
             deviceId: body.device_id,
+            freshBias: body.fresh_bias,
+            context: body.context ? {
+              locationLabel: (body.context.location_label as string) ?? null,
+              locationLat: (body.context.location_lat as number) ?? null,
+              locationLon: (body.context.location_lon as number) ?? null,
+              isInMotion: (body.context.is_in_motion as number) ?? null,
+              bluetoothContext: (body.context.bluetooth_context as string) ?? null,
+              userNote: (body.context.user_note as string) ?? null,
+            } : null,
           });
           return Response.json(result);
+        }
+
+        case "/shortcut/start": {
+          if (request.method !== "POST") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          // Bearer token auth
+          const authHeader = request.headers.get("Authorization");
+          const token = authHeader?.replace("Bearer ", "");
+          if (token !== env.SHORTCUT_TOKEN) {
+            return new Response("Unauthorized", { status: 401 });
+          }
+          const spotify = new SpotifyClient(env);
+          const shortcutBody = await request.json() as {
+            mode?: string; minutes?: number;
+            context?: { location_label?: string; location_lat?: number; location_lon?: number;
+                        is_in_motion?: number; bluetooth_context?: string; user_note?: string };
+          };
+          const shortcutResult = await startSession(env.DB, spotify, {
+            mode: shortcutBody.mode,
+            output: "play_now",
+            durationMin: shortcutBody.minutes,
+            context: shortcutBody.context ? {
+              locationLabel: shortcutBody.context.location_label ?? null,
+              locationLat: shortcutBody.context.location_lat ?? null,
+              locationLon: shortcutBody.context.location_lon ?? null,
+              isInMotion: shortcutBody.context.is_in_motion ?? null,
+              bluetoothContext: shortcutBody.context.bluetooth_context ?? null,
+              userNote: shortcutBody.context.user_note ?? null,
+            } : null,
+          });
+          return Response.json({
+            ok: true,
+            summary: `Started ${shortcutResult.mode} session, ${shortcutResult.trackCount} tracks (${shortcutResult.familiarCount} familiar, ${shortcutResult.freshCount} fresh).`,
+          });
+        }
+
+        case "/debug/last-snapshot": {
+          const row = await env.DB.prepare(
+            "SELECT * FROM context_snapshots ORDER BY captured_at DESC LIMIT 1"
+          ).first();
+          if (!row) return Response.json({ error: "No snapshots yet" });
+          return Response.json(row);
         }
 
         case "/debug/run-discovery": {

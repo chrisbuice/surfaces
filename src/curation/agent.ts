@@ -12,6 +12,7 @@ import { shouldBeFresh } from "./arc";
 import { SpotifyClient } from "../spotify/client";
 import { playTracks, queueTracks, createPlaylist, getActiveDevice } from "../spotify/playback";
 import { getTopFresh, markFreshUsed } from "../discovery/pool";
+import { captureContext, type ContextInput } from "../context/capture";
 
 interface TrackCandidate {
   track_id: string;
@@ -26,7 +27,8 @@ interface StartSessionInput {
   output?: "play_now" | "queue" | "playlist" | null;
   durationMin?: number | null;
   deviceId?: string | null;
-  freshBias?: number | null; // -1 to +1 shift on freshness
+  freshBias?: number | null;
+  context?: ContextInput | null;
 }
 
 interface SessionResult {
@@ -45,6 +47,11 @@ export async function startSession(
   spotify: SpotifyClient,
   input: StartSessionInput
 ): Promise<SessionResult> {
+  // ── Capture context snapshot ──
+  const { snapshotId, snapshot } = await captureContext(
+    db, "session_start", input.context ?? {}
+  );
+
   const mode = resolveMode(input.mode);
   const modeConfig = MODES[mode];
   const output = input.output ?? modeConfig.defaultOutput;
@@ -137,9 +144,9 @@ export async function startSession(
   const freshRatioTarget = targetTrackCount > 0 ? freshCount / targetTrackCount : 0;
 
   await db.prepare(`
-    INSERT INTO sessions (session_id, mode, invoked_at, invoked_via, fresh_ratio_target, duration_target_min, output)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(sessionId, mode, now, "api", freshRatioTarget, durationMin, output).run();
+    INSERT INTO sessions (session_id, mode, invoked_at, invoked_via, fresh_ratio_target, duration_target_min, output, context_snapshot_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(sessionId, mode, now, "api", freshRatioTarget, durationMin, output, snapshotId).run();
 
   const trackInserts = selected.map((t, i) =>
     db.prepare(
