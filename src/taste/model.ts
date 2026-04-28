@@ -113,6 +113,34 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient):
     }
   }
 
+  // ── Add tracks from play history (so every played track gets a score) ──
+  const playedTracks = await db.prepare(`
+    SELECT DISTINCT pe.track_id, po.track_name, po.artist_ids, po.album_id
+    FROM play_events pe
+    LEFT JOIN poll_observations po ON po.track_id = pe.track_id
+    WHERE po.track_name IS NOT NULL
+    GROUP BY pe.track_id
+  `).all<{ track_id: string; track_name: string; artist_ids: string; album_id: string | null }>();
+
+  for (const row of playedTracks.results) {
+    if (!tracks.has(row.track_id)) {
+      let artistIds: string[] = [];
+      try { artistIds = JSON.parse(row.artist_ids); } catch { /* skip */ }
+      tracks.set(row.track_id, {
+        track_name: row.track_name,
+        artist_ids: artistIds,
+        primary_artist_id: artistIds[0] ?? "",
+        album_id: row.album_id,
+        in_liked_songs: false,
+        in_top_tracks_short: false,
+        in_top_tracks_medium: false,
+        in_top_tracks_long: false,
+        seasonal_playlist_count: 0,
+        current_season_present: false,
+      });
+    }
+  }
+
   // ── Build artist accumulators ──
   const artists = new Map<string, ArtistAccumulator>();
 
