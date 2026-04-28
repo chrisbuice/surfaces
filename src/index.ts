@@ -3,6 +3,7 @@ import { SpotifyClient } from "./spotify/client";
 import { handlePoll } from "./tracker/poll";
 import { derivePlayEvents } from "./tracker/derive";
 import { getRecentPollObservations, getRecentPlayEvents, pruneOldObservations } from "./db/queries";
+import { rebuildTasteModel } from "./taste/model";
 
 export interface Env {
   DB: D1Database;
@@ -44,9 +45,36 @@ export default {
         }
 
         case "/debug/derive": {
-          // Manual trigger for derivation (useful for testing)
           const count = await derivePlayEvents(env.DB);
           return Response.json({ derived: count });
+        }
+
+        case "/debug/rebuild-taste": {
+          const spotify = new SpotifyClient(env);
+          const result = await rebuildTasteModel(env.DB, spotify);
+          return Response.json(result);
+        }
+
+        case "/debug/top-tracks-by-score": {
+          const limit = url.searchParams.get("limit") ?? "30";
+          const rows = await env.DB.prepare(
+            "SELECT track_id, track_name, primary_artist_id, taste_score, in_liked_songs, in_top_tracks_short, in_top_tracks_medium, seasonal_playlist_count, play_count, skip_count FROM track_taste ORDER BY taste_score DESC LIMIT ?"
+          ).bind(parseInt(limit)).all();
+          return Response.json(rows.results);
+        }
+
+        case "/debug/seasonal-playlists": {
+          const rows = await env.DB.prepare(
+            "SELECT * FROM seasonal_playlists ORDER BY year DESC, season"
+          ).all();
+          return Response.json(rows.results);
+        }
+
+        case "/debug/top-artists": {
+          const rows = await env.DB.prepare(
+            "SELECT artist_id, artist_name, taste_score, in_top_artists_short, in_top_artists_medium, is_followed, total_plays FROM artist_taste ORDER BY taste_score DESC LIMIT 30"
+          ).all();
+          return Response.json(rows.results);
         }
 
         default:
@@ -68,9 +96,10 @@ export default {
     }
 
     if (cron === "0 5 * * *") {
-      // Daily at 5am UTC (1am ET): derive play events + prune old observations
+      // Daily at 5am UTC (1am ET): derive, rebuild taste model, prune
       await derivePlayEvents(env.DB);
-      // Prune observations older than 30 days
+      const spotify = new SpotifyClient(env);
+      await rebuildTasteModel(env.DB, spotify);
       await pruneOldObservations(env.DB, 30 * 24 * 60 * 60);
     }
   },
