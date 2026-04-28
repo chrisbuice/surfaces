@@ -217,7 +217,7 @@
       }
     }
 
-    // Like a track (add to Spotify saved songs)
+    // Like a track (add to "Liked via Agent" playlist)
     async function likeTrack(btn, trackId) {
       const original = btn.innerHTML;
       btn.textContent = '...';
@@ -226,17 +226,36 @@
         if (resp.ok) {
           btn.innerHTML = '&#9829;';
           btn.className = 'queue-btn done';
+          btn.title = 'Added to Liked via Agent';
         } else {
           btn.innerHTML = original;
-          btn.title = 'Blocked by Spotify Dev Mode';
+          btn.title = resp.error || 'Failed';
           btn.style.borderColor = '#e74c3c';
           btn.style.color = '#e74c3c';
         }
       } catch {
         btn.innerHTML = original;
-        btn.title = 'Blocked by Spotify Dev Mode';
-        btn.style.borderColor = '#e74c3c';
-        btn.style.color = '#e74c3c';
+      }
+    }
+
+    // Block a track (add to "Blocked" playlist, excluded from future curation)
+    async function blockTrack(btn, trackId) {
+      btn.textContent = '...';
+      try {
+        const resp = await apiPost('/api/block-track', { track_id: trackId });
+        if (resp.ok) {
+          btn.innerHTML = '&#10005;';
+          btn.className = 'queue-btn done';
+          btn.style.borderColor = '#e74c3c';
+          btn.style.color = '#e74c3c';
+          btn.title = 'Blocked from future sessions';
+          // Dim the whole row
+          btn.closest('tr').style.opacity = '0.4';
+        } else {
+          btn.innerHTML = '&#10005;';
+        }
+      } catch {
+        btn.innerHTML = '&#10005;';
       }
     }
 
@@ -323,7 +342,10 @@
             <td>${name}</td>
             <td><span class="badge ${badgeClass(e.classification)}">${e.classification}</span></td>
             <td class="score">${score}</td>
-            <td><button class="queue-btn" onclick="likeTrack(this, '${e.track_id}')">&#9825;</button></td>
+            <td style="white-space:nowrap;">
+              <button class="queue-btn" onclick="likeTrack(this, '${e.track_id}')" title="Add to Liked via Agent playlist">&#9825;</button>
+              <button class="queue-btn" onclick="blockTrack(this, '${e.track_id}')" title="Block from future sessions" style="margin-left:4px;">&#10005;</button>
+            </td>
           </tr>`;
         }).join('');
         html += '</table>';

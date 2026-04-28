@@ -73,6 +73,21 @@ export async function startSession(
     freshMultiplier = Math.max(0, freshMultiplier + input.freshBias * 0.5);
   }
 
+  // ── Load blocked tracks from the "Blocked" playlist ──
+  const blockedIds = new Set<string>();
+  if (kv) {
+    const blockedPlaylistId = await kv.get("playlist:blocked");
+    if (blockedPlaylistId) {
+      try {
+        const { getPlaylistTracks } = await import("../spotify/library");
+        const blockedTracks = await getPlaylistTracks(spotify, blockedPlaylistId, 500);
+        for (const item of blockedTracks) {
+          if (item.track?.id) blockedIds.add(item.track.id);
+        }
+      } catch { /* playlist may not exist yet */ }
+    }
+  }
+
   // ── Build familiar candidate pool ──
   const recentRows = await db.prepare(
     "SELECT DISTINCT track_id FROM play_events ORDER BY started_at DESC LIMIT ?"
@@ -108,7 +123,7 @@ export async function startSession(
   // Apply context multipliers to familiar tracks (cold-start + learned)
   const allBiases: Array<import("../context/rules").ContextBias> = [];
   const familiarPool: TrackCandidate[] = familiarRows.results
-    .filter(t => !recentIds.has(t.track_id))
+    .filter(t => !recentIds.has(t.track_id) && !blockedIds.has(t.track_id))
     .map(t => {
       const ctx = computeContextMultiplier(snapshot, mode, {
         track_id: t.track_id,
@@ -133,7 +148,7 @@ export async function startSession(
   // ── Build fresh candidate pool ──
   const freshEntries = await getTopFresh(db, 50);
   const freshPool: TrackCandidate[] = freshEntries
-    .filter(f => !recentIds.has(f.track_id))
+    .filter(f => !recentIds.has(f.track_id) && !blockedIds.has(f.track_id))
     .map(f => ({
       track_id: f.track_id,
       track_name: f.track_name,

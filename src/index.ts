@@ -323,23 +323,42 @@ export default {
           return Response.json(stats);
         }
 
-        case "/api/like-track": {
+        case "/api/like-track":
+        case "/api/block-track": {
           if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
           const spotify = new SpotifyClient(env);
-          const { track_id: likeTrackId } = await request.json() as { track_id: string };
-          if (!likeTrackId) return Response.json({ ok: false, error: "track_id required" });
-          try {
-            // Try /me/tracks with URIs first (may work in newer Dev Mode)
-            await spotify.put("/v1/me/tracks", { uris: [`spotify:track:${likeTrackId}`] });
-            return Response.json({ ok: true });
-          } catch {
+          const { track_id: actionTrackId } = await request.json() as { track_id: string };
+          if (!actionTrackId) return Response.json({ ok: false, error: "track_id required" });
+
+          const isBlock = url.pathname === "/api/block-track";
+          const kvKey = isBlock ? "playlist:blocked" : "playlist:liked";
+          const playlistName = isBlock ? "Blocked" : "Liked via Agent";
+
+          // Get or create the dedicated playlist
+          let playlistId = await env.KV.get(kvKey);
+          if (!playlistId) {
             try {
-              // Fallback: try with IDs
-              await spotify.put("/v1/me/tracks", { ids: [likeTrackId] });
-              return Response.json({ ok: true });
+              const pl = await spotify.post<{ id: string }>("/v1/me/playlists", {
+                name: playlistName, public: false,
+                description: isBlock
+                  ? "Tracks blocked from curation agent — do not play"
+                  : "Tracks liked from the curation agent dashboard",
+              });
+              playlistId = pl.id;
+              await env.KV.put(kvKey, playlistId);
             } catch {
-              return Response.json({ ok: false, error: "Blocked by Spotify Dev Mode" });
+              return Response.json({ ok: false, error: "Failed to create playlist" });
             }
+          }
+
+          // Add track to the playlist
+          try {
+            await spotify.post(`/v1/playlists/${playlistId}/items`, {
+              uris: [`spotify:track:${actionTrackId}`],
+            });
+            return Response.json({ ok: true, playlist: playlistName });
+          } catch (e) {
+            return Response.json({ ok: false, error: String(e) });
           }
         }
 
