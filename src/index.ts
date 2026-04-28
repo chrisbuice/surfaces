@@ -1,5 +1,8 @@
 import { handleLogin, handleCallback } from "./auth/spotify-oauth";
 import { SpotifyClient } from "./spotify/client";
+import { handlePoll } from "./tracker/poll";
+import { derivePlayEvents } from "./tracker/derive";
+import { getRecentPollObservations, getRecentPlayEvents, pruneOldObservations } from "./db/queries";
 
 export interface Env {
   DB: D1Database;
@@ -30,6 +33,22 @@ export default {
           return Response.json({ display_name: profile.display_name, id: profile.id });
         }
 
+        case "/debug/recent-observations": {
+          const obs = await getRecentPollObservations(env.DB, 20);
+          return Response.json(obs);
+        }
+
+        case "/debug/recent-events": {
+          const events = await getRecentPlayEvents(env.DB, 20);
+          return Response.json(events);
+        }
+
+        case "/debug/derive": {
+          // Manual trigger for derivation (useful for testing)
+          const count = await derivePlayEvents(env.DB);
+          return Response.json({ derived: count });
+        }
+
         default:
           return new Response("Not found", { status: 404 });
       }
@@ -40,6 +59,19 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    // Cron handlers will go here in M2+
+    const cron = controller.cron;
+
+    if (cron === "* * * * *") {
+      // Every minute: poll Spotify for currently-playing, then derive events
+      await handlePoll(env);
+      await derivePlayEvents(env.DB);
+    }
+
+    if (cron === "0 5 * * *") {
+      // Daily at 5am UTC (1am ET): derive play events + prune old observations
+      await derivePlayEvents(env.DB);
+      // Prune observations older than 30 days
+      await pruneOldObservations(env.DB, 30 * 24 * 60 * 60);
+    }
   },
 } satisfies ExportedHandler<Env>;

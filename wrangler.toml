@@ -13,6 +13,9 @@ database_id = "a639e396-3fb1-4db6-b5a5-ce61c60d5779"
 binding = "KV"
 id = "7055b925a6b74bd39150201370724eeb"
 
-# ── Cron triggers (added in M2) ──
-# [triggers]
-# crons = ["* * * * *"]
+# ── Cron triggers ──
+[triggers]
+crons = [
+  "* * * * *",       # every minute: poll currently-playing
+  "0 5 * * *",       # daily 5am UTC (1am ET): derive play_events + prune
+]

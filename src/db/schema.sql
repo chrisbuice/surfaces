@@ -1,0 +1,221 @@
+-- =========================================================
+-- USER & AUTH
+-- =========================================================
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY,
+  spotify_user_id TEXT UNIQUE NOT NULL,
+  display_name TEXT,
+  created_at INTEGER NOT NULL
+);
+
+-- =========================================================
+-- LISTENING HISTORY
+-- =========================================================
+CREATE TABLE IF NOT EXISTS poll_observations (
+  id INTEGER PRIMARY KEY,
+  observed_at INTEGER NOT NULL,
+  is_playing INTEGER NOT NULL,
+  track_id TEXT,
+  track_name TEXT,
+  artist_ids TEXT,
+  album_id TEXT,
+  progress_ms INTEGER,
+  duration_ms INTEGER,
+  device_type TEXT,
+  context_uri TEXT,
+  context_type TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_poll_observed_at ON poll_observations(observed_at);
+CREATE INDEX IF NOT EXISTS idx_poll_track ON poll_observations(track_id);
+
+CREATE TABLE IF NOT EXISTS play_events (
+  id INTEGER PRIMARY KEY,
+  track_id TEXT NOT NULL,
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER NOT NULL,
+  duration_listened_ms INTEGER NOT NULL,
+  track_duration_ms INTEGER,
+  classification TEXT NOT NULL,
+  context_uri TEXT,
+  context_type TEXT,
+  device_type TEXT,
+  hour_of_day INTEGER,
+  day_of_week INTEGER,
+  session_id TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_play_events_track ON play_events(track_id);
+CREATE INDEX IF NOT EXISTS idx_play_events_started ON play_events(started_at);
+CREATE INDEX IF NOT EXISTS idx_play_events_hour ON play_events(hour_of_day);
+
+-- =========================================================
+-- TASTE MODEL
+-- =========================================================
+CREATE TABLE IF NOT EXISTS track_taste (
+  track_id TEXT PRIMARY KEY,
+  track_name TEXT NOT NULL,
+  artist_ids TEXT NOT NULL,
+  primary_artist_id TEXT NOT NULL,
+  album_id TEXT,
+  in_liked_songs INTEGER DEFAULT 0,
+  in_top_tracks_short INTEGER DEFAULT 0,
+  in_top_tracks_medium INTEGER DEFAULT 0,
+  in_top_tracks_long INTEGER DEFAULT 0,
+  seasonal_playlist_count INTEGER DEFAULT 0,
+  current_season_present INTEGER DEFAULT 0,
+  play_count INTEGER DEFAULT 0,
+  skip_count INTEGER DEFAULT 0,
+  complete_count INTEGER DEFAULT 0,
+  last_played_at INTEGER,
+  taste_score REAL,
+  refreshed_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_track_taste_score ON track_taste(taste_score DESC);
+CREATE INDEX IF NOT EXISTS idx_track_taste_artist ON track_taste(primary_artist_id);
+
+CREATE TABLE IF NOT EXISTS artist_taste (
+  artist_id TEXT PRIMARY KEY,
+  artist_name TEXT NOT NULL,
+  in_top_artists_short INTEGER DEFAULT 0,
+  in_top_artists_medium INTEGER DEFAULT 0,
+  in_top_artists_long INTEGER DEFAULT 0,
+  is_followed INTEGER DEFAULT 0,
+  total_plays INTEGER DEFAULT 0,
+  unique_tracks_played INTEGER DEFAULT 0,
+  taste_score REAL,
+  refreshed_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS mode_profiles (
+  mode TEXT PRIMARY KEY,
+  hour_distribution TEXT NOT NULL,
+  top_artists TEXT,
+  top_tracks TEXT,
+  top_playlists TEXT,
+  refreshed_at INTEGER NOT NULL
+);
+
+-- =========================================================
+-- SEASONAL PLAYLISTS
+-- =========================================================
+CREATE TABLE IF NOT EXISTS seasonal_playlists (
+  id INTEGER PRIMARY KEY,
+  spotify_playlist_id TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  season TEXT NOT NULL,
+  year INTEGER NOT NULL,
+  is_current INTEGER DEFAULT 0,
+  last_synced_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_seasonal_year ON seasonal_playlists(year DESC);
+
+-- =========================================================
+-- PHYSICAL CONTEXT
+-- =========================================================
+CREATE TABLE IF NOT EXISTS context_snapshots (
+  id INTEGER PRIMARY KEY,
+  captured_at INTEGER NOT NULL,
+  trigger TEXT NOT NULL,
+  local_hour INTEGER NOT NULL,
+  local_minute INTEGER NOT NULL,
+  day_of_week INTEGER NOT NULL,
+  daylight_phase TEXT NOT NULL,
+  sunrise_at INTEGER,
+  sunset_at INTEGER,
+  weather_temp_f REAL,
+  weather_condition TEXT,
+  weather_precipitation_mm REAL,
+  weather_wind_mph REAL,
+  weather_cloud_pct INTEGER,
+  location_label TEXT,
+  location_lat REAL,
+  location_lon REAL,
+  location_source TEXT,
+  device_type TEXT,
+  is_in_motion INTEGER,
+  bluetooth_context TEXT,
+  calendar_event_title TEXT,
+  calendar_event_category TEXT,
+  calendar_event_ends_at INTEGER,
+  user_note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_context_captured_at ON context_snapshots(captured_at);
+
+CREATE TABLE IF NOT EXISTS play_event_context (
+  play_event_id INTEGER PRIMARY KEY,
+  context_snapshot_id INTEGER NOT NULL,
+  FOREIGN KEY(play_event_id) REFERENCES play_events(id),
+  FOREIGN KEY(context_snapshot_id) REFERENCES context_snapshots(id)
+);
+
+CREATE TABLE IF NOT EXISTS track_context_affinity (
+  track_id TEXT NOT NULL,
+  dimension TEXT NOT NULL,
+  bucket TEXT NOT NULL,
+  affinity REAL NOT NULL,
+  sample_size INTEGER NOT NULL,
+  refreshed_at INTEGER NOT NULL,
+  PRIMARY KEY(track_id, dimension, bucket)
+);
+CREATE INDEX IF NOT EXISTS idx_track_context_track ON track_context_affinity(track_id);
+
+CREATE TABLE IF NOT EXISTS settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  home_lat REAL,
+  home_lon REAL,
+  home_label TEXT DEFAULT 'home',
+  time_zone TEXT NOT NULL,
+  weather_enabled INTEGER DEFAULT 1,
+  calendar_enabled INTEGER DEFAULT 0,
+  calendar_ical_url TEXT,
+  shortcut_token_hash TEXT
+);
+
+-- =========================================================
+-- DISCOVERY / FRESH POOL
+-- =========================================================
+CREATE TABLE IF NOT EXISTS fresh_pool (
+  id INTEGER PRIMARY KEY,
+  track_id TEXT NOT NULL,
+  track_name TEXT NOT NULL,
+  artist_ids TEXT NOT NULL,
+  primary_artist_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  source_detail TEXT,
+  found_at INTEGER NOT NULL,
+  taste_score REAL NOT NULL,
+  status TEXT NOT NULL DEFAULT 'fresh',
+  status_changed_at INTEGER,
+  expires_at INTEGER,
+  UNIQUE(track_id)
+);
+CREATE INDEX IF NOT EXISTS idx_fresh_status ON fresh_pool(status);
+CREATE INDEX IF NOT EXISTS idx_fresh_score ON fresh_pool(taste_score DESC);
+
+-- =========================================================
+-- SESSIONS
+-- =========================================================
+CREATE TABLE IF NOT EXISTS sessions (
+  id INTEGER PRIMARY KEY,
+  session_id TEXT UNIQUE NOT NULL,
+  mode TEXT NOT NULL,
+  invoked_at INTEGER NOT NULL,
+  invoked_via TEXT NOT NULL,
+  fresh_ratio_target REAL,
+  duration_target_min INTEGER,
+  output TEXT NOT NULL,
+  spotify_playlist_id TEXT,
+  ended_at INTEGER,
+  context_snapshot_id INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS session_tracks (
+  id INTEGER PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  track_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  was_swapped INTEGER DEFAULT 0,
+  outcome TEXT,
+  FOREIGN KEY(session_id) REFERENCES sessions(session_id)
+);
+CREATE INDEX IF NOT EXISTS idx_session_tracks_session ON session_tracks(session_id);
