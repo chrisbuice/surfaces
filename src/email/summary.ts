@@ -186,72 +186,78 @@ function renderEmail(s: DailySummary): string {
   const contextLine = (label: string, data: Record<string, number>) => {
     const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
     if (entries.length === 0) return "";
-    return `<tr><td style="color:#999;padding:4px 8px;">${label}</td><td style="padding:4px 8px;">${entries.map(([k, v]) => `${k} (${v})`).join(", ")}</td></tr>`;
+    return `<tr><td style="color:#666;padding:6px 0;font-size:14px;">${label}</td><td style="padding:6px 0;font-size:14px;color:#333;">${entries.map(([k, v]) => `${k} (${v})`).join(", ")}</td></tr>`;
   };
 
   return `
-<div style="font-family:-apple-system,sans-serif;max-width:500px;margin:0 auto;background:#1a1a1a;color:#e0e0e0;padding:24px;border-radius:12px;">
-  <h1 style="color:#1db954;font-size:20px;margin:0 0 16px;">Daily Listening Summary</h1>
-
-  <div style="display:flex;gap:12px;margin-bottom:20px;">
-    <div style="background:#282828;padding:12px;border-radius:8px;flex:1;text-align:center;">
-      <div style="font-size:28px;font-weight:700;color:#1db954;">${s.totalTracks}</div>
-      <div style="font-size:12px;color:#999;">tracks</div>
-    </div>
-    <div style="background:#282828;padding:12px;border-radius:8px;flex:1;text-align:center;">
-      <div style="font-size:28px;font-weight:700;color:#1db954;">${s.totalMinutes}</div>
-      <div style="font-size:12px;color:#999;">minutes</div>
-    </div>
-    <div style="background:#282828;padding:12px;border-radius:8px;flex:1;text-align:center;">
-      <div style="font-size:28px;font-weight:700;color:${s.skipRate > 30 ? "#e74c3c" : "#1db954"};">${s.skipRate}%</div>
-      <div style="font-size:12px;color:#999;">skip rate</div>
-    </div>
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:500px;margin:0 auto;background:#ffffff;color:#333;padding:28px;border-radius:12px;">
+  <div style="margin-bottom:24px;">
+    <span style="font-size:22px;font-weight:700;color:#191414;">Daily Listening Summary</span>
   </div>
 
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+    <tr>
+      <td width="33%" style="background:#f5f5f5;padding:16px 8px;border-radius:8px;text-align:center;">
+        <div style="font-size:32px;font-weight:700;color:#1db954;">${s.totalTracks}</div>
+        <div style="font-size:13px;color:#666;margin-top:4px;">tracks</div>
+      </td>
+      <td width="4"></td>
+      <td width="33%" style="background:#f5f5f5;padding:16px 8px;border-radius:8px;text-align:center;">
+        <div style="font-size:32px;font-weight:700;color:#1db954;">${s.totalMinutes}</div>
+        <div style="font-size:13px;color:#666;margin-top:4px;">minutes</div>
+      </td>
+      <td width="4"></td>
+      <td width="33%" style="background:#f5f5f5;padding:16px 8px;border-radius:8px;text-align:center;">
+        <div style="font-size:32px;font-weight:700;color:${s.skipRate > 30 ? "#e74c3c" : "#1db954"};">${s.skipRate}%</div>
+        <div style="font-size:13px;color:#666;margin-top:4px;">skip rate</div>
+      </td>
+    </tr>
+  </table>
+
   ${s.completed + s.skipped + s.partial > 0 ? `
-  <div style="margin-bottom:20px;font-size:13px;color:#999;">
-    ${s.completed} completed · ${s.skipped} skipped · ${s.partial} partial
+  <div style="margin-bottom:24px;font-size:14px;color:#666;">
+    ${s.completed} completed &middot; ${s.skipped} skipped &middot; ${s.partial} partial
   </div>` : ""}
 
   ${s.topTracks.length > 0 ? `
-  <h2 style="font-size:14px;color:#b3b3b3;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Most Played</h2>
-  <table style="width:100%;margin-bottom:20px;">
-    ${s.topTracks.map(t => `<tr><td style="padding:4px 8px;">${t.name}</td><td style="padding:4px 8px;color:#1db954;text-align:right;">${t.count}x</td></tr>`).join("")}
+  <div style="font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;border-bottom:2px solid #f0f0f0;padding-bottom:6px;">Most Played</div>
+  <table style="width:100%;margin-bottom:24px;">
+    ${s.topTracks.map(t => `<tr><td style="padding:6px 0;font-size:15px;color:#333;">${t.name}</td><td style="padding:6px 0;font-size:15px;color:#1db954;text-align:right;font-weight:600;">${t.count}x</td></tr>`).join("")}
   </table>` : ""}
 
   ${s.topArtists.length > 0 ? `
-  <h2 style="font-size:14px;color:#b3b3b3;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Top Artists</h2>
-  <table style="width:100%;margin-bottom:20px;">
-    ${s.topArtists.map(a => `<tr><td style="padding:4px 8px;">${a.name}</td><td style="padding:4px 8px;color:#1db954;text-align:right;">${a.count} plays</td></tr>`).join("")}
+  <div style="font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;border-bottom:2px solid #f0f0f0;padding-bottom:6px;">Top Artists</div>
+  <table style="width:100%;margin-bottom:24px;">
+    ${s.topArtists.map(a => `<tr><td style="padding:6px 0;font-size:15px;color:#333;">${a.name}</td><td style="padding:6px 0;font-size:15px;color:#1db954;text-align:right;font-weight:600;">${a.count} plays</td></tr>`).join("")}
   </table>` : ""}
 
   ${s.freshTracksPlayed > 0 ? `
-  <h2 style="font-size:14px;color:#b3b3b3;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Discovery</h2>
-  <div style="margin-bottom:20px;font-size:13px;">
-    ${s.freshTracksPlayed} fresh tracks played · ${s.freshTracksCompleted} completed · ${s.freshTracksSkipped} skipped
-    ${s.newInPool > 0 ? `<br>${s.newInPool} new candidates added to pool` : ""}
+  <div style="font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;border-bottom:2px solid #f0f0f0;padding-bottom:6px;">Discovery</div>
+  <div style="margin-bottom:24px;font-size:14px;color:#333;">
+    ${s.freshTracksPlayed} fresh tracks played &middot; ${s.freshTracksCompleted} completed &middot; ${s.freshTracksSkipped} skipped
+    ${s.newInPool > 0 ? `<br style="margin-top:4px;">${s.newInPool} new candidates added to pool` : ""}
   </div>` : s.newInPool > 0 ? `
-  <div style="margin-bottom:20px;font-size:13px;color:#999;">
+  <div style="margin-bottom:24px;font-size:14px;color:#666;">
     ${s.newInPool} new discovery candidates added to pool
   </div>` : ""}
 
   ${s.modesSessions.length > 0 ? `
-  <h2 style="font-size:14px;color:#b3b3b3;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Sessions</h2>
-  <div style="margin-bottom:20px;font-size:13px;">
-    ${s.modesSessions.map(m => `${m.mode} (${m.count})`).join(" · ")}
+  <div style="font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;border-bottom:2px solid #f0f0f0;padding-bottom:6px;">Sessions</div>
+  <div style="margin-bottom:24px;font-size:14px;color:#333;">
+    ${s.modesSessions.map(m => `${m.mode} (${m.count})`).join(" &middot; ")}
   </div>` : ""}
 
   ${Object.values(s.contextBreakdown).some(d => Object.keys(d).length > 0) ? `
-  <h2 style="font-size:14px;color:#b3b3b3;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Context</h2>
-  <table style="width:100%;margin-bottom:20px;font-size:13px;">
+  <div style="font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;border-bottom:2px solid #f0f0f0;padding-bottom:6px;">Context</div>
+  <table style="width:100%;margin-bottom:24px;">
     ${contextLine("Weather", s.contextBreakdown.weather)}
     ${contextLine("Daylight", s.contextBreakdown.daylight)}
     ${contextLine("Device", s.contextBreakdown.device)}
     ${contextLine("Location", s.contextBreakdown.location)}
   </table>` : ""}
 
-  <div style="font-size:11px;color:#555;margin-top:16px;border-top:1px solid #333;padding-top:12px;">
-    Spotify Agent · <a href="https://spotify-agent-dashboard.pages.dev" style="color:#1db954;">Open Dashboard</a>
+  <div style="font-size:12px;color:#999;margin-top:20px;border-top:1px solid #eee;padding-top:16px;">
+    Spotify Agent &middot; <a href="https://spotify-agent-dashboard.pages.dev" style="color:#1db954;text-decoration:none;font-weight:500;">Open Dashboard</a>
   </div>
 </div>`;
 }
