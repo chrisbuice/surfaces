@@ -1,0 +1,15 @@
+{
+  "name": "spotify-agent",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 execute spotify-agent-db --file=src/db/schema.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250424.0",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.83.0"
+  }
+}

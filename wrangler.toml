@@ -1,0 +1,18 @@
+name = "spotify-agent"
+main = "src/index.ts"
+compatibility_date = "2025-04-28"
+
+# ── D1 database ──
+[[d1_databases]]
+binding = "DB"
+database_name = "spotify-agent-db"
+database_id = "a639e396-3fb1-4db6-b5a5-ce61c60d5779"
+
+# ── KV namespace ──
+[[kv_namespaces]]
+binding = "KV"
+id = "7055b925a6b74bd39150201370724eeb"
+
+# ── Cron triggers (added in M2) ──
+# [triggers]
+# crons = ["* * * * *"]

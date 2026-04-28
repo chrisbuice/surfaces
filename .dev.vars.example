@@ -1,0 +1,5 @@
+# Copy this file to .dev.vars and fill in values for local development.
+# These are secrets — never commit .dev.vars to git.
+SPOTIFY_CLIENT_ID=your_client_id_here
+SPOTIFY_CLIENT_SECRET=your_client_secret_here
+SHORTCUT_TOKEN=your_random_token_here
