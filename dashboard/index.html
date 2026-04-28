@@ -48,6 +48,9 @@
     .badge-partial { background: #f39c1233; color: #f39c12; }
     .badge-replayed { background: #9b59b633; color: #9b59b6; }
     .history-time { color: #777; font-size: 12px; white-space: nowrap; }
+    .reason-tag { display: inline-block; background: #282828; padding: 2px 8px; border-radius: 10px; font-size: 11px; color: #b3b3b3; margin: 2px 4px 2px 0; }
+    .reason-tag.context { background: #1db95422; color: #1db954; }
+    .reason-tag.fresh { background: #9b59b622; color: #9b59b6; }
     .queue-btn { background: none; border: 1px solid #555; color: #b3b3b3; padding: 3px 10px; border-radius: 12px; cursor: pointer; font-size: 12px; white-space: nowrap; }
     .queue-btn:hover { border-color: #1db954; color: #1db954; }
     .queue-btn.done { border-color: #1db954; color: #1db954; pointer-events: none; }
@@ -88,6 +91,15 @@
     </div>
     <div id="session-status" class="status-msg" style="display:none;"></div>
     <div id="session-queue" style="display:none; margin-top:12px;"></div>
+  </div>
+
+  <!-- Why These Tracks -->
+  <div class="card" id="explain-card" style="display:none;">
+    <div class="card-header">
+      <h2>Why These Tracks</h2>
+      <button class="refresh-btn" onclick="loadExplanation()">Refresh</button>
+    </div>
+    <div id="explain-content"></div>
   </div>
 
   <!-- Context -->
@@ -225,6 +237,34 @@
         ).join('');
       } catch (e) {
         document.getElementById('context-grid').innerHTML = `<div class="status-msg error">${e.message}</div>`;
+      }
+    }
+
+    // Why These Tracks — explain session picks
+    async function loadExplanation() {
+      try {
+        const data = await api('/api/session-explain');
+        if (data.error) {
+          document.getElementById('explain-card').style.display = 'none';
+          return;
+        }
+        document.getElementById('explain-card').style.display = 'block';
+        let html = '<table><tr><th>#</th><th>Track</th><th>Why</th></tr>';
+        html += data.tracks.map(t => {
+          const isFresh = t.source.includes('fresh');
+          const tags = t.reasons.map(r => {
+            const cls = r.startsWith('Weather') || r.startsWith('Night') ? 'reason-tag context'
+              : r.startsWith('Discovery') || r.startsWith('Fresh') ? 'reason-tag fresh'
+              : 'reason-tag';
+            return `<span class="${cls}">${r}</span>`;
+          }).join('');
+          const outcomeStr = t.outcome ? ` <span class="badge badge-${t.outcome}">${t.outcome}</span>` : '';
+          return `<tr><td style="color:#b3b3b3;">${t.position}</td><td>${t.trackName}${outcomeStr}</td><td>${tags}</td></tr>`;
+        }).join('');
+        html += '</table>';
+        document.getElementById('explain-content').innerHTML = html;
+      } catch {
+        document.getElementById('explain-card').style.display = 'none';
       }
     }
 
@@ -408,6 +448,9 @@
           } else {
             document.getElementById('biases-card').style.display = 'none';
           }
+
+          // Load track explanations
+          loadExplanation();
         } catch (e) {
           status.textContent = `Error: ${e.message}`;
           status.className = 'status-msg error';
@@ -420,6 +463,7 @@
     // Initial load
     loadNowPlaying();
     loadContext();
+    loadExplanation();
     loadFreshPool();
     loadStats();
     loadHistory();

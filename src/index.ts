@@ -272,6 +272,93 @@ export default {
           });
         }
 
+        case "/api/session-explain": {
+          // Explain why each track was picked in the most recent session
+          const lastSess = await env.DB.prepare(
+            "SELECT session_id, mode, context_snapshot_id FROM sessions ORDER BY invoked_at DESC LIMIT 1"
+          ).first<{ session_id: string; mode: string; context_snapshot_id: number | null }>();
+          if (!lastSess) return Response.json({ error: "No sessions yet" });
+
+          const sessTracks = await env.DB.prepare(
+            "SELECT position, track_id, source, outcome FROM session_tracks WHERE session_id = ? ORDER BY position"
+          ).bind(lastSess.session_id).all<{
+            position: number; track_id: string; source: string; outcome: string | null;
+          }>();
+
+          // Get taste data for each track
+          const explanations = [];
+          for (const st of sessTracks.results) {
+            const taste = await env.DB.prepare(
+              `SELECT track_name, taste_score, in_liked_songs, in_top_tracks_short,
+                      in_top_tracks_medium, in_top_tracks_long, seasonal_playlist_count,
+                      current_season_present, play_count, skip_count, complete_count
+               FROM track_taste WHERE track_id = ?`
+            ).bind(st.track_id).first<{
+              track_name: string; taste_score: number; in_liked_songs: number;
+              in_top_tracks_short: number; in_top_tracks_medium: number; in_top_tracks_long: number;
+              seasonal_playlist_count: number; current_season_present: number;
+              play_count: number; skip_count: number; complete_count: number;
+            }>();
+
+            const reasons: string[] = [];
+            if (st.source === "familiar") {
+              if (taste) {
+                if (taste.in_top_tracks_short) reasons.push("In your current top tracks");
+                if (taste.in_top_tracks_medium) reasons.push("In your medium-term top tracks");
+                if (taste.in_top_tracks_long) reasons.push("In your long-term top tracks");
+                if (taste.in_liked_songs) reasons.push("In your liked songs");
+                if (taste.current_season_present) reasons.push("In your current season playlist");
+                if (taste.seasonal_playlist_count > 0 && !taste.current_season_present) reasons.push(`In ${taste.seasonal_playlist_count} seasonal playlist(s)`);
+                if (taste.play_count > 3) reasons.push(`Played ${taste.play_count} times`);
+                if (taste.complete_count > 2) reasons.push(`Completed ${taste.complete_count} times (low skip)`);
+                if (reasons.length === 0) reasons.push("Matches your taste profile");
+              } else {
+                reasons.push("Familiar track");
+              }
+            } else {
+              // Fresh track
+              const freshEntry = await env.DB.prepare(
+                "SELECT source, source_detail, taste_score FROM fresh_pool WHERE track_id = ?"
+              ).bind(st.track_id).first<{ source: string; source_detail: string | null; taste_score: number }>();
+              if (freshEntry?.source_detail) {
+                reasons.push(`Discovery: new from ${freshEntry.source_detail}`);
+              } else {
+                reasons.push("Fresh discovery");
+              }
+              reasons.push(`Predicted fit score: ${freshEntry?.taste_score?.toFixed(1) ?? "?"}`);
+            }
+
+            // Check if context biases were applied
+            if (lastSess.context_snapshot_id) {
+              const snap = await env.DB.prepare(
+                "SELECT weather_condition, daylight_phase, device_type, location_label FROM context_snapshots WHERE id = ?"
+              ).bind(lastSess.context_snapshot_id).first<{
+                weather_condition: string | null; daylight_phase: string;
+                device_type: string | null; location_label: string | null;
+              }>();
+              if (snap) {
+                if (snap.weather_condition === "rain" || snap.weather_condition === "overcast") reasons.push(`Weather bias: ${snap.weather_condition}`);
+                if (snap.daylight_phase === "night" && lastSess.mode === "unwinding") reasons.push("Night unwinding: comfort pick");
+              }
+            }
+
+            explanations.push({
+              position: st.position + 1,
+              trackName: taste?.track_name ?? st.track_id,
+              source: st.source,
+              outcome: st.outcome,
+              score: taste?.taste_score ?? null,
+              reasons,
+            });
+          }
+
+          return Response.json({
+            sessionId: lastSess.session_id,
+            mode: lastSess.mode,
+            tracks: explanations,
+          });
+        }
+
         case "/debug/rebuild-affinities": {
           const result = await rebuildAffinities(env.DB);
           return Response.json(result);
