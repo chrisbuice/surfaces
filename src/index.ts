@@ -3,6 +3,7 @@ import { SpotifyClient } from "./spotify/client";
 import { handlePoll } from "./tracker/poll";
 import { derivePlayEvents } from "./tracker/derive";
 import { getRecentPollObservations, getRecentPlayEvents, pruneOldObservations } from "./db/queries";
+import { processFeedback } from "./curation/feedback";
 import { startSession } from "./curation/agent";
 import { rebuildTasteModel } from "./taste/model";
 import { runDiscoveryAgent } from "./discovery/agent";
@@ -142,6 +143,12 @@ export default {
           });
         }
 
+        case "/debug/run-feedback": {
+          const feedbackResult = await processFeedback(env.DB);
+          if (!feedbackResult) return Response.json({ message: "No active session" });
+          return Response.json(feedbackResult);
+        }
+
         case "/debug/session-biases": {
           // Show context biases applied to the most recent session
           const lastSession = await env.DB.prepare(
@@ -265,6 +272,11 @@ export default {
       // Daily at 10am UTC (6am ET): run discovery agent
       const spotify = new SpotifyClient(env);
       await runDiscoveryAgent(env.DB, spotify);
+    }
+
+    if (cron === "*/2 * * * *") {
+      // Every 2 minutes: check for active session and process feedback
+      await processFeedback(env.DB);
     }
   },
 } satisfies ExportedHandler<Env>;

@@ -20,5 +20,5 @@ Tracked decisions, things the user needs to provide, and items deferred to later
 | 7 | Calendar source (Google iCal, Apple, skip?) | M12 (deferred) | |
 | 8 | Context bias magnitudes — tune after M8 | M8+ | Cold-start rules use ×1.05 to ×1.3; adjust by feel. |
 | 9 | iOS Shortcut location precision (round lat/lon?) | M11 (deferred) | Probably 2 decimal places (~1km). |
-| 10 | Spotify Dev Mode API restrictions | M5 | `/playlists/{id}/tracks` (read), playlist track-add (write), `/browse/new-releases` all return 403. `play_now`, `queue`, `/me/tracks`, `/me/top/*`, search, followed-artists all work. Discovery uses search-based approach. Taste model rebuild may break if token refreshes. Need Extended Quota Mode approval from Spotify to unlock full API. |
+| 10 | Spotify Dev Mode API restrictions | M5 | After adding Web Playback SDK, playlist READ works again. Playlist WRITE (adding tracks) and `/browse/new-releases` still return 403. Extended Quota Mode requires 250K+ MAU business — not applicable. `play_now` and `queue` work fine. `output=playlist` is broken (creates empty playlist). Discovery could be upgraded to scan editorial playlists now that reads work. |
 | 11 | Clean up test playlists | — | Several empty test playlists ("test-delete-me", "working — 2026-04-28") were created during debugging. Delete manually from Spotify. |
