@@ -89,23 +89,20 @@ export async function startSession(
     seasonal_playlist_count: number; current_season_present: number;
   }>();
 
-  // Load learned affinities for all candidate tracks
-  const candidateTrackIds = familiarRows.results.map(t => t.track_id);
+  // Load learned affinities (all of them — table is small for a single user)
   const affinityMap = new Map<string, Array<{ dimension: string; bucket: string; affinity: number; sample_size: number }>>();
-  if (candidateTrackIds.length > 0) {
+  try {
     const affinityRows = await db.prepare(
-      `SELECT track_id, dimension, bucket, affinity, sample_size
-       FROM track_context_affinity
-       WHERE track_id IN (${candidateTrackIds.map(() => "?").join(",")})`)
-      .bind(...candidateTrackIds).all<{
-        track_id: string; dimension: string; bucket: string; affinity: number; sample_size: number;
-      }>();
+      "SELECT track_id, dimension, bucket, affinity, sample_size FROM track_context_affinity"
+    ).all<{
+      track_id: string; dimension: string; bucket: string; affinity: number; sample_size: number;
+    }>();
     for (const row of affinityRows.results) {
       const list = affinityMap.get(row.track_id) ?? [];
       list.push(row);
       affinityMap.set(row.track_id, list);
     }
-  }
+  } catch { /* no affinities yet — that's fine */ }
 
   // Apply context multipliers to familiar tracks (cold-start + learned)
   const allBiases: Array<import("../context/rules").ContextBias> = [];

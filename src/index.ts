@@ -109,25 +109,52 @@ export default {
           return Response.json(result);
         }
 
-        case "/shortcut/start": {
+        case "/shortcut/start":
+        case "/shortcut/queue":
+        case "/shortcut/save_to_seasonal": {
           if (request.method !== "POST") {
             return new Response("Method not allowed", { status: 405 });
           }
-          // Bearer token auth
           const authHeader = request.headers.get("Authorization");
-          const token = authHeader?.replace("Bearer ", "");
-          if (token !== env.SHORTCUT_TOKEN) {
+          const bearerToken = authHeader?.replace("Bearer ", "");
+          if (bearerToken !== env.SHORTCUT_TOKEN) {
             return new Response("Unauthorized", { status: 401 });
           }
+
           const spotify = new SpotifyClient(env);
+
+          // save_to_seasonal: add currently-playing to current season playlist
+          if (url.pathname === "/shortcut/save_to_seasonal") {
+            const currentSeasonal = await env.DB.prepare(
+              "SELECT spotify_playlist_id, name FROM seasonal_playlists WHERE is_current = 1 LIMIT 1"
+            ).first<{ spotify_playlist_id: string; name: string }>();
+            if (!currentSeasonal) {
+              return Response.json({ ok: false, summary: "No current seasonal playlist found." });
+            }
+            const playing = await spotify.get<{ item?: { id: string; name: string } }>("/v1/me/player/currently-playing");
+            if (!playing?.item) {
+              return Response.json({ ok: false, summary: "Nothing is currently playing." });
+            }
+            try {
+              await spotify.post(`/v1/playlists/${currentSeasonal.spotify_playlist_id}/tracks`, {
+                uris: [`spotify:track:${playing.item.id}`],
+              });
+              return Response.json({ ok: true, summary: `Added "${playing.item.name}" to ${currentSeasonal.name}.` });
+            } catch {
+              return Response.json({ ok: false, summary: "Failed to add track (playlist write blocked in Dev Mode)." });
+            }
+          }
+
+          // start or queue: build a session
           const shortcutBody = await request.json() as {
             mode?: string; minutes?: number;
             context?: { location_label?: string; location_lat?: number; location_lon?: number;
                         is_in_motion?: number; bluetooth_context?: string; user_note?: string };
           };
+          const outputType = url.pathname === "/shortcut/queue" ? "queue" as const : "play_now" as const;
           const shortcutResult = await startSession(env.DB, spotify, {
             mode: shortcutBody.mode,
-            output: "play_now",
+            output: outputType,
             durationMin: shortcutBody.minutes,
             context: shortcutBody.context ? {
               locationLabel: shortcutBody.context.location_label ?? null,
@@ -138,9 +165,10 @@ export default {
               userNote: shortcutBody.context.user_note ?? null,
             } : null,
           });
+          const verb = outputType === "queue" ? "Queued" : "Started";
           return Response.json({
             ok: true,
-            summary: `Started ${shortcutResult.mode} session, ${shortcutResult.trackCount} tracks (${shortcutResult.familiarCount} familiar, ${shortcutResult.freshCount} fresh).`,
+            summary: `${verb} ${shortcutResult.mode} session, ${shortcutResult.trackCount} tracks (${shortcutResult.familiarCount} familiar, ${shortcutResult.freshCount} fresh). ${shortcutResult.contextSummary.weatherCondition ?? ""} ${shortcutResult.contextSummary.tempF ? shortcutResult.contextSummary.tempF + "°F" : ""}`.trim(),
           });
         }
 
