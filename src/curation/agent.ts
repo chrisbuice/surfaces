@@ -1,20 +1,32 @@
 /**
  * agent.ts — the curation agent: build a session for a mode.
  *
- * M4: familiar-only sessions. Fresh mixing added in M6.
+ * Mixes familiar tracks (from track_taste) with fresh discoveries
+ * (from fresh_pool) using the position-based freshness arc.
  * Context multipliers added in M8.
  */
 
 import { MODES, AVG_TRACK_DURATION_MIN, RECENCY_AVOID_COUNT } from "../config";
 import { resolveMode } from "./modes";
+import { shouldBeFresh } from "./arc";
 import { SpotifyClient } from "../spotify/client";
 import { playTracks, queueTracks, createPlaylist, getActiveDevice } from "../spotify/playback";
+import { getTopFresh, markFreshUsed } from "../discovery/pool";
+
+interface TrackCandidate {
+  track_id: string;
+  track_name: string;
+  primary_artist_id: string;
+  taste_score: number;
+  source: string; // "familiar" or "fresh:<source>"
+}
 
 interface StartSessionInput {
   mode?: string | null;
   output?: "play_now" | "queue" | "playlist" | null;
   durationMin?: number | null;
   deviceId?: string | null;
+  freshBias?: number | null; // -1 to +1 shift on freshness
 }
 
 interface SessionResult {
@@ -22,6 +34,8 @@ interface SessionResult {
   mode: string;
   output: string;
   trackCount: number;
+  familiarCount: number;
+  freshCount: number;
   tracks: Array<{ id: string; name: string; artist: string; source: string }>;
   playlistId?: string;
 }
@@ -37,59 +51,117 @@ export async function startSession(
   const durationMin = input.durationMin ?? modeConfig.defaultDurationMin;
   const targetTrackCount = Math.round(durationMin / AVG_TRACK_DURATION_MIN);
 
-  // ── Build candidate pool from track_taste ──
-  // Get recently played track IDs to avoid repeating
+  // Apply fresh bias to the mode multiplier
+  let freshMultiplier = modeConfig.freshMultiplier;
+  if (input.freshBias) {
+    freshMultiplier = Math.max(0, freshMultiplier + input.freshBias * 0.5);
+  }
+
+  // ── Build familiar candidate pool ──
   const recentRows = await db.prepare(
     "SELECT DISTINCT track_id FROM play_events ORDER BY started_at DESC LIMIT ?"
   ).bind(RECENCY_AVOID_COUNT).all<{ track_id: string }>();
   const recentIds = new Set(recentRows.results.map(r => r.track_id));
 
-  // Fetch top-scoring familiar tracks
-  const candidates = await db.prepare(
-    "SELECT track_id, track_name, artist_ids, primary_artist_id, taste_score FROM track_taste WHERE taste_score > 0 ORDER BY taste_score DESC LIMIT 200"
+  const familiarRows = await db.prepare(
+    "SELECT track_id, track_name, primary_artist_id, taste_score FROM track_taste WHERE taste_score > 0 ORDER BY taste_score DESC LIMIT 200"
   ).all<{
-    track_id: string;
-    track_name: string;
-    artist_ids: string;
-    primary_artist_id: string;
-    taste_score: number;
+    track_id: string; track_name: string; primary_artist_id: string; taste_score: number;
   }>();
+  const familiarPool: TrackCandidate[] = familiarRows.results
+    .filter(t => !recentIds.has(t.track_id))
+    .map(t => ({ ...t, source: "familiar" }));
 
-  // Filter out recently played
-  const pool = candidates.results.filter(t => !recentIds.has(t.track_id));
+  // ── Build fresh candidate pool ──
+  const freshEntries = await getTopFresh(db, 50);
+  const freshPool: TrackCandidate[] = freshEntries
+    .filter(f => !recentIds.has(f.track_id))
+    .map(f => ({
+      track_id: f.track_id,
+      track_name: f.track_name,
+      primary_artist_id: f.primary_artist_id,
+      taste_score: f.taste_score,
+      source: `fresh:${f.source}`,
+    }));
 
-  if (pool.length === 0) {
+  if (familiarPool.length === 0) {
     throw new Error("No tracks available for curation. Run /debug/rebuild-taste first.");
   }
 
-  // ── Select tracks with weighted random, avoiding same-artist back-to-back ──
-  const selected = selectTracks(pool, targetTrackCount);
+  // ── Build session position by position ──
+  const selected: TrackCandidate[] = [];
+  const usedIds = new Set<string>();
+  let familiarCount = 0;
+  let freshCount = 0;
+
+  for (let i = 0; i < targetTrackCount; i++) {
+    const position = targetTrackCount > 1 ? i / (targetTrackCount - 1) : 0;
+    const useFresh = freshPool.length > 0 && shouldBeFresh(position, freshMultiplier);
+    const pool = useFresh ? freshPool : familiarPool;
+    const lastArtist = selected.length > 0 ? selected[selected.length - 1].primary_artist_id : null;
+
+    // Weighted pick from the chosen pool
+    const weights = pool
+      .filter(t => !usedIds.has(t.track_id))
+      .map(t => {
+        let weight = Math.max(t.taste_score, 0.1);
+        if (t.primary_artist_id === lastArtist) weight *= 0.1;
+        return { track: t, weight };
+      });
+
+    // If chosen pool is empty, fall back to the other pool
+    let pick: TrackCandidate | null = null;
+    if (weights.length > 0) {
+      pick = weightedRandomPick(weights).track;
+    } else {
+      const fallbackPool = useFresh ? familiarPool : freshPool;
+      const fallbackWeights = fallbackPool
+        .filter(t => !usedIds.has(t.track_id))
+        .map(t => ({ track: t, weight: Math.max(t.taste_score, 0.1) }));
+      if (fallbackWeights.length > 0) {
+        pick = weightedRandomPick(fallbackWeights).track;
+      }
+    }
+
+    if (!pick) break;
+
+    selected.push(pick);
+    usedIds.add(pick.track_id);
+    if (pick.source === "familiar") familiarCount++;
+    else freshCount++;
+  }
 
   // ── Persist session ──
   const sessionId = crypto.randomUUID();
   const now = Math.floor(Date.now() / 1000);
+  const freshRatioTarget = targetTrackCount > 0 ? freshCount / targetTrackCount : 0;
 
   await db.prepare(`
     INSERT INTO sessions (session_id, mode, invoked_at, invoked_via, fresh_ratio_target, duration_target_min, output)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(sessionId, mode, now, "api", 0, durationMin, output).run();
+  `).bind(sessionId, mode, now, "api", freshRatioTarget, durationMin, output).run();
 
   const trackInserts = selected.map((t, i) =>
     db.prepare(
       "INSERT INTO session_tracks (session_id, position, track_id, source) VALUES (?, ?, ?, ?)"
-    ).bind(sessionId, i, t.track_id, "familiar")
+    ).bind(sessionId, i, t.track_id, t.source)
   );
   for (let i = 0; i < trackInserts.length; i += 100) {
     await db.batch(trackInserts.slice(i, i + 100));
+  }
+
+  // Mark fresh tracks as queued in the pool
+  for (const t of selected) {
+    if (t.source !== "familiar") {
+      await markFreshUsed(db, t.track_id, "queued");
+    }
   }
 
   // ── Execute output ──
   const trackIds = selected.map(t => t.track_id);
 
   if (output === "play_now") {
-    const device = input.deviceId
-      ? undefined // use the provided device
-      : (await getActiveDevice(spotify));
+    const device = input.deviceId ? undefined : (await getActiveDevice(spotify));
     const deviceId = input.deviceId ?? device?.id;
     if (!deviceId) {
       throw new Error("No active Spotify device found. Open Spotify and start playing something first.");
@@ -109,9 +181,9 @@ export async function startSession(
 
     return {
       sessionId, mode, output, trackCount: selected.length,
+      familiarCount, freshCount,
       tracks: selected.map(t => ({
-        id: t.track_id, name: t.track_name,
-        artist: t.primary_artist_id, source: "familiar",
+        id: t.track_id, name: t.track_name, artist: t.primary_artist_id, source: t.source,
       })),
       playlistId,
     };
@@ -119,43 +191,11 @@ export async function startSession(
 
   return {
     sessionId, mode, output, trackCount: selected.length,
+    familiarCount, freshCount,
     tracks: selected.map(t => ({
-      id: t.track_id, name: t.track_name,
-      artist: t.primary_artist_id, source: "familiar",
+      id: t.track_id, name: t.track_name, artist: t.primary_artist_id, source: t.source,
     })),
   };
-}
-
-/** Weighted random selection avoiding same-artist back-to-back */
-function selectTracks(
-  pool: Array<{ track_id: string; track_name: string; primary_artist_id: string; taste_score: number }>,
-  count: number
-): typeof pool {
-  const selected: typeof pool = [];
-  const used = new Set<string>();
-
-  for (let i = 0; i < count && pool.length > 0; i++) {
-    const lastArtist = selected.length > 0 ? selected[selected.length - 1].primary_artist_id : null;
-
-    // Build weighted candidates, penalizing same-artist-as-last
-    const weights = pool
-      .filter(t => !used.has(t.track_id))
-      .map(t => {
-        let weight = Math.max(t.taste_score, 0.1);
-        if (t.primary_artist_id === lastArtist) {
-          weight *= 0.1; // strong penalty for back-to-back same artist
-        }
-        return { track: t, weight };
-      });
-
-    if (weights.length === 0) break;
-
-    const pick = weightedRandomPick(weights);
-    selected.push(pick.track);
-    used.add(pick.track.track_id);
-  }
-
-  return selected;
 }
 
 function weightedRandomPick<T>(items: Array<{ track: T; weight: number }>): { track: T; weight: number } {

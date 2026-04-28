@@ -110,6 +110,12 @@ export class SpotifyClient {
       throw new Error(`Spotify API ${method} ${path} failed (${resp.status}): ${text}`);
     }
 
+    // Some endpoints return non-JSON (e.g. queue returns a snapshot ID string)
+    const contentType = resp.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      return undefined as T;
+    }
+
     return (await resp.json()) as T;
   }
 }
