@@ -18,7 +18,11 @@ import { getUnderivedObservations, insertPlayEvent, type PollObservation } from 
 
 const USER_TZ = "America/New_York";
 
-export async function derivePlayEvents(db: D1Database): Promise<number> {
+/**
+ * Derive play events from poll observations.
+ * If contextSnapshotId is provided, links each new play event to that snapshot.
+ */
+export async function derivePlayEvents(db: D1Database, contextSnapshotId?: number | null): Promise<number> {
   const observations = await getUnderivedObservations(db);
   if (observations.length < 2) return 0;
 
@@ -45,8 +49,17 @@ export async function derivePlayEvents(db: D1Database): Promise<number> {
       // The previous track ended — classify it
       const event = classifyTrack(trackStartObs!, currentTrack, obs);
       if (event) {
-        await insertPlayEvent(db, event);
+        const eventId = await insertPlayEvent(db, event);
         eventsCreated++;
+
+        // Link to context snapshot if available
+        if (contextSnapshotId && eventId) {
+          try {
+            await db.prepare(
+              "INSERT INTO play_event_context (play_event_id, context_snapshot_id) VALUES (?, ?)"
+            ).bind(eventId, contextSnapshotId).run();
+          } catch { /* already linked or snapshot doesn't exist */ }
+        }
       }
 
       // Start tracking the new track (if any)

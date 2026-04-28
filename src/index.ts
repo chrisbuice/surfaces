@@ -5,6 +5,7 @@ import { derivePlayEvents } from "./tracker/derive";
 import { getRecentPollObservations, getRecentPlayEvents, pruneOldObservations } from "./db/queries";
 import { processFeedback } from "./curation/feedback";
 import { rebuildAffinities } from "./context/affinity";
+import { captureContext as captureContextSnapshot, getLatestSnapshotId } from "./context/capture";
 import { startSession } from "./curation/agent";
 import { rebuildTasteModel } from "./taste/model";
 import { runDiscoveryAgent } from "./discovery/agent";
@@ -149,7 +150,7 @@ export default {
               bluetoothContext: (body.context.bluetooth_context as string) ?? null,
               userNote: (body.context.user_note as string) ?? null,
             } : null,
-          });
+          }, env.KV);
           return Response.json(result);
         }
 
@@ -208,7 +209,7 @@ export default {
               bluetoothContext: shortcutBody.context.bluetooth_context ?? null,
               userNote: shortcutBody.context.user_note ?? null,
             } : null,
-          });
+          }, env.KV);
           const verb = outputType === "queue" ? "Queued" : "Started";
           return Response.json({
             ok: true,
@@ -389,13 +390,23 @@ export default {
 
     if (cron === "* * * * *") {
       // Every minute: poll Spotify for currently-playing, then derive events
+      // Link new play events to the most recent context snapshot
       await handlePoll(env);
-      await derivePlayEvents(env.DB);
+      const latestSnapshotId = await getLatestSnapshotId(env.DB);
+      await derivePlayEvents(env.DB, latestSnapshotId);
+    }
+
+    if (cron === "0 * * * *") {
+      // Every hour: capture a context snapshot for ambient tracking
+      // This ensures every play event has a recent context to link to,
+      // even outside of curated sessions
+      await captureContextSnapshot(env.DB, "hourly_cron", {}, env.KV);
     }
 
     if (cron === "0 5 * * *") {
       // Daily at 5am UTC (1am ET): derive, rebuild taste + affinities, prune
-      await derivePlayEvents(env.DB);
+      const snapshotId = await getLatestSnapshotId(env.DB);
+      await derivePlayEvents(env.DB, snapshotId);
       const spotify = new SpotifyClient(env);
       await rebuildTasteModel(env.DB, spotify);
       await rebuildAffinities(env.DB);

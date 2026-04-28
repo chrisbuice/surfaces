@@ -1,11 +1,17 @@
 /**
  * capture.ts — build a context_snapshot from inputs + APIs.
  *
- * Called at session start. Assembles context from:
+ * Called:
+ * - At session start (trigger: 'session_start')
+ * - Hourly via cron (trigger: 'hourly_cron')
+ * - When shortcut provides location (trigger: 'shortcut')
+ *
+ * Assembles context from:
  * - Current time + timezone → local hour, day of week
  * - Open-Meteo → weather, sunrise/sunset → daylight phase
- * - Most recent poll observation → device type
- * - Optional shortcut payload → location, motion, Bluetooth, user note
+ * - Most recent poll observation → device type, playback context
+ * - KV last-known location → persists between shortcut calls
+ * - Optional shortcut payload → exact GPS, motion, Bluetooth, user note
  */
 
 import { getWeatherAndSun, getDaylightPhase } from "./weather";
@@ -19,6 +25,7 @@ export interface ContextInput {
   locationLon?: number | null;
   isInMotion?: number | null;
   bluetoothContext?: string | null;
+  wifiNetwork?: string | null;
   userNote?: string | null;
 }
 
@@ -49,11 +56,36 @@ export interface ContextSnapshot {
   userNote: string | null;
 }
 
+/**
+ * Save the last-known location to KV. Called whenever a shortcut
+ * provides GPS coordinates so the hourly cron can use them.
+ */
+export async function saveLastKnownLocation(
+  kv: KVNamespace,
+  lat: number,
+  lon: number,
+  label: string | null
+): Promise<void> {
+  await kv.put("context:last_location", JSON.stringify({
+    lat, lon, label, updatedAt: Math.floor(Date.now() / 1000),
+  }));
+}
+
+/** Read last-known location from KV */
+async function getLastKnownLocation(kv: KVNamespace): Promise<{
+  lat: number; lon: number; label: string | null; updatedAt: number;
+} | null> {
+  const raw = await kv.get("context:last_location");
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
 /** Capture a full context snapshot and persist it to D1. Returns the snapshot ID. */
 export async function captureContext(
   db: D1Database,
   trigger: string,
-  input: ContextInput
+  input: ContextInput,
+  kv?: KVNamespace
 ): Promise<{ snapshotId: number; snapshot: ContextSnapshot }> {
   const now = Math.floor(Date.now() / 1000);
 
@@ -63,7 +95,7 @@ export async function captureContext(
   const localMinute = localTime.getMinutes();
   const dayOfWeek = localTime.getDay();
 
-  // ── Location: use input if provided, otherwise fall back to settings ──
+  // ── Location: shortcut GPS → KV last-known → settings home ──
   let lat: number | null = input.locationLat ?? null;
   let lon: number | null = input.locationLon ?? null;
   let locationLabel = input.locationLabel ?? null;
@@ -71,7 +103,26 @@ export async function captureContext(
 
   if (lat !== null && lon !== null) {
     locationSource = "shortcut";
-  } else {
+    // Persist this as last-known location for future cron snapshots
+    if (kv) {
+      await saveLastKnownLocation(kv, lat, lon, locationLabel);
+    }
+  } else if (kv) {
+    // Try KV last-known location (from a recent shortcut call)
+    const lastKnown = await getLastKnownLocation(kv);
+    if (lastKnown) {
+      const ageHours = (now - lastKnown.updatedAt) / 3600;
+      if (ageHours < 4) {
+        // Recent enough to be useful (less than 4 hours old)
+        lat = lastKnown.lat;
+        lon = lastKnown.lon;
+        locationLabel = lastKnown.label;
+        locationSource = "last_known";
+      }
+    }
+  }
+
+  if (lat === null || lon === null) {
     // Fall back to home location from settings
     const settings = await db.prepare(
       "SELECT home_lat, home_lon, home_label FROM settings WHERE id = 1"
@@ -108,7 +159,6 @@ export async function captureContext(
     }
   }
 
-  // If no weather data, infer daylight phase from hour alone
   if (daylightPhase === "unknown") {
     if (localHour < 6) daylightPhase = "night";
     else if (localHour < 8) daylightPhase = "pre_dawn";
@@ -119,7 +169,7 @@ export async function captureContext(
     else daylightPhase = "night";
   }
 
-  // ── Device type from most recent poll observation ──
+  // ── Device type + playback context from most recent poll observation ──
   const lastObs = await getLastObservation(db);
   const deviceType = lastObs?.device_type ?? null;
 
@@ -145,9 +195,9 @@ export async function captureContext(
     deviceType,
     isInMotion: input.isInMotion ?? null,
     bluetoothContext: input.bluetoothContext ?? null,
-    calendarEventTitle: null,   // M12
-    calendarEventCategory: null, // M12
-    calendarEventEndsAt: null,   // M12
+    calendarEventTitle: null,
+    calendarEventCategory: null,
+    calendarEventEndsAt: null,
     userNote: input.userNote ?? null,
   };
 
@@ -174,4 +224,15 @@ export async function captureContext(
   const snapshotId = result.meta.last_row_id as number;
 
   return { snapshotId, snapshot };
+}
+
+/**
+ * Get the most recent context snapshot. Used to link play events
+ * to the context that was active when they happened.
+ */
+export async function getLatestSnapshotId(db: D1Database): Promise<number | null> {
+  const row = await db.prepare(
+    "SELECT id FROM context_snapshots ORDER BY captured_at DESC LIMIT 1"
+  ).first<{ id: number }>();
+  return row?.id ?? null;
 }

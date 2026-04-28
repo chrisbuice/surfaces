@@ -53,11 +53,12 @@ interface SessionResult {
 export async function startSession(
   db: D1Database,
   spotify: SpotifyClient,
-  input: StartSessionInput
+  input: StartSessionInput,
+  kv?: KVNamespace
 ): Promise<SessionResult> {
   // ── Capture context snapshot ──
   const { snapshotId, snapshot } = await captureContext(
-    db, "session_start", input.context ?? {}
+    db, "session_start", input.context ?? {}, kv
   );
 
   const mode = resolveMode(input.mode);
