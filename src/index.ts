@@ -5,6 +5,8 @@ import { derivePlayEvents } from "./tracker/derive";
 import { getRecentPollObservations, getRecentPlayEvents, pruneOldObservations } from "./db/queries";
 import { startSession } from "./curation/agent";
 import { rebuildTasteModel } from "./taste/model";
+import { runDiscoveryAgent } from "./discovery/agent";
+import { getTopFresh, getFreshPoolStats } from "./discovery/pool";
 
 export interface Env {
   DB: D1Database;
@@ -95,6 +97,60 @@ export default {
           return Response.json(result);
         }
 
+        case "/debug/run-discovery": {
+          const spotify = new SpotifyClient(env);
+          const result = await runDiscoveryAgent(env.DB, spotify);
+          return Response.json(result);
+        }
+
+        case "/debug/discovery-sources": {
+          const spotify = new SpotifyClient(env);
+          const diag: Record<string, unknown> = {};
+
+          // Test followed artists recent releases
+          try {
+            const { getFollowedArtists } = await import("./spotify/library");
+            const { getArtistRecentReleases } = await import("./spotify/browse");
+            const fa = await getFollowedArtists(spotify, 10);
+            diag.followedArtists = fa.length;
+            const releases: string[] = [];
+            for (const a of fa.slice(0, 5)) {
+              const r = await getArtistRecentReleases(spotify, a.id, 30);
+              if (r.length > 0) releases.push(`${a.name}: ${r.map(x => x.name).join(", ")}`);
+            }
+            diag.recentReleases = releases.length > 0 ? releases : "none in last 30 days from first 5 artists";
+          } catch (e) { diag.followedArtists = { error: String(e) }; }
+
+          // Test editorial playlist search — try multiple
+          try {
+            const { findPlaylistByName } = await import("./spotify/browse");
+            const names = ["New Music Friday", "Fresh Finds", "Pollen", "RADAR"];
+            const found: Record<string, unknown> = {};
+            for (const name of names) {
+              found[name] = await findPlaylistByName(spotify, name);
+            }
+            diag.editorialPlaylists = found;
+          } catch (e) { diag.editorialPlaylists = { error: String(e) }; }
+
+          // Check KV cache
+          const cached = await env.KV.get("discovery:editorial_playlist_ids");
+          // Test fetching tracks from New Music Friday directly
+          diag.note = "Discovery uses search API (playlist-tracks blocked in Dev Mode).";
+
+          return Response.json(diag);
+        }
+
+        case "/debug/fresh-pool": {
+          const limit = parseInt(url.searchParams.get("limit") ?? "20");
+          const entries = await getTopFresh(env.DB, limit);
+          return Response.json(entries);
+        }
+
+        case "/debug/fresh-pool-stats": {
+          const stats = await getFreshPoolStats(env.DB);
+          return Response.json(stats);
+        }
+
         case "/debug/all-playlists": {
           const spotify = new SpotifyClient(env);
           const { getUserPlaylists } = await import("./spotify/library");
@@ -126,6 +182,12 @@ export default {
       const spotify = new SpotifyClient(env);
       await rebuildTasteModel(env.DB, spotify);
       await pruneOldObservations(env.DB, 30 * 24 * 60 * 60);
+    }
+
+    if (cron === "0 10 * * *") {
+      // Daily at 10am UTC (6am ET): run discovery agent
+      const spotify = new SpotifyClient(env);
+      await runDiscoveryAgent(env.DB, spotify);
     }
   },
 } satisfies ExportedHandler<Env>;

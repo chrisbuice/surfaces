@@ -20,5 +20,5 @@ Tracked decisions, things the user needs to provide, and items deferred to later
 | 7 | Calendar source (Google iCal, Apple, skip?) | M12 (deferred) | |
 | 8 | Context bias magnitudes — tune after M8 | M8+ | Cold-start rules use ×1.05 to ×1.3; adjust by feel. |
 | 9 | iOS Shortcut location precision (round lat/lon?) | M11 (deferred) | Probably 2 decimal places (~1km). |
-| 10 | Spotify playlist write 403 in Dev Mode | M5 | Creating playlists works, but adding tracks returns 403. `play_now` and `queue` work fine. May need Extended Quota Mode or to request approval. Affects `output=playlist` and Discovery Queue playlist. Workaround: use `play_now`/`queue` for now. |
+| 10 | Spotify Dev Mode API restrictions | M5 | `/playlists/{id}/tracks` (read), playlist track-add (write), `/browse/new-releases` all return 403. `play_now`, `queue`, `/me/tracks`, `/me/top/*`, search, followed-artists all work. Discovery uses search-based approach. Taste model rebuild may break if token refreshes. Need Extended Quota Mode approval from Spotify to unlock full API. |
 | 11 | Clean up test playlists | — | Several empty test playlists ("test-delete-me", "working — 2026-04-28") were created during debugging. Delete manually from Spotify. |

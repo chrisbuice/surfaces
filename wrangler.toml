@@ -17,5 +17,6 @@ id = "7055b925a6b74bd39150201370724eeb"
 [triggers]
 crons = [
   "* * * * *",       # every minute: poll currently-playing
-  "0 5 * * *",       # daily 5am UTC (1am ET): derive play_events + prune
+  "0 5 * * *",       # daily 5am UTC (1am ET): derive play_events + prune + taste rebuild
+  "0 10 * * *",      # daily 10am UTC (6am ET): discovery agent
 ]
