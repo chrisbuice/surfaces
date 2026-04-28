@@ -77,6 +77,13 @@ export default {
           return Response.json(rows.results);
         }
 
+        case "/debug/all-playlists": {
+          const spotify = new SpotifyClient(env);
+          const { getUserPlaylists } = await import("./spotify/library");
+          const pls = await getUserPlaylists(spotify, 500);
+          return Response.json(pls.map(p => ({ id: p.id, name: p.name, tracks: p.tracks?.total ?? 0 })));
+        }
+
         default:
           return new Response("Not found", { status: 404 });
       }

@@ -2,22 +2,41 @@
  * seasonal.ts — detect and sync seasonal playlists.
  *
  * The user's seasonal playlists always contain a season name (spring, summer,
- * fall, winter) in the title. They sometimes include a year. When a year is
- * present in the name we use it as a hint; otherwise we infer the year/season
- * from when tracks were added to the playlist.
+ * fall, winter) in the title — sometimes creatively (e.g. "springing",
+ * "its fall yall", "brrr 2023", "wynter"). They sometimes include a year.
+ * When a year isn't present, we infer the timeframe from track add dates.
+ *
+ * Only playlists owned by the user are considered.
  */
 
 import { SpotifyClient } from "../spotify/client";
 import { getUserPlaylists, getPlaylistTracks } from "../spotify/library";
 
+// Patterns are checked in order; first match wins.
+// Regexes use \b on the left but not the right, so "springing", "falling",
+// "wintertime", "summmer" (typo) all match.
 const SEASON_PATTERNS: Array<{ season: string; regex: RegExp; months: number[] }> = [
-  { season: "winter", regex: /\bwinter\b/i, months: [12, 1, 2] },
-  { season: "spring", regex: /\bspring\b/i, months: [3, 4, 5] },
-  { season: "summer", regex: /\bsummer\b/i, months: [6, 7, 8] },
-  { season: "fall",   regex: /\b(?:fall|autumn)\b/i, months: [9, 10, 11] },
+  // "wynter" is the user's name for a summer playlist — check it before winter
+  { season: "summer", regex: /\bwynter\b/i, months: [6, 7, 8] },
+  // "brrr" = winter
+  { season: "winter", regex: /\bwinter/i, months: [12, 1, 2] },
+  { season: "winter", regex: /\bbrrr/i, months: [12, 1, 2] },
+  { season: "spring", regex: /\bspring/i, months: [3, 4, 5] },
+  { season: "summer", regex: /\bsumm+er/i, months: [6, 7, 8] },
+  { season: "fall",   regex: /\b(?:fall|autumn)/i, months: [9, 10, 11] },
+];
+
+// Playlists whose names match a season keyword but aren't seasonal music playlists
+const EXCLUDE_PATTERNS = [
+  /show ideas/i,
+  /AGMC/i,
 ];
 
 const YEAR_REGEX = /\b(20\d{2})\b/;
+// Also match 2-digit year shorthand like "summer 25", "fall 24"
+const SHORT_YEAR_REGEX = /\b(\d{2})\b/;
+
+const USER_SPOTIFY_ID = "121776622";
 
 interface SeasonalPlaylistInfo {
   spotifyPlaylistId: string;
@@ -32,25 +51,45 @@ export async function detectSeasonalPlaylists(spotify: SpotifyClient): Promise<S
   const results: SeasonalPlaylistInfo[] = [];
 
   for (const pl of playlists) {
+    // Only consider playlists owned by the user
+    if (pl.owner?.id !== USER_SPOTIFY_ID) continue;
+
+    // Skip excluded patterns
+    if (EXCLUDE_PATTERNS.some(re => re.test(pl.name))) continue;
+
     // Check if the name contains a season
     const matchedSeason = SEASON_PATTERNS.find(sp => sp.regex.test(pl.name));
     if (!matchedSeason) continue;
 
     // Try to extract year from name
-    const yearMatch = pl.name.match(YEAR_REGEX);
-    let year: number;
+    let year: number | null = null;
 
-    try {
-      if (yearMatch) {
-        year = parseInt(yearMatch[1], 10);
-      } else {
-        // Infer year from track add dates — fetch a sample of tracks
-        year = await inferYearFromTracks(spotify, pl.id, matchedSeason.months);
+    // Full year: "2024", "2025"
+    const fullYearMatch = pl.name.match(YEAR_REGEX);
+    if (fullYearMatch) {
+      year = parseInt(fullYearMatch[1], 10);
+    }
+
+    // Short year: "25", "24" — interpret as 20xx
+    if (!year) {
+      const shortYearMatch = pl.name.match(SHORT_YEAR_REGEX);
+      if (shortYearMatch) {
+        const twoDigit = parseInt(shortYearMatch[1], 10);
+        // Only treat as year if it's plausible (14-30 range for 2014-2030)
+        if (twoDigit >= 14 && twoDigit <= 30) {
+          year = 2000 + twoDigit;
+        }
       }
-    } catch (err) {
-      // Some playlists may be inaccessible (403) — skip them
-      console.warn(`Skipping playlist "${pl.name}" (${pl.id}): ${err}`);
-      continue;
+    }
+
+    // If no year found in name, infer from track add dates
+    if (!year) {
+      try {
+        year = await inferYearFromTracks(spotify, pl.id, matchedSeason.months);
+      } catch (err) {
+        console.warn(`Skipping playlist "${pl.name}" (${pl.id}): ${err}`);
+        continue;
+      }
     }
 
     results.push({
@@ -73,7 +112,6 @@ async function inferYearFromTracks(
   const items = await getPlaylistTracks(spotify, playlistId, 100);
   if (items.length === 0) return new Date().getFullYear();
 
-  // Get the median added_at date
   const dates = items
     .map(item => new Date(item.added_at))
     .filter(d => !isNaN(d.getTime()))
