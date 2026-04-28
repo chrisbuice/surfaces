@@ -6,6 +6,7 @@ import { getRecentPollObservations, getRecentPlayEvents, pruneOldObservations } 
 import { processFeedback } from "./curation/feedback";
 import { rebuildAffinities } from "./context/affinity";
 import { captureContext as captureContextSnapshot, getLatestSnapshotId } from "./context/capture";
+import { generateAndSendSummary } from "./email/summary";
 import { startSession } from "./curation/agent";
 import { rebuildTasteModel } from "./taste/model";
 import { runDiscoveryAgent } from "./discovery/agent";
@@ -17,6 +18,7 @@ export interface Env {
   SPOTIFY_CLIENT_ID: string;
   SPOTIFY_CLIENT_SECRET: string;
   SHORTCUT_TOKEN: string;
+  RESEND_API_KEY: string;
 }
 
 export default {
@@ -359,6 +361,11 @@ export default {
           });
         }
 
+        case "/debug/send-summary": {
+          const emailResult = await generateAndSendSummary(env.DB, env.RESEND_API_KEY);
+          return Response.json(emailResult);
+        }
+
         case "/debug/rebuild-affinities": {
           const result = await rebuildAffinities(env.DB);
           return Response.json(result);
@@ -564,29 +571,6 @@ export default {
       await derivePlayEvents(env.DB, latestSnapshotId);
     }
 
-    if (cron === "0 * * * *") {
-      // Every hour: capture a context snapshot for ambient tracking
-      // This ensures every play event has a recent context to link to,
-      // even outside of curated sessions
-      // Pull latest shortcut signals from KV for richer hourly snapshots
-      let cronInput: Record<string, unknown> = {};
-      const signalsRaw = await env.KV.get("context:last_shortcut_signals");
-      if (signalsRaw) {
-        try {
-          const signals = JSON.parse(signalsRaw);
-          const ageMin = (Math.floor(Date.now() / 1000) - signals.updatedAt) / 60;
-          if (ageMin < 120) { // use if less than 2 hours old
-            cronInput = {
-              isInMotion: signals.isInMotion,
-              bluetoothContext: signals.bluetoothContext,
-              userNote: signals.userNote,
-            };
-          }
-        } catch { /* ignore */ }
-      }
-      await captureContextSnapshot(env.DB, "hourly_cron", cronInput, env.KV);
-    }
-
     if (cron === "0 5 * * *") {
       // Daily at 5am UTC (1am ET): derive, rebuild taste + affinities, prune
       const snapshotId = await getLatestSnapshotId(env.DB);
@@ -606,6 +590,32 @@ export default {
     if (cron === "*/2 * * * *") {
       // Every 2 minutes: check for active session and process feedback
       await processFeedback(env.DB);
+
+      // On the hour (minute 0): capture an ambient context snapshot
+      const currentMinute = new Date().getUTCMinutes();
+      if (currentMinute < 2) {
+        let cronInput: Record<string, unknown> = {};
+        const signalsRaw = await env.KV.get("context:last_shortcut_signals");
+        if (signalsRaw) {
+          try {
+            const signals = JSON.parse(signalsRaw);
+            const ageMin = (Math.floor(Date.now() / 1000) - signals.updatedAt) / 60;
+            if (ageMin < 120) {
+              cronInput = {
+                isInMotion: signals.isInMotion,
+                bluetoothContext: signals.bluetoothContext,
+                userNote: signals.userNote,
+              };
+            }
+          } catch { /* ignore */ }
+        }
+        await captureContextSnapshot(env.DB, "hourly_cron", cronInput, env.KV);
+      }
+    }
+
+    if (cron === "0 0 * * *") {
+      // Midnight UTC (8pm ET): send nightly listening summary
+      await generateAndSendSummary(env.DB, env.RESEND_API_KEY);
     }
   },
 } satisfies ExportedHandler<Env>;
