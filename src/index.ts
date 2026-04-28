@@ -4,6 +4,7 @@ import { handlePoll } from "./tracker/poll";
 import { derivePlayEvents } from "./tracker/derive";
 import { getRecentPollObservations, getRecentPlayEvents, pruneOldObservations } from "./db/queries";
 import { processFeedback } from "./curation/feedback";
+import { rebuildAffinities } from "./context/affinity";
 import { startSession } from "./curation/agent";
 import { rebuildTasteModel } from "./taste/model";
 import { runDiscoveryAgent } from "./discovery/agent";
@@ -143,6 +144,20 @@ export default {
           });
         }
 
+        case "/debug/rebuild-affinities": {
+          const result = await rebuildAffinities(env.DB);
+          return Response.json(result);
+        }
+
+        case "/debug/track-affinities": {
+          const trackId = url.searchParams.get("track_id");
+          if (!trackId) return Response.json({ error: "track_id required" });
+          const rows = await env.DB.prepare(
+            "SELECT * FROM track_context_affinity WHERE track_id = ? ORDER BY dimension, bucket"
+          ).bind(trackId).all();
+          return Response.json(rows.results);
+        }
+
         case "/debug/run-feedback": {
           const feedbackResult = await processFeedback(env.DB);
           if (!feedbackResult) return Response.json({ message: "No active session" });
@@ -261,10 +276,11 @@ export default {
     }
 
     if (cron === "0 5 * * *") {
-      // Daily at 5am UTC (1am ET): derive, rebuild taste model, prune
+      // Daily at 5am UTC (1am ET): derive, rebuild taste + affinities, prune
       await derivePlayEvents(env.DB);
       const spotify = new SpotifyClient(env);
       await rebuildTasteModel(env.DB, spotify);
+      await rebuildAffinities(env.DB);
       await pruneOldObservations(env.DB, 30 * 24 * 60 * 60);
     }
 

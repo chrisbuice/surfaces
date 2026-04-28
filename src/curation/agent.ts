@@ -89,7 +89,25 @@ export async function startSession(
     seasonal_playlist_count: number; current_season_present: number;
   }>();
 
-  // Apply context multipliers to familiar tracks
+  // Load learned affinities for all candidate tracks
+  const candidateTrackIds = familiarRows.results.map(t => t.track_id);
+  const affinityMap = new Map<string, Array<{ dimension: string; bucket: string; affinity: number; sample_size: number }>>();
+  if (candidateTrackIds.length > 0) {
+    const affinityRows = await db.prepare(
+      `SELECT track_id, dimension, bucket, affinity, sample_size
+       FROM track_context_affinity
+       WHERE track_id IN (${candidateTrackIds.map(() => "?").join(",")})`)
+      .bind(...candidateTrackIds).all<{
+        track_id: string; dimension: string; bucket: string; affinity: number; sample_size: number;
+      }>();
+    for (const row of affinityRows.results) {
+      const list = affinityMap.get(row.track_id) ?? [];
+      list.push(row);
+      affinityMap.set(row.track_id, list);
+    }
+  }
+
+  // Apply context multipliers to familiar tracks (cold-start + learned)
   const allBiases: Array<import("../context/rules").ContextBias> = [];
   const familiarPool: TrackCandidate[] = familiarRows.results
     .filter(t => !recentIds.has(t.track_id))
@@ -99,11 +117,11 @@ export async function startSession(
         play_count: t.play_count,
         skip_count: t.skip_count,
         complete_count: t.complete_count,
-        last_played_hour: null, // would need a join; skip for now
+        last_played_hour: null,
         seasonal_playlist_count: t.seasonal_playlist_count,
         current_season_present: t.current_season_present === 1,
         album_id: t.album_id,
-      });
+      }, affinityMap.get(t.track_id));
       allBiases.push(...ctx.biases);
       return {
         track_id: t.track_id,

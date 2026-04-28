@@ -1,11 +1,12 @@
 /**
- * context_score.ts — blend cold-start rules (and later learned affinities)
+ * context_score.ts — blend cold-start rules with learned affinities
  * into a context multiplier for each track.
  *
  * final_score(track) = taste_score × mode_weight × Π(context_multipliers)
  *
- * Multipliers are clamped to [CONTEXT_MULTIPLIER_MIN, CONTEXT_MULTIPLIER_MAX]
- * so context can nudge but never completely override taste.
+ * For each context dimension, if learned affinity has sample_size >= 5,
+ * use the learned multiplier. Otherwise, use the cold-start rule.
+ * This lets learned behavior gradually take over as data accumulates.
  */
 
 import { CONTEXT_MULTIPLIER_MIN, CONTEXT_MULTIPLIER_MAX } from "../config";
@@ -23,6 +24,13 @@ interface TrackForContext {
   album_id: string | null;
 }
 
+interface LearnedAffinity {
+  dimension: string;
+  bucket: string;
+  affinity: number;
+  sample_size: number;
+}
+
 export interface ScoredContext {
   multiplier: number;
   biases: ContextBias[];
@@ -30,14 +38,15 @@ export interface ScoredContext {
 
 /**
  * Compute the context multiplier for a single track.
- * Returns the clamped product of all applicable biases.
+ * Blends cold-start rules with learned affinities by sample size.
  */
 export function computeContextMultiplier(
   snapshot: ContextSnapshot,
   mode: string,
-  track: TrackForContext
+  track: TrackForContext,
+  learnedAffinities?: LearnedAffinity[]
 ): ScoredContext {
-  const biases = getColdStartBiases(snapshot, mode, {
+  const coldStartBiases = getColdStartBiases(snapshot, mode, {
     playCount: track.play_count,
     skipCount: track.skip_count,
     completeCount: track.complete_count,
@@ -47,21 +56,82 @@ export function computeContextMultiplier(
     albumId: track.album_id,
   });
 
-  // Product of all multipliers
-  let product = 1.0;
-  for (const bias of biases) {
-    product *= bias.multiplier;
+  const finalBiases: ContextBias[] = [];
+
+  // Build a lookup of learned affinities by dimension
+  const learnedMap = new Map<string, LearnedAffinity>();
+  if (learnedAffinities) {
+    for (const a of learnedAffinities) {
+      learnedMap.set(`${a.dimension}:${a.bucket}`, a);
+    }
   }
 
-  // Clamp
+  // For each cold-start bias, check if we have a learned affinity that should replace it
+  const processedDimensions = new Set<string>();
+  for (const bias of coldStartBiases) {
+    const key = `${bias.dimension}:${bias.bucket}`;
+    const learned = learnedMap.get(key);
+
+    if (learned && learned.sample_size >= 5) {
+      // Learned affinity has enough data — use it instead of cold-start
+      finalBiases.push({
+        dimension: bias.dimension,
+        bucket: bias.bucket,
+        multiplier: learned.affinity,
+        reason: `Learned: ${bias.dimension}=${bias.bucket} (n=${learned.sample_size}, affinity=${learned.affinity.toFixed(2)})`,
+      });
+    } else {
+      // Not enough learned data — keep cold-start rule
+      finalBiases.push(bias);
+    }
+    processedDimensions.add(key);
+  }
+
+  // Also apply any learned affinities for dimensions that don't have cold-start rules
+  // (e.g., the user plays certain tracks at specific locations we didn't code rules for)
+  if (learnedAffinities) {
+    for (const a of learnedAffinities) {
+      const key = `${a.dimension}:${a.bucket}`;
+      if (!processedDimensions.has(key) && a.sample_size >= 5 && Math.abs(a.affinity - 1.0) > 0.05) {
+        // Match against current snapshot
+        const snapshotValue = getSnapshotValue(snapshot, a.dimension);
+        if (snapshotValue !== null && String(snapshotValue) === a.bucket) {
+          finalBiases.push({
+            dimension: a.dimension,
+            bucket: a.bucket,
+            multiplier: a.affinity,
+            reason: `Learned: ${a.dimension}=${a.bucket} (n=${a.sample_size}, affinity=${a.affinity.toFixed(2)})`,
+          });
+        }
+      }
+    }
+  }
+
+  // Product of all multipliers, clamped
+  let product = 1.0;
+  for (const bias of finalBiases) {
+    product *= bias.multiplier;
+  }
   product = Math.max(CONTEXT_MULTIPLIER_MIN, Math.min(CONTEXT_MULTIPLIER_MAX, product));
 
-  return { multiplier: product, biases };
+  return { multiplier: product, biases: finalBiases };
+}
+
+/** Get the value of a snapshot field by dimension name */
+function getSnapshotValue(snapshot: ContextSnapshot, dimension: string): string | number | null {
+  switch (dimension) {
+    case "daylight_phase": return snapshot.daylightPhase;
+    case "weather_condition": return snapshot.weatherCondition;
+    case "location_label": return snapshot.locationLabel;
+    case "device_type": return snapshot.deviceType;
+    case "day_of_week": return snapshot.dayOfWeek;
+    case "calendar_category": return snapshot.calendarEventCategory;
+    default: return null;
+  }
 }
 
 /**
  * Summarize which biases were applied across all tracks in a session.
- * Returns unique biases with counts.
  */
 export function summarizeBiases(
   allBiases: ContextBias[]
