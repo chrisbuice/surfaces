@@ -154,6 +154,61 @@ export default {
           return Response.json(result);
         }
 
+        case "/shortcut/update-location": {
+          if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const locAuthHeader = request.headers.get("Authorization");
+          const locToken = locAuthHeader?.replace("Bearer ", "");
+          if (locToken !== env.SHORTCUT_TOKEN) return new Response("Unauthorized", { status: 401 });
+
+          const locBody = await request.json() as {
+            location_lat: number; location_lon: number;
+            location_label?: string;
+            altitude_m?: number;
+            floor?: number;
+            speed_mps?: number;
+            is_in_motion?: number;
+            bluetooth_context?: string;
+            wifi_network?: string;
+            user_note?: string;
+          };
+
+          if (!locBody.location_lat || !locBody.location_lon) {
+            return Response.json({ ok: false, error: "location_lat and location_lon required" });
+          }
+
+          // Store full-precision location in KV (no rounding — office vs backyard matters)
+          const { saveLastKnownLocation } = await import("./context/capture");
+          await saveLastKnownLocation(env.KV, locBody.location_lat, locBody.location_lon, locBody.location_label ?? null);
+
+          // Also store extended context signals in KV for the next snapshot
+          await env.KV.put("context:last_shortcut_signals", JSON.stringify({
+            isInMotion: locBody.is_in_motion ?? null,
+            bluetoothContext: locBody.bluetooth_context ?? null,
+            wifiNetwork: locBody.wifi_network ?? null,
+            altitude_m: locBody.altitude_m ?? null,
+            floor: locBody.floor ?? null,
+            speed_mps: locBody.speed_mps ?? null,
+            userNote: locBody.user_note ?? null,
+            updatedAt: Math.floor(Date.now() / 1000),
+          }));
+
+          // Capture a context snapshot immediately with this location
+          const { captureContext: capCtx } = await import("./context/capture");
+          await capCtx(env.DB, "location_update", {
+            locationLabel: locBody.location_label ?? null,
+            locationLat: locBody.location_lat,
+            locationLon: locBody.location_lon,
+            isInMotion: locBody.is_in_motion ?? null,
+            bluetoothContext: locBody.bluetooth_context ?? null,
+            userNote: locBody.user_note ?? null,
+          }, env.KV);
+
+          return Response.json({
+            ok: true,
+            summary: `Location updated: ${locBody.location_label || `${locBody.location_lat.toFixed(6)}, ${locBody.location_lon.toFixed(6)}`}`,
+          });
+        }
+
         case "/shortcut/start":
         case "/shortcut/queue":
         case "/shortcut/save_to_seasonal": {
@@ -426,7 +481,23 @@ export default {
       // Every hour: capture a context snapshot for ambient tracking
       // This ensures every play event has a recent context to link to,
       // even outside of curated sessions
-      await captureContextSnapshot(env.DB, "hourly_cron", {}, env.KV);
+      // Pull latest shortcut signals from KV for richer hourly snapshots
+      let cronInput: Record<string, unknown> = {};
+      const signalsRaw = await env.KV.get("context:last_shortcut_signals");
+      if (signalsRaw) {
+        try {
+          const signals = JSON.parse(signalsRaw);
+          const ageMin = (Math.floor(Date.now() / 1000) - signals.updatedAt) / 60;
+          if (ageMin < 120) { // use if less than 2 hours old
+            cronInput = {
+              isInMotion: signals.isInMotion,
+              bluetoothContext: signals.bluetoothContext,
+              userNote: signals.userNote,
+            };
+          }
+        } catch { /* ignore */ }
+      }
+      await captureContextSnapshot(env.DB, "hourly_cron", cronInput, env.KV);
     }
 
     if (cron === "0 5 * * *") {

@@ -59,6 +59,7 @@ export interface ContextSnapshot {
 /**
  * Save the last-known location to KV. Called whenever a shortcut
  * provides GPS coordinates so the hourly cron can use them.
+ * Stores full precision — no rounding. Office vs backyard matters.
  */
 export async function saveLastKnownLocation(
   kv: KVNamespace,
@@ -66,6 +67,7 @@ export async function saveLastKnownLocation(
   lon: number,
   label: string | null
 ): Promise<void> {
+  // Store with full floating-point precision
   await kv.put("context:last_location", JSON.stringify({
     lat, lon, label, updatedAt: Math.floor(Date.now() / 1000),
   }));
