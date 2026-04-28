@@ -181,7 +181,7 @@ export default {
               return Response.json({ ok: false, summary: "Nothing is currently playing." });
             }
             try {
-              await spotify.post(`/v1/playlists/${currentSeasonal.spotify_playlist_id}/tracks`, {
+              await spotify.post(`/v1/playlists/${currentSeasonal.spotify_playlist_id}/items`, {
                 uris: [`spotify:track:${playing.item.id}`],
               });
               return Response.json({ ok: true, summary: `Added "${playing.item.name}" to ${currentSeasonal.name}.` });
@@ -329,10 +329,17 @@ export default {
           const { track_id: likeTrackId } = await request.json() as { track_id: string };
           if (!likeTrackId) return Response.json({ ok: false, error: "track_id required" });
           try {
-            await spotify.put("/v1/me/tracks", { ids: [likeTrackId] });
+            // Try /me/tracks with URIs first (may work in newer Dev Mode)
+            await spotify.put("/v1/me/tracks", { uris: [`spotify:track:${likeTrackId}`] });
             return Response.json({ ok: true });
           } catch {
-            return Response.json({ ok: false, error: "Blocked by Spotify Dev Mode" });
+            try {
+              // Fallback: try with IDs
+              await spotify.put("/v1/me/tracks", { ids: [likeTrackId] });
+              return Response.json({ ok: true });
+            } catch {
+              return Response.json({ ok: false, error: "Blocked by Spotify Dev Mode" });
+            }
           }
         }
 

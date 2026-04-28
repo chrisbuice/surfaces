@@ -110,10 +110,19 @@ export async function getPlaylistTracks(
   const pageSize = 100;
 
   while (offset < limit) {
-    const resp = await spotify.get<PaginatedResponse<PlaylistTrackItem>>(
-      `/v1/playlists/${playlistId}/tracks`,
-      { limit: String(pageSize), offset: String(offset), fields: "items(added_at,track(id,name,artists(id,name),album(id,name),duration_ms)),next,total" }
-    );
+    // Try /items first (works in Dev Mode), fall back to /tracks
+    let resp: PaginatedResponse<PlaylistTrackItem>;
+    try {
+      resp = await spotify.get<PaginatedResponse<PlaylistTrackItem>>(
+        `/v1/playlists/${playlistId}/items`,
+        { limit: String(pageSize), offset: String(offset), fields: "items(added_at,track(id,name,artists(id,name),album(id,name),duration_ms)),next,total" }
+      );
+    } catch {
+      resp = await spotify.get<PaginatedResponse<PlaylistTrackItem>>(
+        `/v1/playlists/${playlistId}/tracks`,
+        { limit: String(pageSize), offset: String(offset), fields: "items(added_at,track(id,name,artists(id,name),album(id,name),duration_ms)),next,total" }
+      );
+    }
     items.push(...resp.items);
     if (!resp.next || resp.items.length < pageSize) break;
     offset += pageSize;

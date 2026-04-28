@@ -76,9 +76,9 @@ export async function createPlaylist(
 
   if (trackIds.length > 0) {
     const uris = trackIds.map(id => `spotify:track:${id}`);
-    // Spotify accepts up to 100 tracks per request
+    // Use /items endpoint (works in Dev Mode; /tracks returns 403)
     for (let i = 0; i < uris.length; i += 100) {
-      await spotify.post(`/v1/playlists/${playlist.id}/tracks`, {
+      await spotify.post(`/v1/playlists/${playlist.id}/items`, {
         uris: uris.slice(i, i + 100),
       });
     }
