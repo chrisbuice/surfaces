@@ -3,6 +3,7 @@ import { SpotifyClient } from "./spotify/client";
 import { handlePoll } from "./tracker/poll";
 import { derivePlayEvents } from "./tracker/derive";
 import { getRecentPollObservations, getRecentPlayEvents, pruneOldObservations } from "./db/queries";
+import { startSession } from "./curation/agent";
 import { rebuildTasteModel } from "./taste/model";
 
 export interface Env {
@@ -75,6 +76,23 @@ export default {
             "SELECT artist_id, artist_name, taste_score, in_top_artists_short, in_top_artists_medium, is_followed, total_plays FROM artist_taste ORDER BY taste_score DESC LIMIT 30"
           ).all();
           return Response.json(rows.results);
+        }
+
+        case "/api/start-session": {
+          if (request.method !== "POST") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          const spotify = new SpotifyClient(env);
+          const body = await request.json() as {
+            mode?: string; output?: string; duration_min?: number; device_id?: string;
+          };
+          const result = await startSession(env.DB, spotify, {
+            mode: body.mode,
+            output: body.output as "play_now" | "queue" | "playlist" | undefined,
+            durationMin: body.duration_min,
+            deviceId: body.device_id,
+          });
+          return Response.json(result);
         }
 
         case "/debug/all-playlists": {

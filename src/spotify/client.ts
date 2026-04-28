@@ -53,13 +53,13 @@ export class SpotifyClient {
   }
 
   /** Make a PUT request to the Spotify API */
-  async put<T = unknown>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>("PUT", path, undefined, body);
+  async put<T = unknown>(path: string, body?: unknown, params?: Record<string, string>): Promise<T> {
+    return this.request<T>("PUT", path, params, body);
   }
 
   /** Make a POST request to the Spotify API */
-  async post<T = unknown>(path: string, body?: unknown): Promise<T> {
-    return this.request<T>("POST", path, undefined, body);
+  async post<T = unknown>(path: string, body?: unknown, params?: Record<string, string>): Promise<T> {
+    return this.request<T>("POST", path, params, body);
   }
 
   /** Make a DELETE request to the Spotify API */
