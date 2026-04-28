@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spotify Agent</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #121212; color: #e0e0e0; padding: 20px; max-width: 900px; margin: 0 auto; }
+    h1 { color: #1db954; margin-bottom: 20px; font-size: 24px; }
+    h2 { color: #b3b3b3; font-size: 16px; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+    .card { background: #1e1e1e; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .now-playing { display: flex; align-items: center; gap: 12px; }
+    .now-playing .dot { width: 8px; height: 8px; border-radius: 50%; background: #1db954; animation: pulse 2s infinite; }
+    .now-playing .dot.inactive { background: #555; animation: none; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .track-name { font-size: 18px; font-weight: 600; }
+    .track-artist { color: #b3b3b3; font-size: 14px; }
+    .mode-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+    .mode-btn { background: #282828; border: 1px solid #333; border-radius: 20px; padding: 10px 16px; color: #e0e0e0; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .mode-btn:hover { background: #1db954; color: #000; border-color: #1db954; }
+    .mode-btn:active { transform: scale(0.97); }
+    .mode-btn.active { background: #1db954; color: #000; border-color: #1db954; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { text-align: left; color: #b3b3b3; font-weight: 500; padding: 8px 4px; border-bottom: 1px solid #333; }
+    td { padding: 8px 4px; border-bottom: 1px solid #1e1e1e; }
+    .score { color: #1db954; font-weight: 600; }
+    .source-tag { background: #282828; padding: 2px 8px; border-radius: 10px; font-size: 12px; color: #b3b3b3; }
+    .context-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .context-item { background: #282828; padding: 8px 12px; border-radius: 6px; }
+    .context-label { color: #b3b3b3; font-size: 12px; }
+    .context-value { font-size: 14px; margin-top: 2px; }
+    .bias-list { list-style: none; }
+    .bias-list li { padding: 4px 0; font-size: 13px; color: #b3b3b3; }
+    .bias-list li .mult { color: #1db954; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .stat-box { background: #282828; padding: 12px; border-radius: 6px; text-align: center; }
+    .stat-number { font-size: 24px; font-weight: 700; color: #1db954; }
+    .stat-label { font-size: 12px; color: #b3b3b3; margin-top: 4px; }
+    .status-msg { padding: 12px; background: #282828; border-radius: 6px; color: #b3b3b3; text-align: center; }
+    .refresh-btn { background: none; border: 1px solid #555; color: #b3b3b3; padding: 4px 12px; border-radius: 12px; cursor: pointer; font-size: 12px; }
+    .refresh-btn:hover { border-color: #1db954; color: #1db954; }
+    .error { color: #e74c3c; }
+    .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+    .badge-completed { background: #1db95433; color: #1db954; }
+    .badge-skipped { background: #e74c3c33; color: #e74c3c; }
+    .badge-partial { background: #f39c1233; color: #f39c12; }
+    .badge-replayed { background: #9b59b633; color: #9b59b6; }
+    .history-time { color: #777; font-size: 12px; white-space: nowrap; }
+    .queue-btn { background: none; border: 1px solid #555; color: #b3b3b3; padding: 3px 10px; border-radius: 12px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+    .queue-btn:hover { border-color: #1db954; color: #1db954; }
+    .queue-btn.done { border-color: #1db954; color: #1db954; pointer-events: none; }
+    #output-select { background: #282828; color: #e0e0e0; border: 1px solid #555; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Spotify Agent</h1>
+
+  <!-- Now Playing -->
+  <div class="card" id="now-playing-card">
+    <h2>Now Playing</h2>
+    <div class="now-playing">
+      <div class="dot inactive" id="playing-dot"></div>
+      <div>
+        <div class="track-name" id="track-name">Loading...</div>
+        <div class="track-artist" id="track-artist"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mode Buttons -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Start Session</h2>
+      <select id="output-select">
+        <option value="play_now">Play Now</option>
+        <option value="queue">Queue</option>
+      </select>
+    </div>
+    <div class="mode-buttons">
+      <button class="mode-btn" data-mode="waking_up">Waking Up</button>
+      <button class="mode-btn" data-mode="working">Working</button>
+      <button class="mode-btn" data-mode="driving">Driving</button>
+      <button class="mode-btn" data-mode="brainstorming">Brainstorming</button>
+      <button class="mode-btn" data-mode="unwinding">Unwinding</button>
+      <button class="mode-btn" data-mode="sleeping">Sleeping</button>
+    </div>
+    <div id="session-status" class="status-msg" style="display:none;"></div>
+    <div id="session-queue" style="display:none; margin-top:12px;"></div>
+  </div>
+
+  <!-- Context -->
+  <div class="card" id="context-card">
+    <div class="card-header">
+      <h2>Latest Context</h2>
+      <button class="refresh-btn" onclick="loadContext()">Refresh</button>
+    </div>
+    <div class="context-grid" id="context-grid">
+      <div class="status-msg">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Active Session Biases -->
+  <div class="card" id="biases-card" style="display:none;">
+    <h2>Session Biases Applied</h2>
+    <ul class="bias-list" id="bias-list"></ul>
+  </div>
+
+  <!-- Fresh Pool -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Fresh Pool</h2>
+      <button class="refresh-btn" onclick="loadFreshPool()">Refresh</button>
+    </div>
+    <div id="fresh-pool-content">
+      <div class="status-msg">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Stats</h2>
+      <button class="refresh-btn" onclick="loadStats()">Refresh</button>
+    </div>
+    <div class="stats-grid" id="stats-grid">
+      <div class="status-msg" style="grid-column: 1/-1;">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Recent History -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Last 24 Hours</h2>
+      <button class="refresh-btn" onclick="loadHistory()">Refresh</button>
+    </div>
+    <div id="history-content">
+      <div class="status-msg">Loading...</div>
+    </div>
+  </div>
+
+  <script>
+    const API = 'https://spotify-agent.chrisbuice.workers.dev';
+
+    async function api(path) {
+      const resp = await fetch(`${API}${path}`);
+      if (!resp.ok) throw new Error(`${resp.status}: ${await resp.text()}`);
+      return resp.json();
+    }
+
+    async function apiPost(path, body) {
+      const resp = await fetch(`${API}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return resp.json();
+    }
+
+    // Now Playing (live from Spotify, polls every 5s)
+    async function loadNowPlaying() {
+      try {
+        const data = await api('/api/now-playing');
+        const dot = document.getElementById('playing-dot');
+        const name = document.getElementById('track-name');
+        const artist = document.getElementById('track-artist');
+        if (data.is_playing && data.track_name) {
+          dot.className = 'dot';
+          name.textContent = data.track_name;
+          const fmt = ms => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
+          const timeStr = data.progress_ms != null && data.duration_ms ? ` \u2022 ${fmt(data.progress_ms)} / ${fmt(data.duration_ms)}` : '';
+          const device = data.device_name ? ` \u2022 ${data.device_name}` : '';
+          artist.textContent = data.artist_name + timeStr + device;
+        } else if (data.track_name) {
+          dot.className = 'dot inactive';
+          name.textContent = data.track_name;
+          artist.textContent = data.artist_name + ' \u2022 Paused';
+        } else {
+          dot.className = 'dot inactive';
+          name.textContent = 'Nothing playing';
+          artist.textContent = '';
+        }
+      } catch { }
+    }
+
+    // Context
+    async function loadContext() {
+      try {
+        const [snap, nowPlaying] = await Promise.all([
+          api('/debug/last-snapshot'),
+          api('/api/now-playing').catch(() => ({})),
+        ]);
+        if (snap.error) {
+          document.getElementById('context-grid').innerHTML = '<div class="status-msg">No snapshots yet</div>';
+          return;
+        }
+        const capturedDate = new Date(snap.captured_at * 1000);
+        const timeStr = capturedDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+        // Use live device from now-playing, fall back to snapshot
+        const deviceDisplay = nowPlaying.device_name ? `${nowPlaying.device_name} (${nowPlaying.device_type})` : snap.device_type || 'unknown';
+        const items = [
+          { label: 'Captured', value: timeStr },
+          { label: 'Daylight', value: snap.daylight_phase },
+          { label: 'Weather', value: `${snap.weather_condition || 'unknown'}, ${snap.weather_temp_f ? snap.weather_temp_f + '\u00b0F' : '?'}` },
+          { label: 'Location', value: `${snap.location_label || 'unknown'} (${snap.location_source})` },
+          { label: 'Device', value: deviceDisplay },
+          { label: 'Wind', value: snap.weather_wind_mph ? snap.weather_wind_mph + ' mph' : '?' },
+          { label: 'Cloud', value: snap.weather_cloud_pct != null ? snap.weather_cloud_pct + '%' : '?' },
+        ];
+        if (snap.user_note) items.push({ label: 'Note', value: snap.user_note });
+        document.getElementById('context-grid').innerHTML = items.map(i =>
+          `<div class="context-item"><div class="context-label">${i.label}</div><div class="context-value">${i.value}</div></div>`
+        ).join('');
+      } catch (e) {
+        document.getElementById('context-grid').innerHTML = `<div class="status-msg error">${e.message}</div>`;
+      }
+    }
+
+    // Like a track (add to Spotify saved songs)
+    async function likeTrack(btn, trackId) {
+      const original = btn.innerHTML;
+      btn.textContent = '...';
+      try {
+        const resp = await apiPost('/api/like-track', { track_id: trackId });
+        if (resp.ok) {
+          btn.innerHTML = '&#9829;';
+          btn.className = 'queue-btn done';
+        } else {
+          btn.innerHTML = original;
+          btn.title = 'Blocked by Spotify Dev Mode';
+          btn.style.borderColor = '#e74c3c';
+          btn.style.color = '#e74c3c';
+        }
+      } catch {
+        btn.innerHTML = original;
+        btn.title = 'Blocked by Spotify Dev Mode';
+        btn.style.borderColor = '#e74c3c';
+        btn.style.color = '#e74c3c';
+      }
+    }
+
+    // Queue a single track
+    async function queueTrack(btn, trackId) {
+      btn.textContent = '...';
+      try {
+        await apiPost('/api/queue-track', { track_id: trackId });
+        btn.textContent = 'Queued';
+        btn.className = 'queue-btn done';
+      } catch {
+        btn.textContent = 'Failed';
+        setTimeout(() => { btn.textContent = '+ Queue'; }, 2000);
+      }
+    }
+
+    // Fresh Pool
+    async function loadFreshPool() {
+      try {
+        const [pool, stats] = await Promise.all([
+          api('/debug/fresh-pool?limit=15'),
+          api('/debug/fresh-pool-stats'),
+        ]);
+        let html = `<div style="margin-bottom:8px;color:#b3b3b3;font-size:13px;">
+          ${stats.fresh} fresh, ${stats.queued} queued, ${stats.played} played, ${stats.liked} liked, ${stats.skipped} skipped
+        </div>`;
+        if (pool.length === 0) {
+          html += '<div class="status-msg">Fresh pool is empty. Run discovery first.</div>';
+        } else {
+          html += '<table><tr><th>Track</th><th>Source</th><th>Score</th><th></th></tr>';
+          html += pool.map(t =>
+            `<tr><td>${t.track_name}</td><td><span class="source-tag">${t.source_detail || t.source}</span></td><td class="score">${t.taste_score.toFixed(1)}</td><td><button class="queue-btn" onclick="queueTrack(this, '${t.track_id}')">+ Queue</button></td></tr>`
+          ).join('');
+          html += '</table>';
+        }
+        document.getElementById('fresh-pool-content').innerHTML = html;
+      } catch (e) {
+        document.getElementById('fresh-pool-content').innerHTML = `<div class="status-msg error">${e.message}</div>`;
+      }
+    }
+
+    // Stats
+    async function loadStats() {
+      try {
+        const [events, taste, poolStats] = await Promise.all([
+          api('/debug/recent-events'),
+          api('/debug/top-tracks-by-score?limit=5'),
+          api('/debug/fresh-pool-stats'),
+        ]);
+
+        const completed = events.filter(e => e.classification === 'completed').length;
+        const skipped = events.filter(e => e.classification === 'skipped').length;
+        const total = events.length;
+        const skipRate = total > 0 ? Math.round(skipped / total * 100) : 0;
+
+        document.getElementById('stats-grid').innerHTML = `
+          <div class="stat-box"><div class="stat-number">${total}</div><div class="stat-label">Recent Events</div></div>
+          <div class="stat-box"><div class="stat-number">${completed}</div><div class="stat-label">Completed</div></div>
+          <div class="stat-box"><div class="stat-number">${skipped}</div><div class="stat-label">Skipped</div></div>
+          <div class="stat-box"><div class="stat-number">${skipRate}%</div><div class="stat-label">Skip Rate</div></div>
+        `;
+      } catch (e) {
+        document.getElementById('stats-grid').innerHTML = `<div class="status-msg error" style="grid-column:1/-1;">${e.message}</div>`;
+      }
+    }
+
+    // Recent History
+    async function loadHistory() {
+      try {
+        const events = await api('/api/recent-history');
+        const el = document.getElementById('history-content');
+        if (events.length === 0) {
+          el.innerHTML = '<div class="status-msg">No play events in the last 24 hours.</div>';
+          return;
+        }
+        const badgeClass = c => ({completed:'badge-completed',skipped:'badge-skipped',partial:'badge-partial',replayed:'badge-replayed'}[c] || '');
+        let html = '<table><tr><th>Time</th><th>Track</th><th>Result</th><th>Score</th><th></th></tr>';
+        html += events.map(e => {
+          const time = new Date(e.started_at * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+          const name = e.track_name || e.track_id;
+          const score = e.taste_score != null ? e.taste_score.toFixed(1) : '\u2014';
+          return `<tr>
+            <td class="history-time">${time}</td>
+            <td>${name}</td>
+            <td><span class="badge ${badgeClass(e.classification)}">${e.classification}</span></td>
+            <td class="score">${score}</td>
+            <td><button class="queue-btn" onclick="likeTrack(this, '${e.track_id}')">&#9825;</button></td>
+          </tr>`;
+        }).join('');
+        html += '</table>';
+        el.innerHTML = html;
+      } catch (e) {
+        document.getElementById('history-content').innerHTML = `<div class="status-msg error">${e.message}</div>`;
+      }
+    }
+
+    // Mode buttons
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const mode = btn.dataset.mode;
+        const output = document.getElementById('output-select').value;
+        const status = document.getElementById('session-status');
+        status.style.display = 'block';
+        status.textContent = `Starting ${mode} session...`;
+        status.className = 'status-msg';
+        btn.classList.add('active');
+
+        try {
+          const result = await apiPost('/api/start-session', { mode, output, duration_min: 60 });
+          const ctx = result.contextSummary;
+          let msg = `${result.mode}: ${result.trackCount} tracks (${result.familiarCount} familiar, ${result.freshCount} fresh)`;
+          if (ctx.weatherCondition) msg += ` | ${ctx.weatherCondition} ${ctx.tempF}\u00b0F`;
+
+          status.textContent = msg;
+
+          // Show session queue
+          const queueDiv = document.getElementById('session-queue');
+          if (result.tracks && result.tracks.length > 0) {
+            queueDiv.style.display = 'block';
+            queueDiv.innerHTML = '<table><tr><th>#</th><th>Track</th><th>Type</th></tr>' +
+              result.tracks.map((t, i) => {
+                const isFresh = t.source.includes('fresh');
+                const tag = isFresh ? '<span class="source-tag" style="background:#1db954;color:#000;">Fresh</span>' : '<span class="source-tag">Familiar</span>';
+                return `<tr><td style="color:#b3b3b3;width:30px;">${i + 1}</td><td>${t.name}</td><td>${tag}</td></tr>`;
+              }).join('') + '</table>';
+          } else {
+            queueDiv.style.display = 'none';
+          }
+
+          // Show biases
+          if (ctx.biasesApplied && ctx.biasesApplied.length > 0) {
+            document.getElementById('biases-card').style.display = 'block';
+            document.getElementById('bias-list').innerHTML = ctx.biasesApplied.map(b =>
+              `<li><span class="mult">\u00d7${b.avgMultiplier}</span> ${b.reason} (${b.appliedToTracks} tracks)</li>`
+            ).join('');
+          } else {
+            document.getElementById('biases-card').style.display = 'none';
+          }
+        } catch (e) {
+          status.textContent = `Error: ${e.message}`;
+          status.className = 'status-msg error';
+        }
+
+        setTimeout(() => btn.classList.remove('active'), 2000);
+      });
+    });
+
+    // Initial load
+    loadNowPlaying();
+    loadContext();
+    loadFreshPool();
+    loadStats();
+    loadHistory();
+    setInterval(loadNowPlaying, 5000);
+  </script>
+</body>
+</html>

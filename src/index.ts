@@ -22,6 +22,24 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    // CORS preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        },
+      });
+    }
+
+    const addCors = (resp: Response): Response => {
+      const headers = new Headers(resp.headers);
+      headers.set("Access-Control-Allow-Origin", "*");
+      return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers });
+    };
+
+    const response = await (async (): Promise<Response> => {
     try {
       switch (url.pathname) {
         case "/":
@@ -37,6 +55,32 @@ export default {
           const spotify = new SpotifyClient(env);
           const profile = await spotify.get<{ display_name: string; id: string }>("/v1/me");
           return Response.json({ display_name: profile.display_name, id: profile.id });
+        }
+
+        case "/api/now-playing": {
+          const spotify = new SpotifyClient(env);
+          try {
+            const playing = await spotify.get<{
+              is_playing: boolean;
+              item: { id: string; name: string; artists: Array<{ name: string }>; duration_ms: number } | null;
+              progress_ms: number | null;
+              device?: { name: string; type: string } | null;
+            }>("/v1/me/player/currently-playing");
+            if (!playing || !playing.item) {
+              return Response.json({ is_playing: false });
+            }
+            return Response.json({
+              is_playing: playing.is_playing,
+              track_name: playing.item.name,
+              artist_name: playing.item.artists.map(a => a.name).join(", "),
+              progress_ms: playing.progress_ms,
+              duration_ms: playing.item.duration_ms,
+              device_name: playing.device?.name ?? null,
+              device_type: playing.device?.type ?? null,
+            });
+          } catch {
+            return Response.json({ is_playing: false });
+          }
         }
 
         case "/debug/recent-observations": {
@@ -278,6 +322,50 @@ export default {
           return Response.json(stats);
         }
 
+        case "/api/like-track": {
+          if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const spotify = new SpotifyClient(env);
+          const { track_id: likeTrackId } = await request.json() as { track_id: string };
+          if (!likeTrackId) return Response.json({ ok: false, error: "track_id required" });
+          try {
+            await spotify.put("/v1/me/tracks", { ids: [likeTrackId] });
+            return Response.json({ ok: true });
+          } catch {
+            return Response.json({ ok: false, error: "Blocked by Spotify Dev Mode" });
+          }
+        }
+
+        case "/api/queue-track": {
+          if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const spotify = new SpotifyClient(env);
+          const { track_id } = await request.json() as { track_id: string };
+          if (!track_id) return Response.json({ ok: false, error: "track_id required" });
+          const { getActiveDevice } = await import("./spotify/playback");
+          const device = await getActiveDevice(spotify);
+          await spotify.post("/v1/me/player/queue", undefined, {
+            uri: `spotify:track:${track_id}`,
+            ...(device?.id ? { device_id: device.id } : {}),
+          });
+          return Response.json({ ok: true });
+        }
+
+        case "/api/recent-history": {
+          const since = Math.floor(Date.now() / 1000) - 24 * 3600;
+          const rows = await env.DB.prepare(`
+            SELECT pe.track_id, pe.started_at, pe.duration_listened_ms, pe.classification,
+                   pe.hour_of_day, pe.device_type,
+                   COALESCE(tt.track_name, po.track_name) as track_name,
+                   tt.taste_score, tt.primary_artist_id
+            FROM play_events pe
+            LEFT JOIN track_taste tt ON tt.track_id = pe.track_id
+            LEFT JOIN poll_observations po ON po.track_id = pe.track_id
+            WHERE pe.started_at >= ?
+            GROUP BY pe.id
+            ORDER BY pe.started_at DESC
+          `).bind(since).all();
+          return Response.json(rows.results);
+        }
+
         case "/debug/all-playlists": {
           const spotify = new SpotifyClient(env);
           const { getUserPlaylists } = await import("./spotify/library");
@@ -292,6 +380,8 @@ export default {
       const message = err instanceof Error ? err.message : "Unknown error";
       return new Response(message, { status: 500 });
     }
+    })();
+    return addCors(response);
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
