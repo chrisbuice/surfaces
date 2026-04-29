@@ -49,6 +49,7 @@ interface SeasonalPlaylistInfo {
   name: string;
   season: string;
   year: number;
+  yearFromName: boolean;
 }
 
 /** Scan user's playlists and return ones that look seasonal */
@@ -91,11 +92,10 @@ export async function detectSeasonalPlaylists(spotify: SpotifyClient): Promise<S
       }
     }
 
-    // If no year found in name, default to current year.
-    // (Previously we inferred from track added_at dates, but Dev Mode blocks
-    // the playlist-tracks API and the embed fallback doesn't include added_at.
-    // All existing undated playlists are already synced with correct years from
-    // earlier runs; new playlists without a year are most likely current.)
+    const yearFromName = year !== null;
+
+    // If no year found in name, default to current year. The sync function
+    // will preserve the existing DB year for known playlists (see below).
     if (!year) {
       year = new Date().getFullYear();
     }
@@ -105,6 +105,7 @@ export async function detectSeasonalPlaylists(spotify: SpotifyClient): Promise<S
       name: pl.name,
       season: matchedSeason.season,
       year,
+      yearFromName,
     });
   }
 
@@ -137,7 +138,20 @@ export async function syncSeasonalPlaylists(
 
   let synced = 0;
   for (const pl of detected) {
-    const isCurrent = (pl.season === currentSeason && pl.year === currentYear) ? 1 : 0;
+    // If the year wasn't in the playlist name, check if the DB already has
+    // a correct year from a previous sync (when the API could infer it from
+    // track added_at dates). Don't overwrite good data with a default.
+    let year = pl.year;
+    if (!pl.yearFromName) {
+      const existing = await db.prepare(
+        "SELECT year FROM seasonal_playlists WHERE spotify_playlist_id = ?"
+      ).bind(pl.spotifyPlaylistId).first<{ year: number }>();
+      if (existing) {
+        year = existing.year;
+      }
+    }
+
+    const isCurrent = (pl.season === currentSeason && year === currentYear) ? 1 : 0;
 
     await db.prepare(`
       INSERT INTO seasonal_playlists (spotify_playlist_id, name, season, year, is_current, last_synced_at)
@@ -148,7 +162,7 @@ export async function syncSeasonalPlaylists(
         year = excluded.year,
         is_current = excluded.is_current,
         last_synced_at = excluded.last_synced_at
-    `).bind(pl.spotifyPlaylistId, pl.name, pl.season, pl.year, isCurrent, now).run();
+    `).bind(pl.spotifyPlaylistId, pl.name, pl.season, year, isCurrent, now).run();
     synced++;
   }
 
