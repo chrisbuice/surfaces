@@ -109,7 +109,9 @@ function parseTrackFromTitle(
 export async function pullAllCandidates(
   spotify: SpotifyClient,
   debug?: string[],
-  dayOverride?: number
+  dayOverride?: number,
+  db?: D1Database,
+  lastfmApiKey?: string
 ): Promise<DiscoveryCandidate[]> {
   const candidates: DiscoveryCandidate[] = [];
   const day = dayOverride ?? Math.floor(Date.now() / 86400000);
@@ -124,6 +126,17 @@ export async function pullAllCandidates(
 
   // ── 2. Editorial RSS feed (1 feed per day, rotated) ──
   await searchEditorialRss(spotify, candidates, day, debug);
+
+  // ── 3. Last.fm similar-artist discovery ──
+  if (db && lastfmApiKey) {
+    try {
+      const { pullLastFmCandidates } = await import("./similar");
+      const lastfmCandidates = await pullLastFmCandidates(spotify, db, lastfmApiKey, debug);
+      candidates.push(...lastfmCandidates);
+    } catch (err) {
+      debug?.push(`Last.fm discovery error: ${err}`);
+    }
+  }
 
   // Deduplicate
   const seen = new Set<string>();

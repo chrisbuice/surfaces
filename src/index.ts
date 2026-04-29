@@ -19,6 +19,7 @@ export interface Env {
   SPOTIFY_CLIENT_SECRET: string;
   SHORTCUT_TOKEN: string;
   RESEND_API_KEY: string;
+  LASTFM_API_KEY?: string;
 }
 
 export default {
@@ -533,7 +534,7 @@ export default {
           const spotify = new SpotifyClient(env);
           const dayParam = url.searchParams.get("day");
           const dayOverride = dayParam ? parseInt(dayParam) : undefined;
-          const result = await runDiscoveryAgent(env.DB, spotify, dayOverride);
+          const result = await runDiscoveryAgent(env.DB, spotify, dayOverride, env.LASTFM_API_KEY);
           return Response.json(result);
         }
 
@@ -691,6 +692,38 @@ export default {
           const { rebuildAcousticProfile } = await import("./audio/profile");
           const profileResult = await rebuildAcousticProfile(env.DB);
           return Response.json(profileResult);
+        }
+
+        case "/debug/lastfm-similar": {
+          const lfmArtist = url.searchParams.get("artist");
+          if (!lfmArtist) return Response.json({ error: "artist query param required" }, { status: 400 });
+          if (!env.LASTFM_API_KEY) return Response.json({ error: "LASTFM_API_KEY not set" }, { status: 500 });
+          const { LastFmClient } = await import("./discovery/lastfm");
+          const lfm = new LastFmClient(env.LASTFM_API_KEY, env.DB);
+          const lfmResult = await lfm.getSimilarArtists(lfmArtist, 10);
+          return Response.json(lfmResult);
+        }
+
+        case "/debug/discovery-by-source": {
+          const sourceRows = await env.DB.prepare(`
+            SELECT
+              CASE
+                WHEN source LIKE 'lastfm:%' THEN 'lastfm'
+                WHEN source LIKE 'editorial_rss%' THEN 'editorial_rss'
+                WHEN source LIKE 'followed_artist%' THEN 'followed_artist'
+                WHEN source LIKE 'top_artist%' THEN 'top_artist'
+                ELSE source
+              END as source_group,
+              COUNT(*) as cnt,
+              SUM(CASE WHEN status = 'fresh' THEN 1 ELSE 0 END) as fresh,
+              SUM(CASE WHEN status = 'played' THEN 1 ELSE 0 END) as played,
+              SUM(CASE WHEN status = 'liked' THEN 1 ELSE 0 END) as liked,
+              SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) as skipped
+            FROM fresh_pool
+            GROUP BY source_group
+            ORDER BY cnt DESC
+          `).all();
+          return Response.json(sourceRows.results);
         }
 
         case "/debug/audio-features-table": {
@@ -1031,7 +1064,7 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
     if (cron === "0 10 * * *") {
       // Daily at 10am UTC (6am ET): run discovery agent
       const spotify = new SpotifyClient(env);
-      await runDiscoveryAgent(env.DB, spotify);
+      await runDiscoveryAgent(env.DB, spotify, undefined, env.LASTFM_API_KEY);
     }
 
     if (cron === "*/2 * * * *") {
