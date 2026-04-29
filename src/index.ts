@@ -571,6 +571,69 @@ export default {
           return Response.json(stats);
         }
 
+        case "/debug/playlist-tracks": {
+          const playlistId = url.searchParams.get("id");
+          if (!playlistId) return Response.json({ error: "id query param required" }, { status: 400 });
+          const maxLimit = 1000;
+          const trackLimit = Math.min(parseInt(url.searchParams.get("limit") ?? "200") || 200, maxLimit);
+
+          // Dev Mode blocks all Spotify API playlist-track endpoints (both user
+          // and client-credentials tokens). Workaround: scrape the public embed
+          // page which includes track data in __NEXT_DATA__ without auth.
+          const embedResp = await fetch(
+            `https://open.spotify.com/embed/playlist/${playlistId}`,
+            { headers: { "User-Agent": "Mozilla/5.0 (compatible; SpotifyAgent/1.0)" } }
+          );
+          if (!embedResp.ok) {
+            return Response.json({ error: `Embed fetch failed (${embedResp.status})` }, { status: 502 });
+          }
+          const html = await embedResp.text();
+          const match = html.match(/__NEXT_DATA__.*?type="application\/json">(.*?)<\/script>/);
+          if (!match) {
+            return Response.json({ error: "Could not parse embed data" }, { status: 502 });
+          }
+
+          interface EmbedTrack {
+            uri: string;
+            title: string;
+            subtitle: string;
+            duration: number;
+            isPlayable: boolean;
+          }
+          const nextData = JSON.parse(match[1]) as {
+            props: { pageProps: { state: { data: { entity: {
+              name: string;
+              trackList: EmbedTrack[];
+            } } } } };
+          };
+          const entity = nextData.props.pageProps.state.data.entity;
+          const embedTracks = entity.trackList.slice(0, trackLimit);
+
+          const tracks = embedTracks.map((t, i) => {
+            const trackId = t.uri.replace("spotify:track:", "");
+            return {
+              track_id: trackId,
+              track_name: t.title,
+              artist_names: t.subtitle.split(/,\s*/).map(s => s.replace(/\u00a0/g, " ").trim()),
+              artist_ids: null,   // not available via embed
+              album_name: null,   // not available via embed
+              album_id: null,     // not available via embed
+              added_at: null,     // not available via embed
+              added_at_iso: null, // not available via embed
+              duration_ms: t.duration,
+              position: i,
+            };
+          });
+
+          return Response.json({
+            playlist_name: entity.name,
+            track_count: entity.trackList.length,
+            source: "embed_scrape",
+            note: "added_at, album, and artist_ids unavailable in Dev Mode (embed scraping fallback)",
+            tracks,
+          });
+        }
+
         case "/api/like-track":
         case "/api/block-track": {
           if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
