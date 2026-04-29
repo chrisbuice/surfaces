@@ -474,7 +474,9 @@ export default {
 
         case "/debug/run-discovery": {
           const spotify = new SpotifyClient(env);
-          const result = await runDiscoveryAgent(env.DB, spotify);
+          const dayParam = url.searchParams.get("day");
+          const dayOverride = dayParam ? parseInt(dayParam) : undefined;
+          const result = await runDiscoveryAgent(env.DB, spotify, dayOverride);
           return Response.json(result);
         }
 

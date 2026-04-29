@@ -24,12 +24,13 @@ interface DiscoveryResult {
 
 export async function runDiscoveryAgent(
   db: D1Database,
-  spotify: SpotifyClient
+  spotify: SpotifyClient,
+  dayOverride?: number
 ): Promise<DiscoveryResult & { debug?: string[] }> {
   const debug: string[] = [];
 
   // ── Pull candidates from all sources ──
-  const candidates = await pullAllCandidates(spotify, debug);
+  const candidates = await pullAllCandidates(spotify, debug, dayOverride);
   debug.push(`pullAllCandidates returned ${candidates.length} candidates`);
 
   // ── Filter out tracks the user already knows ──

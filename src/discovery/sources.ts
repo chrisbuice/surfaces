@@ -108,10 +108,11 @@ function parseTrackFromTitle(
 /** Pull candidates — rotates sources daily */
 export async function pullAllCandidates(
   spotify: SpotifyClient,
-  debug?: string[]
+  debug?: string[],
+  dayOverride?: number
 ): Promise<DiscoveryCandidate[]> {
   const candidates: DiscoveryCandidate[] = [];
-  const day = Math.floor(Date.now() / 86400000);
+  const day = dayOverride ?? Math.floor(Date.now() / 86400000);
   const useFollowed = day % 2 === 0;
 
   // ── 1. Artist-based search (alternates followed vs top) ──
