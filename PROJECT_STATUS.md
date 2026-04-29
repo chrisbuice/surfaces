@@ -185,6 +185,7 @@ spotifygenie/
 | M14 | MCP server | Done | `src/mcp/server.ts`, `src/mcp/tools.ts` |
 | M15 | Editorial RSS discovery | Done | `src/discovery/sources.ts` (Stereogum, Line of Best Fit, EARMILK) |
 | M16 | ReccoBeats audio features | Done | `src/audio/reccobeats.ts`, `src/audio/backfill.ts`, `src/db/migrations/001_audio_features.sql` |
+| M17 | Acoustic preference profile | Done | `src/audio/profile.ts`, `src/db/migrations/002_acoustic_profile.sql` |
 
 ---
 
