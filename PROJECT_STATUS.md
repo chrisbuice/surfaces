@@ -1,9 +1,9 @@
 # Spotify Curation Agent — Project Status
 
-**Last updated:** April 29, 2026 (end of session 3)
-**Codebase:** 30 TypeScript files + 1 HTML dashboard, ~6,650 lines
-**Commits:** 35 on main branch
-**All planned milestones (M0–M15) are complete** (M12 skipped by choice)
+**Last updated:** April 29, 2026 (end of session 4)
+**Codebase:** 32 TypeScript files + 1 HTML dashboard, ~7,640 lines
+**Commits:** 52 on main branch
+**All planned milestones (M0–M16) are complete** (M12 skipped by choice)
 
 This document is intended to bring a new conversation up to speed on the full state of the application — what exists, how it works, what files do what, and what's left to explore.
 
@@ -119,6 +119,10 @@ spotifygenie/
       playback.ts              # play(), queue(), createPlaylist(), getActiveDevice()
       browse.ts                # Search (used by discovery)
 
+    audio/
+      reccobeats.ts            # ReccoBeats client (AudioFeaturesProvider interface)
+      backfill.ts              # Cron handler: batched audio feature fetch
+
     tracker/
       poll.ts                  # Cron: poll /me/player, write poll_observations
       derive.ts                # Turn sequential observations into play_events with classification
@@ -180,6 +184,7 @@ spotifygenie/
 | M13 | Dashboard | Done | `dashboard/index.html` |
 | M14 | MCP server | Done | `src/mcp/server.ts`, `src/mcp/tools.ts` |
 | M15 | Editorial RSS discovery | Done | `src/discovery/sources.ts` (Stereogum, Line of Best Fit, EARMILK) |
+| M16 | ReccoBeats audio features | Done | `src/audio/reccobeats.ts`, `src/audio/backfill.ts`, `src/db/migrations/001_audio_features.sql` |
 
 ---
 
@@ -242,6 +247,9 @@ spotifygenie/
 | `/debug/track-affinities?track_id=X` | View affinities for a specific track |
 | `/debug/all-playlists` | List all user playlists |
 | `/debug/playlist-tracks?id=X&limit=N` | Full track listing of any playlist via embed scraping |
+| `/debug/audio-features?track_id=X` | Audio features for a track (fetches from ReccoBeats if missing) |
+| `/debug/audio-features-stats` | Coverage: tracks scored, with features, not found, missing |
+| `/debug/run-audio-backfill` | Manually trigger a backfill batch (40 tracks) |
 
 ---
 
@@ -369,6 +377,22 @@ Sent at 8pm ET via Resend. Light theme for mobile readability. Contains:
 ## 13. Commit history
 
 ```
+d8e4cbe M16: Debug endpoints for audio features
+085c11d M16: ReccoBeats client, backfill cron, and audio features pipeline
+1fa6e79 M16: Add track_audio_features table
+b6f270f Remove dead code referencing removed/renamed Spotify endpoints
+e449fe0 Tolerant fix for playlist field rename (tracks → items)
+f588177 Backfill quick skips from Spotify recently-played API
+2c00953 Raise skip threshold from 30% to 50%
+cf1249a Add replay bonus to taste scoring
+51ba439 Fix skip detection: remove impossible 30s time threshold
+1f6bcd6 Redesign stats: today's listening, agent, discovery, taste model
+9868c81 Now Playing: show next 3 tracks in queue
+c33c678 History: store artist names at poll time, show device for direct plays
+95665d3 Last 24 Hours: add artist name and play source column
+c9024a8 Fix year inference overwriting correct years for undated playlists
+cdde6e8 Prefer phone over soundbar when no device is actively playing
+9854410 Exclude "a late summer" from seasonal playlists
 2718a18 Fix three features silently broken by Spotify Dev Mode
 7e14204 Exclude followed-not-curated playlist from seasonal detection
 9986bd5 Add /debug/playlist-tracks for taste archaeology
