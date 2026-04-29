@@ -241,3 +241,18 @@ CREATE TABLE IF NOT EXISTS track_audio_features (
   fetched_at INTEGER NOT NULL       -- unix seconds
 );
 CREATE INDEX IF NOT EXISTS idx_audio_features_fetched ON track_audio_features(fetched_at);
+
+-- =========================================================
+-- ACOUSTIC PROFILE (M17 — per-mode centroids)
+-- =========================================================
+-- Mean + stddev per (mode, dimension). Rebuilt daily from play history.
+-- Rows with sample_size < threshold are undertrained — M20 falls back to 'overall'.
+CREATE TABLE IF NOT EXISTS acoustic_profile (
+  mode TEXT NOT NULL,
+  dimension TEXT NOT NULL,
+  mean REAL NOT NULL,
+  stddev REAL NOT NULL,
+  sample_size INTEGER NOT NULL,
+  refreshed_at INTEGER NOT NULL,
+  PRIMARY KEY (mode, dimension)
+);
