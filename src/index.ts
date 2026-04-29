@@ -72,14 +72,57 @@ export default {
             if (!playing || !playing.item) {
               return Response.json({ is_playing: false });
             }
+            // Check if this track is in the most recent active session
+            let playContext: { inSession: boolean; mode?: string; source?: string; sourceDetail?: string; reasons?: string[] } = { inSession: false };
+            const activeSess = await env.DB.prepare(
+              "SELECT session_id, mode FROM sessions WHERE ended_at IS NULL ORDER BY invoked_at DESC LIMIT 1"
+            ).first<{ session_id: string; mode: string }>();
+            if (activeSess) {
+              const st = await env.DB.prepare(
+                "SELECT source FROM session_tracks WHERE session_id = ? AND track_id = ?"
+              ).bind(activeSess.session_id, playing.item.id).first<{ source: string }>();
+              if (st) {
+                const isFresh = st.source.startsWith("fresh:");
+                const reasons: string[] = [];
+                if (isFresh) {
+                  const fp = await env.DB.prepare(
+                    "SELECT source_detail FROM fresh_pool WHERE track_id = ?"
+                  ).bind(playing.item.id).first<{ source_detail: string | null }>();
+                  reasons.push(fp?.source_detail ? `Discovery: ${fp.source_detail}` : "Fresh discovery");
+                } else {
+                  const taste = await env.DB.prepare(
+                    `SELECT in_liked_songs, in_top_tracks_short, in_top_tracks_medium, in_top_tracks_long,
+                            current_season_present, seasonal_playlist_count, play_count
+                     FROM track_taste WHERE track_id = ?`
+                  ).bind(playing.item.id).first<{
+                    in_liked_songs: number; in_top_tracks_short: number; in_top_tracks_medium: number;
+                    in_top_tracks_long: number; current_season_present: number;
+                    seasonal_playlist_count: number; play_count: number;
+                  }>();
+                  if (taste) {
+                    if (taste.in_top_tracks_short) reasons.push("In your current top tracks");
+                    else if (taste.in_top_tracks_medium) reasons.push("In your medium-term favorites");
+                    else if (taste.in_top_tracks_long) reasons.push("In your long-term favorites");
+                    if (taste.in_liked_songs) reasons.push("Liked song");
+                    if (taste.current_season_present) reasons.push("Current season playlist");
+                    if (taste.play_count > 5) reasons.push(`Played ${taste.play_count} times`);
+                    if (reasons.length === 0) reasons.push("Matches your taste profile");
+                  }
+                }
+                playContext = { inSession: true, mode: activeSess.mode, source: isFresh ? "fresh" : "familiar", reasons };
+              }
+            }
+
             return Response.json({
               is_playing: playing.is_playing,
+              track_id: playing.item.id,
               track_name: playing.item.name,
               artist_name: playing.item.artists.map(a => a.name).join(", "),
               progress_ms: playing.progress_ms,
               duration_ms: playing.item.duration_ms,
               device_name: playing.device?.name ?? null,
               device_type: playing.device?.type ?? null,
+              play_context: playContext,
             });
           } catch {
             return Response.json({ is_playing: false });

@@ -65,11 +65,16 @@
     <h2>Now Playing</h2>
     <div class="now-playing">
       <div class="dot inactive" id="playing-dot"></div>
-      <div>
+      <div style="flex:1;">
         <div class="track-name" id="track-name">Loading...</div>
         <div class="track-artist" id="track-artist"></div>
       </div>
+      <div id="now-playing-actions" style="display:none;white-space:nowrap;margin-left:12px;">
+        <button class="queue-btn" id="np-like-btn" title="Add to Liked via Agent playlist">&#9825;</button>
+        <button class="queue-btn" id="np-block-btn" title="Block from future sessions" style="margin-left:4px;">&#10005;</button>
+      </div>
     </div>
+    <div id="np-context" style="display:none;margin-top:6px;font-size:12px;color:#b3b3b3;"></div>
   </div>
 
   <!-- Mode Buttons -->
@@ -182,27 +187,60 @@
     }
 
     // Now Playing (live from Spotify, polls every 5s)
+    let currentTrackId = null;
     async function loadNowPlaying() {
       try {
         const data = await api('/api/now-playing');
         const dot = document.getElementById('playing-dot');
         const name = document.getElementById('track-name');
         const artist = document.getElementById('track-artist');
-        if (data.is_playing && data.track_name) {
-          dot.className = 'dot';
+        const actions = document.getElementById('now-playing-actions');
+        if (data.track_name) {
+          dot.className = data.is_playing ? 'dot' : 'dot inactive';
           name.textContent = data.track_name;
           const fmt = ms => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}`;
-          const timeStr = data.progress_ms != null && data.duration_ms ? ` \u2022 ${fmt(data.progress_ms)} / ${fmt(data.duration_ms)}` : '';
+          const timeStr = data.is_playing && data.progress_ms != null && data.duration_ms ? ` \u2022 ${fmt(data.progress_ms)} / ${fmt(data.duration_ms)}` : '';
           const device = data.device_name ? ` \u2022 ${data.device_name}` : '';
-          artist.textContent = data.artist_name + timeStr + device;
-        } else if (data.track_name) {
-          dot.className = 'dot inactive';
-          name.textContent = data.track_name;
-          artist.textContent = data.artist_name + ' \u2022 Paused';
+          artist.textContent = data.artist_name + (data.is_playing ? '' : ' \u2022 Paused') + timeStr + device;
+          // Reset buttons if track changed
+          if (data.track_id !== currentTrackId) {
+            currentTrackId = data.track_id;
+            const likeBtn = document.getElementById('np-like-btn');
+            const blockBtn = document.getElementById('np-block-btn');
+            likeBtn.innerHTML = '&#9825;';
+            likeBtn.className = 'queue-btn';
+            likeBtn.onclick = () => likeTrack(likeBtn, currentTrackId);
+            blockBtn.innerHTML = '&#10005;';
+            blockBtn.className = 'queue-btn';
+            blockBtn.onclick = () => blockTrack(blockBtn, currentTrackId);
+          }
+          actions.style.display = '';
+          // Show play context
+          const ctxEl = document.getElementById('np-context');
+          const pc = data.play_context;
+          if (pc && pc.inSession) {
+            const srcTag = pc.source === 'fresh'
+              ? '<span class="reason-tag fresh">fresh</span>'
+              : '<span class="reason-tag">familiar</span>';
+            const reasonTags = (pc.reasons || []).map(r => {
+              const cls = r.startsWith('Discovery') ? 'reason-tag fresh' : 'reason-tag';
+              return `<span class="${cls}">${r}</span>`;
+            }).join(' ');
+            ctxEl.innerHTML = `Agent (${pc.mode}) ${srcTag} ${reasonTags}`;
+            ctxEl.style.display = '';
+          } else if (pc && !pc.inSession) {
+            ctxEl.innerHTML = '<span style="color:#888;">Manual play</span>';
+            ctxEl.style.display = '';
+          } else {
+            ctxEl.style.display = 'none';
+          }
         } else {
           dot.className = 'dot inactive';
           name.textContent = 'Nothing playing';
           artist.textContent = '';
+          actions.style.display = 'none';
+          document.getElementById('np-context').style.display = 'none';
+          currentTrackId = null;
         }
       } catch { }
     }
