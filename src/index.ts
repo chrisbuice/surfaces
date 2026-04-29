@@ -113,6 +113,19 @@ export default {
               }
             }
 
+            // Fetch upcoming queue (next 3 tracks)
+            let upNext: Array<{ track_id: string; track_name: string; artist_name: string }> = [];
+            try {
+              const queue = await spotify.get<{
+                queue: Array<{ id: string; name: string; artists: Array<{ name: string }> }>;
+              }>("/v1/me/player/queue");
+              upNext = (queue.queue ?? []).slice(0, 3).map(t => ({
+                track_id: t.id,
+                track_name: t.name,
+                artist_name: t.artists.map(a => a.name).join(", "),
+              }));
+            } catch { /* queue endpoint may fail in Dev Mode */ }
+
             return Response.json({
               is_playing: playing.is_playing,
               track_id: playing.item.id,
@@ -123,6 +136,7 @@ export default {
               device_name: playing.device?.name ?? null,
               device_type: playing.device?.type ?? null,
               play_context: playContext,
+              up_next: upNext,
             });
           } catch {
             return Response.json({ is_playing: false });

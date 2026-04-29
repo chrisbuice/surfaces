@@ -79,6 +79,10 @@
       </div>
     </div>
     <div id="np-context" style="display:none;margin-top:6px;font-size:12px;color:#b3b3b3;"></div>
+    <div id="np-queue" style="display:none;margin-top:10px;border-top:1px solid #333;padding-top:8px;">
+      <div style="font-size:11px;color:#777;margin-bottom:4px;">UP NEXT</div>
+      <div id="np-queue-list"></div>
+    </div>
   </div>
 
   <!-- Mode Buttons -->
@@ -238,12 +242,24 @@
           } else {
             ctxEl.style.display = 'none';
           }
+          // Up next queue
+          const queueEl = document.getElementById('np-queue');
+          const queueList = document.getElementById('np-queue-list');
+          if (data.up_next && data.up_next.length > 0) {
+            queueList.innerHTML = data.up_next.map(t =>
+              `<div style="font-size:13px;padding:2px 0;"><span style="color:#e0e0e0;">${t.track_name}</span> <span style="color:#777;">— ${t.artist_name}</span></div>`
+            ).join('');
+            queueEl.style.display = '';
+          } else {
+            queueEl.style.display = 'none';
+          }
         } else {
           dot.className = 'dot inactive';
           name.textContent = 'Nothing playing';
           artist.textContent = '';
           actions.style.display = 'none';
           document.getElementById('np-context').style.display = 'none';
+          document.getElementById('np-queue').style.display = 'none';
           currentTrackId = null;
         }
       } catch { }
