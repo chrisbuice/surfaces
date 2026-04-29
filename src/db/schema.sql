@@ -247,6 +247,19 @@ CREATE INDEX IF NOT EXISTS idx_audio_features_fetched ON track_audio_features(fe
 -- =========================================================
 -- Mean + stddev per (mode, dimension). Rebuilt daily from play history.
 -- Rows with sample_size < threshold are undertrained — M20 falls back to 'overall'.
+-- =========================================================
+-- LAST.FM CACHE (M18 — similar artists/tracks)
+-- =========================================================
+CREATE TABLE IF NOT EXISTS lastfm_similar_cache (
+  query_type TEXT NOT NULL,
+  query_key TEXT NOT NULL,
+  response_json TEXT NOT NULL,
+  fetched_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  PRIMARY KEY (query_type, query_key)
+);
+CREATE INDEX IF NOT EXISTS idx_lastfm_expires ON lastfm_similar_cache(expires_at);
+
 CREATE TABLE IF NOT EXISTS acoustic_profile (
   mode TEXT NOT NULL,
   dimension TEXT NOT NULL,
