@@ -36,6 +36,7 @@ const EXCLUDE_PATTERNS = [
 // but that aren't part of their seasonal curation history.
 const EXCLUDE_PLAYLIST_IDS = new Set([
   "4nZccC8qFIlEsU7385ZyAv", // "boom clap vibes tumblr summer 2014" — followed, not curated
+  "2dh3rjH5LTZCNwAA8xmhjU", // "a late summer" — not a seasonal curation playlist
 ]);
 
 const YEAR_REGEX = /\b(20\d{2})\b/;
