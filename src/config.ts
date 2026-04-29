@@ -63,6 +63,10 @@ export const RECENCY_AVOID_COUNT = 50;
 export const CONTEXT_MULTIPLIER_MIN = 0.5;
 export const CONTEXT_MULTIPLIER_MAX = 2.0;
 
+/** Audio features backfill (M16) */
+export const AUDIO_BACKFILL_BATCH_SIZE = 50;
+export const AUDIO_NOT_FOUND_RESCAN_DAYS = 30;
+
 /** Fresh arc: position → fresh ratio (before mode multiplier) */
 export const FRESH_ARC: Array<[number, number]> = [
   [0.0, 0.0],   // start: 100% familiar

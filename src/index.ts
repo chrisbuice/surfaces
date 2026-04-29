@@ -876,5 +876,12 @@ export default {
       // Midnight UTC (8pm ET): send nightly listening summary
       await generateAndSendSummary(env.DB, env.RESEND_API_KEY);
     }
+
+    if (cron === "30 */2 * * *") {
+      // Every 2 hours at :30: backfill audio features from ReccoBeats.
+      // Single batch request per run — no subrequest budget concern.
+      const { runAudioBackfill } = await import("./audio/backfill");
+      await runAudioBackfill(env.DB);
+    }
   },
 } satisfies ExportedHandler<Env>;
