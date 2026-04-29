@@ -63,6 +63,26 @@ export const RECENCY_AVOID_COUNT = 50;
 export const CONTEXT_MULTIPLIER_MIN = 0.5;
 export const CONTEXT_MULTIPLIER_MAX = 2.0;
 
+/**
+ * Non-overlapping time windows for acoustic profile centroid assignment (M17).
+ * Used ONLY by src/audio/profile.ts — mode inference in modes.ts keeps its
+ * own overlapping defaultHours and scoring logic unchanged.
+ *
+ * Each entry: [startHour, endHour, weekdaysOnly?]
+ * Hours 0–5 contribute to 'overall' only — late-night listening is a known
+ * gap we don't categorize into a named mode.
+ * driving and brainstorming: session-assignment only, no time window.
+ */
+export const CENTROID_HOUR_WINDOWS: Record<string, [number, number, boolean?]> = {
+  waking_up: [6, 9],
+  working:   [9, 18, true],
+  unwinding: [18, 21],
+  sleeping:  [21, 24],
+};
+
+/** Minimum sample size for a centroid to be considered trained */
+export const ACOUSTIC_PROFILE_MIN_SAMPLES = 10;
+
 /** Audio features backfill (M16) */
 export const AUDIO_BACKFILL_BATCH_SIZE = 40; // ReccoBeats max per request is 40
 export const AUDIO_NOT_FOUND_RESCAN_DAYS = 30;

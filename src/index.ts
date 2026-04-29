@@ -664,6 +664,35 @@ export default {
           return Response.json(nfRows.results);
         }
 
+        case "/debug/acoustic-profile": {
+          const profileMode = url.searchParams.get("mode");
+          const minSamples = 10; // ACOUSTIC_PROFILE_MIN_SAMPLES
+
+          let profileRows;
+          if (profileMode) {
+            profileRows = await env.DB.prepare(
+              "SELECT mode, dimension, mean, stddev, sample_size, refreshed_at FROM acoustic_profile WHERE mode = ? ORDER BY dimension"
+            ).bind(profileMode).all();
+          } else {
+            profileRows = await env.DB.prepare(
+              "SELECT mode, dimension, mean, stddev, sample_size, refreshed_at FROM acoustic_profile ORDER BY mode, dimension"
+            ).all();
+          }
+
+          const rows = profileRows.results.map((r: Record<string, unknown>) => ({
+            ...r,
+            status: (r.sample_size as number) >= minSamples ? "trained" : "insufficient",
+          }));
+
+          return Response.json(rows);
+        }
+
+        case "/debug/rebuild-acoustic-profile": {
+          const { rebuildAcousticProfile } = await import("./audio/profile");
+          const profileResult = await rebuildAcousticProfile(env.DB);
+          return Response.json(profileResult);
+        }
+
         case "/debug/audio-features-table": {
           const afLimit = parseInt(url.searchParams.get("limit") ?? "50") || 50;
           const afRows = await env.DB.prepare(`
@@ -991,6 +1020,10 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
       // tracks are immediately eligible. Single batch request to ReccoBeats.
       const { runAudioBackfill } = await import("./audio/backfill");
       await runAudioBackfill(env.DB);
+
+      // Rebuild acoustic profile centroids from play history + audio features
+      const { rebuildAcousticProfile } = await import("./audio/profile");
+      await rebuildAcousticProfile(env.DB);
 
       await pruneOldObservations(env.DB, 30 * 24 * 60 * 60);
     }
