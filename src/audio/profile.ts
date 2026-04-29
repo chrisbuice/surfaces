@@ -75,10 +75,14 @@ export async function rebuildAcousticProfile(db: D1Database): Promise<ProfileRes
     let mode: string | null = r.session_mode ?? null;
 
     // Priority 2: time-inferred from non-overlapping centroid windows
+    // When start > end, the window wraps midnight: [start, 24) ∪ [0, end)
     if (!mode) {
       for (const [m, [start, end, weekdaysOnly]] of Object.entries(CENTROID_HOUR_WINDOWS)) {
-        if (r.hour_of_day >= start && r.hour_of_day < end) {
-          if (weekdaysOnly && (r.day_of_week === 0 || r.day_of_week === 6)) continue;
+        if (weekdaysOnly && (r.day_of_week === 0 || r.day_of_week === 6)) continue;
+        const inWindow = start < end
+          ? (r.hour_of_day >= start && r.hour_of_day < end)
+          : (r.hour_of_day >= start || r.hour_of_day < end);
+        if (inWindow) {
           mode = m;
           break;
         }

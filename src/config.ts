@@ -46,7 +46,7 @@ export const MODES: Record<string, ModeConfig> = {
     freshMultiplier: 0.6,
   },
   sleeping: {
-    defaultHours: [21, 24],
+    defaultHours: [23, 24], // user reaches for sleep music at 23:30+ ET
     defaultDurationMin: 45,
     defaultOutput: "playlist",
     freshMultiplier: 0.2,
@@ -69,15 +69,14 @@ export const CONTEXT_MULTIPLIER_MAX = 2.0;
  * own overlapping defaultHours and scoring logic unchanged.
  *
  * Each entry: [startHour, endHour, weekdaysOnly?]
- * Hours 0–5 contribute to 'overall' only — late-night listening is a known
- * gap we don't categorize into a named mode.
+ * When start > end, the window wraps midnight: [start, 24) ∪ [0, end).
  * driving and brainstorming: session-assignment only, no time window.
  */
 export const CENTROID_HOUR_WINDOWS: Record<string, [number, number, boolean?]> = {
   waking_up: [6, 9],
   working:   [9, 18, true],
-  unwinding: [18, 21],
-  sleeping:  [21, 24],
+  unwinding: [18, 23],
+  sleeping:  [23, 6],  // wraps midnight — user reaches for sleep music at 23:30+ ET
 };
 
 /** Minimum sample size for a centroid to be considered trained */
