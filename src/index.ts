@@ -303,6 +303,7 @@ export default {
             }>();
 
             const reasons: string[] = [];
+            let freshEntry: { track_name: string; source: string; source_detail: string | null; taste_score: number } | null = null;
             if (st.source === "familiar") {
               if (taste) {
                 if (taste.in_top_tracks_short) reasons.push("In your current top tracks");
@@ -319,9 +320,9 @@ export default {
               }
             } else {
               // Fresh track
-              const freshEntry = await env.DB.prepare(
-                "SELECT source, source_detail, taste_score FROM fresh_pool WHERE track_id = ?"
-              ).bind(st.track_id).first<{ source: string; source_detail: string | null; taste_score: number }>();
+              freshEntry = await env.DB.prepare(
+                "SELECT track_name, source, source_detail, taste_score FROM fresh_pool WHERE track_id = ?"
+              ).bind(st.track_id).first<{ track_name: string; source: string; source_detail: string | null; taste_score: number }>();
               if (freshEntry?.source_detail) {
                 reasons.push(`Discovery: new from ${freshEntry.source_detail}`);
               } else {
@@ -344,9 +345,17 @@ export default {
               }
             }
 
+            let trackName = taste?.track_name ?? freshEntry?.track_name;
+            if (!trackName) {
+              const obs = await env.DB.prepare(
+                "SELECT track_name FROM poll_observations WHERE track_id = ? AND track_name IS NOT NULL LIMIT 1"
+              ).bind(st.track_id).first<{ track_name: string }>();
+              trackName = obs?.track_name ?? st.track_id;
+            }
+
             explanations.push({
               position: st.position + 1,
-              trackName: taste?.track_name ?? st.track_id,
+              trackName,
               source: st.source,
               outcome: st.outcome,
               score: taste?.taste_score ?? null,
@@ -359,6 +368,51 @@ export default {
             mode: lastSess.mode,
             tracks: explanations,
           });
+        }
+
+        case "/api/top-affinities": {
+          // Tracks with strongest learned affinities, grouped by context bucket
+          const affinityRows = await env.DB.prepare(`
+            SELECT tca.track_id, tca.dimension, tca.bucket, tca.affinity, tca.sample_size,
+                   COALESCE(tt.track_name, fp.track_name) as track_name
+            FROM track_context_affinity tca
+            LEFT JOIN track_taste tt ON tt.track_id = tca.track_id
+            LEFT JOIN fresh_pool fp ON fp.track_id = tca.track_id
+            WHERE tca.sample_size >= 5 AND ABS(tca.affinity - 1.0) > 0.1
+            ORDER BY tca.affinity DESC
+          `).all<{
+            track_id: string; dimension: string; bucket: string;
+            affinity: number; sample_size: number; track_name: string | null;
+          }>();
+
+          // Group by dimension:bucket
+          const groups = new Map<string, Array<{
+            trackName: string; trackId: string; affinity: number; sampleSize: number;
+          }>>();
+          for (const row of affinityRows.results) {
+            const key = `${row.dimension}:${row.bucket}`;
+            const list = groups.get(key) ?? [];
+            list.push({
+              trackName: row.track_name ?? row.track_id,
+              trackId: row.track_id,
+              affinity: row.affinity,
+              sampleSize: row.sample_size,
+            });
+            groups.set(key, list);
+          }
+
+          // Take top 5 tracks per bucket, format for dashboard
+          const buckets = Array.from(groups.entries()).map(([key, tracks]) => {
+            const [dimension, bucket] = key.split(":");
+            return {
+              dimension,
+              bucket,
+              label: `${bucket} (${dimension.replace(/_/g, " ")})`,
+              tracks: tracks.slice(0, 5),
+            };
+          });
+
+          return Response.json({ buckets, totalAffinities: affinityRows.results.length });
         }
 
         case "/debug/send-summary": {
@@ -547,6 +601,11 @@ export default {
           const { getUserPlaylists } = await import("./spotify/library");
           const pls = await getUserPlaylists(spotify, 500);
           return Response.json(pls.map(p => ({ id: p.id, name: p.name, tracks: p.tracks?.total ?? 0 })));
+        }
+
+        case "/mcp": {
+          const { handleMcp } = await import("./mcp/server");
+          return await handleMcp(request, env);
         }
 
         default:

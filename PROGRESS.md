@@ -247,11 +247,11 @@ Per the plan, these milestones are deferred:
 
 | Milestone | What | Notes |
 |-----------|------|-------|
-| M10 | Learned context affinities | Nightly cron rebuilds `track_context_affinity` from play_event_context. Blends with cold-start rules by sample size. Needs ~1000+ play events with linked context. |
-| M11 | iOS Shortcut endpoints + the shortcut itself | `/shortcut/*` endpoints exist. Need to build the actual iOS Shortcut with location/Bluetooth actions. |
-| M12 | Calendar integration | Add iCal URL to settings, fetch current event at snapshot time, infer category (focus/meeting/workout/meal/travel/social). |
-| M13 | Dashboard | Cloudflare Pages site. Now Playing, mode buttons, fresh pool view, stats, context view. Behind Cloudflare Access. |
-| M14 | MCP server | HTTP MCP transport at `/mcp`. Connect from Claude.ai for conversational session control. |
+| M10 | Learned context affinities | **DONE.** Nightly cron rebuilds `track_context_affinity`. `context_score.ts` blends learned affinities with cold-start rules (threshold: sample_size >= 5). Dashboard shows "Learned Affinities" section grouped by context bucket. API: `/api/top-affinities`. |
+| M11 | iOS Shortcut endpoints + the shortcut itself | **DONE.** `/shortcut/start`, `/shortcut/queue`, `/shortcut/save_to_seasonal`, `/shortcut/update-location` endpoints with token auth. All 6 iOS Shortcuts built and working with GPS/Bluetooth context. `SETUP_SHORTCUTS.md` documented. |
+| M12 | Calendar integration | **SKIPPED.** User doesn't use calendar in a way that would benefit curation. |
+| M13 | Dashboard | **DONE.** Cloudflare Pages at `spotify-agent-dashboard.pages.dev` behind Cloudflare Access. Sections: Now Playing, mode buttons, Why These Tracks, context snapshot, session biases, learned affinities, fresh pool, stats, recent history with like/block. |
+| M14 | MCP server | **DONE.** JSON-RPC 2.0 MCP server at `/mcp` with 8 tools: start_session, current_session_status, end_session, add_to_seasonal, get_fresh_pool, mark_track, stats, current_context. Auth via Bearer token (SHORTCUT_TOKEN). No SDK dependency — manual protocol implementation (~80 lines). |
 
 ---
 

@@ -119,6 +119,17 @@
     <ul class="bias-list" id="bias-list"></ul>
   </div>
 
+  <!-- Learned Affinities -->
+  <div class="card" id="affinities-card" style="display:none;">
+    <div class="card-header">
+      <h2>Learned Affinities</h2>
+      <button class="refresh-btn" onclick="loadAffinities()">Refresh</button>
+    </div>
+    <div id="affinities-content">
+      <div class="status-msg">Loading...</div>
+    </div>
+  </div>
+
   <!-- Fresh Pool -->
   <div class="card">
     <div class="card-header">
@@ -323,6 +334,32 @@
       }
     }
 
+    // Learned Affinities
+    async function loadAffinities() {
+      try {
+        const data = await api('/api/top-affinities');
+        const card = document.getElementById('affinities-card');
+        if (!data.buckets || data.buckets.length === 0) {
+          card.style.display = 'none';
+          return;
+        }
+        card.style.display = 'block';
+        let html = `<div style="margin-bottom:8px;color:#b3b3b3;font-size:13px;">${data.totalAffinities} significant affinities learned</div>`;
+        for (const b of data.buckets) {
+          html += `<div style="margin-bottom:12px;">`;
+          html += `<div style="font-weight:600;margin-bottom:4px;"><span class="reason-tag context">${b.bucket}</span> <span style="color:#b3b3b3;font-size:12px;">${b.dimension.replace(/_/g, ' ')}</span></div>`;
+          html += '<table><tr><th>Track</th><th>Affinity</th><th>Plays</th></tr>';
+          html += b.tracks.map(t =>
+            `<tr><td>${t.trackName}</td><td class="score">${t.affinity.toFixed(2)}x</td><td style="color:#b3b3b3;">${t.sampleSize}</td></tr>`
+          ).join('');
+          html += '</table></div>';
+        }
+        document.getElementById('affinities-content').innerHTML = html;
+      } catch {
+        document.getElementById('affinities-card').style.display = 'none';
+      }
+    }
+
     // Fresh Pool
     async function loadFreshPool() {
       try {
@@ -464,6 +501,7 @@
     loadNowPlaying();
     loadContext();
     loadExplanation();
+    loadAffinities();
     loadFreshPool();
     loadStats();
     loadHistory();
