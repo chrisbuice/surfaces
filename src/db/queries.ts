@@ -10,6 +10,7 @@ export interface PollObservation {
   track_id: string | null;
   track_name: string | null;
   artist_ids: string | null;
+  artist_name: string | null;
   album_id: string | null;
   progress_ms: number | null;
   duration_ms: number | null;
@@ -37,11 +38,11 @@ export interface PlayEvent {
 export async function insertPollObservation(db: D1Database, obs: Omit<PollObservation, "id">): Promise<void> {
   await db.prepare(`
     INSERT INTO poll_observations
-      (observed_at, is_playing, track_id, track_name, artist_ids, album_id, progress_ms, duration_ms, device_type, context_uri, context_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (observed_at, is_playing, track_id, track_name, artist_ids, artist_name, album_id, progress_ms, duration_ms, device_type, context_uri, context_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     obs.observed_at, obs.is_playing, obs.track_id, obs.track_name, obs.artist_ids,
-    obs.album_id, obs.progress_ms, obs.duration_ms, obs.device_type, obs.context_uri, obs.context_type
+    obs.artist_name, obs.album_id, obs.progress_ms, obs.duration_ms, obs.device_type, obs.context_uri, obs.context_type
   ).run();
 }
 

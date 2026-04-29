@@ -462,7 +462,11 @@
       if (e.context_type === 'collection') return { label: 'Liked Songs', cls: 'source-collection' };
       if (e.context_type === 'album') return { label: 'Album', cls: 'source-album' };
       if (e.context_type === 'artist') return { label: 'Artist Radio', cls: 'source-playlist' };
-      return { label: 'Manual', cls: '' };
+      // No context from Spotify — show device as a hint
+      const device = e.device_type || '';
+      const deviceHints = { Smartphone: 'Phone', Computer: 'Desktop', Speaker: 'Speaker', TV: 'TV', CastAudio: 'Cast' };
+      const hint = deviceHints[device] || device;
+      return { label: hint ? `Direct \u00b7 ${hint}` : 'Direct', cls: '' };
     }
 
     async function loadHistory() {

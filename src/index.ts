@@ -662,7 +662,7 @@ export default {
                    pe.hour_of_day, pe.device_type, pe.session_id, pe.context_type, pe.context_uri,
                    COALESCE(tt.track_name, po.track_name) as track_name,
                    tt.taste_score, tt.primary_artist_id,
-                   at2.artist_name as primary_artist_name,
+                   COALESCE(at2.artist_name, po.artist_name) as primary_artist_name,
                    st.source as session_source
             FROM play_events pe
             LEFT JOIN track_taste tt ON tt.track_id = pe.track_id

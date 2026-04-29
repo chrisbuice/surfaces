@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS poll_observations (
   duration_ms INTEGER,
   device_type TEXT,
   context_uri TEXT,
-  context_type TEXT
+  context_type TEXT,
+  artist_name TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_poll_observed_at ON poll_observations(observed_at);
 CREATE INDEX IF NOT EXISTS idx_poll_track ON poll_observations(track_id);
