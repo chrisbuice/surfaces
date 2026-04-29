@@ -32,11 +32,6 @@ export interface SpotifyPlaylist {
   items?: { total: number };
 }
 
-interface PlaylistTrackItem {
-  added_at: string;
-  track: SpotifyTrack | null;
-}
-
 interface PaginatedResponse<T> {
   items: T[];
   next: string | null;
@@ -103,36 +98,9 @@ export async function getUserPlaylists(spotify: SpotifyClient, limit = 200): Pro
   return playlists;
 }
 
-/** Fetch tracks from a specific playlist (with added_at dates) */
-export async function getPlaylistTracks(
-  spotify: SpotifyClient,
-  playlistId: string,
-  limit = 500
-): Promise<PlaylistTrackItem[]> {
-  const items: PlaylistTrackItem[] = [];
-  let offset = 0;
-  const pageSize = 100;
-
-  while (offset < limit) {
-    // Try /items first (works in Dev Mode), fall back to /tracks
-    let resp: PaginatedResponse<PlaylistTrackItem>;
-    try {
-      resp = await spotify.get<PaginatedResponse<PlaylistTrackItem>>(
-        `/v1/playlists/${playlistId}/items`,
-        { limit: String(pageSize), offset: String(offset), fields: "items(added_at,track(id,name,artists(id,name),album(id,name),duration_ms)),next,total" }
-      );
-    } catch {
-      resp = await spotify.get<PaginatedResponse<PlaylistTrackItem>>(
-        `/v1/playlists/${playlistId}/tracks`,
-        { limit: String(pageSize), offset: String(offset), fields: "items(added_at,track(id,name,artists(id,name),album(id,name),duration_ms)),next,total" }
-      );
-    }
-    items.push(...resp.items);
-    if (!resp.next || resp.items.length < pageSize) break;
-    offset += pageSize;
-  }
-  return items;
-}
+// getPlaylistTracks was removed — /items works only for user-owned playlists,
+// and Dev Mode blocks reads of Spotify-owned editorial playlists. All callers
+// now use getPlaylistTracksViaEmbed() from embed.ts to handle both cases uniformly.
 
 /** Fetch followed artists (paginated, cursor-based) */
 export async function getFollowedArtists(spotify: SpotifyClient, limit = 200): Promise<SpotifyArtist[]> {

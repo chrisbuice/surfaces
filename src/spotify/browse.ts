@@ -1,11 +1,17 @@
 /**
- * browse.ts — Spotify browse/discovery endpoints.
+ * browse.ts — Spotify browse/discovery helpers.
  *
- * New releases, followed artists' recent releases, editorial playlist tracks.
+ * Remaining functions after Feb 2026 API audit cleanup:
+ * - getArtistRecentReleases: used by /debug/discovery-sources
+ * - findPlaylistByName: used by /debug/discovery-sources
+ *
+ * Removed (dead code referencing removed/renamed endpoints):
+ * - getNewReleases (/v1/browse/new-releases — removed Feb 2026)
+ * - getAlbumTracks (/v1/albums/{id}/tracks — no callers)
+ * - getEditorialPlaylistTracks (/v1/playlists/{id}/tracks — renamed to /items, no callers)
  */
 
 import { SpotifyClient } from "./client";
-import type { SpotifyTrack } from "./library";
 
 interface Album {
   id: string;
@@ -16,30 +22,7 @@ interface Album {
   total_tracks: number;
 }
 
-interface AlbumTrack {
-  id: string;
-  name: string;
-  artists: Array<{ id: string; name: string }>;
-  duration_ms: number;
-}
-
-/** Fetch new releases from Spotify browse */
-export async function getNewReleases(spotify: SpotifyClient, limit = 50): Promise<Album[]> {
-  const resp = await spotify.get<{ albums: { items: Album[] } }>(
-    "/v1/browse/new-releases", { limit: String(limit) }
-  );
-  return resp.albums.items;
-}
-
-/** Get tracks from an album */
-export async function getAlbumTracks(spotify: SpotifyClient, albumId: string): Promise<AlbumTrack[]> {
-  const resp = await spotify.get<{ items: AlbumTrack[] }>(
-    `/v1/albums/${albumId}/tracks`, { limit: "50" }
-  );
-  return resp.items;
-}
-
-/** Get recent albums/singles from a specific artist (last 14 days) */
+/** Get recent albums/singles from a specific artist (last N days) */
 export async function getArtistRecentReleases(
   spotify: SpotifyClient,
   artistId: string,
@@ -57,28 +40,6 @@ export async function getArtistRecentReleases(
     return resp.items.filter(a => a.release_date >= cutoffStr);
   } catch {
     return []; // Some artist IDs may be invalid
-  }
-}
-
-/** Fetch tracks from an editorial playlist by ID */
-export async function getEditorialPlaylistTracks(
-  spotify: SpotifyClient,
-  playlistId: string,
-  limit = 100
-): Promise<SpotifyTrack[]> {
-  try {
-    const resp = await spotify.get<{
-      items: Array<{ track: SpotifyTrack | null }>;
-    }>(`/v1/playlists/${playlistId}/tracks`, {
-      limit: String(limit),
-      fields: "items(track(id,name,artists(id,name),album(id,name),duration_ms))",
-    });
-    return resp.items
-      .map(i => i.track)
-      .filter((t): t is SpotifyTrack => t !== null && t.id !== null);
-  } catch {
-    console.warn(`Failed to fetch editorial playlist ${playlistId}`);
-    return [];
   }
 }
 
