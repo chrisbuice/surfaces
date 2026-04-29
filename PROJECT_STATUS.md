@@ -1,8 +1,8 @@
 # Spotify Curation Agent — Project Status
 
-**Last updated:** April 28, 2026 (end of session 2)
-**Codebase:** 29 TypeScript files + 1 HTML dashboard, ~6,500 lines
-**Commits:** 29 on main branch
+**Last updated:** April 29, 2026 (end of session 3)
+**Codebase:** 30 TypeScript files + 1 HTML dashboard, ~6,650 lines
+**Commits:** 35 on main branch
 **All planned milestones (M0–M15) are complete** (M12 skipped by choice)
 
 This document is intended to bring a new conversation up to speed on the full state of the application — what exists, how it works, what files do what, and what's left to explore.
@@ -46,16 +46,21 @@ Everything runs on Cloudflare's free tier. Zero monthly cost.
 
 ### Spotify API limitations
 
-The app is in Spotify's **Development Mode**, which blocks certain endpoints:
+The app is permanently in Spotify's **Development Mode** (Extended Quota requires 250K+ MAU — not applicable). Dev Mode blocks most non-user-scoped endpoints. A comprehensive workaround is in place using embed page scraping.
 
-| What works | What's blocked |
-|-----------|----------------|
-| `/me/tracks`, `/me/top/*` (taste data) | `/browse/new-releases` (403) |
-| `/me/player/play`, `/me/player/queue` (playback) | Editorial playlist reads (403) |
-| User-owned playlist reads | Playlist writes (add tracks returns 403) |
-| `/v1/search` (discovery workaround) | |
+| What works | What's blocked | Workaround |
+|-----------|----------------|------------|
+| `/me/tracks`, `/me/top/*` (taste data) | `/playlists/{id}/tracks` (read playlist tracks) | Embed scraping via `src/spotify/embed.ts` |
+| `/me/player/*` (playback control) | `/playlists/{id}/items` GET (read playlist items) | Same embed scraping |
+| `/me/playlists` (list playlists) | `/v1/tracks` (batch track lookup) | Not needed currently |
+| `/v1/search` (discovery) | `/browse/new-releases` | Discovery uses search + RSS |
+| `/v1/me/playlists` POST (create playlists) | `/artists/{id}/albums` | Not needed currently |
+| `/v1/playlists/{id}/items` POST (add tracks) | Client credentials (all endpoints) | N/A |
 
-**Extended Quota Mode** requires 250K+ MAU — not applicable. Workarounds are in place: discovery uses search API, session output uses `play_now`/`queue` instead of playlist creation.
+**Embed scraping** (`src/spotify/embed.ts`): Fetches `open.spotify.com/embed/playlist/{id}` and parses the `__NEXT_DATA__` JSON payload. Returns track IDs, names, artist names, and duration. No auth required. Does NOT include `added_at` timestamps, album data, or structured artist IDs. Used by:
+- Taste model rebuild (seasonal playlist track ingestion)
+- Curation agent (loading blocked tracks to filter from sessions)
+- `/debug/playlist-tracks` endpoint (taste archaeology)
 
 ---
 
@@ -110,6 +115,7 @@ spotifygenie/
     spotify/
       client.ts                # SpotifyClient: fetch wrapper with auth headers + retry
       library.ts               # Saved tracks, top tracks/artists, playlists, followed artists
+      embed.ts                 # Embed scraping: read playlist tracks without API auth (Dev Mode workaround)
       playback.ts              # play(), queue(), createPlaylist(), getActiveDevice()
       browse.ts                # Search (used by discovery)
 
@@ -235,6 +241,7 @@ spotifygenie/
 | `/debug/rebuild-affinities` | Manually trigger affinity rebuild |
 | `/debug/track-affinities?track_id=X` | View affinities for a specific track |
 | `/debug/all-playlists` | List all user playlists |
+| `/debug/playlist-tracks?id=X&limit=N` | Full track listing of any playlist via embed scraping |
 
 ---
 
@@ -245,11 +252,13 @@ spotifygenie/
 Track taste score = weighted sum of:
 - In liked songs (+3)
 - Top tracks short-term (+5), medium-term (+3), long-term (+2)
-- Seasonal playlist count (+1 each, +2 if current season)
+- Seasonal playlist count (+1 each, +2 if current season) — sourced via embed scraping
 - Play count (log-scaled)
 - Complete count bonus, skip count penalty
 - Recency bonus for recently played
 - Primary artist taste score boost
+
+**Note:** Seasonal playlist tracks ingested via embed scraping have track IDs and names but no structured artist IDs or album data. Tracks that also appear in liked songs or top tracks (which use working API endpoints) have full metadata. Seasonal-only tracks get correct playlist counts but incomplete artist linkage.
 
 Artist taste score = weighted sum of:
 - Top artists short/medium/long-term rank
@@ -332,10 +341,13 @@ Sent at 8pm ET via Resend. Light theme for mobile readability. Contains:
 
 ## 11. Known issues and limitations
 
-1. **Spotify Dev Mode** — editorial playlists unreadable, playlist writes fail. No fix available without Extended Quota Mode (requires 250K+ MAU business).
-2. **OAuth token drift** — if token refreshes and loses scopes, taste model rebuild may fail on seasonal playlist access. Fix: re-auth at `/auth/login`.
-3. **Learned affinities need time** — the system needs ~1000+ context-linked play events to generate meaningful affinities. Until then, cold-start rules dominate. This is working as designed.
-4. **RSS title parsing is regex-based** — imperfect, but fails safely (unparseable items are skipped, bad Spotify matches get low taste scores).
+1. **Spotify Dev Mode is permanent** — the app will never leave Dev Mode (Extended Quota requires 250K+ MAU). All playlist-track reads go through embed scraping, which does not provide `added_at` timestamps, album data, or structured artist IDs. This is the accepted tradeoff.
+2. **Embed scraping is a dependency on Spotify's embed page structure** — if Spotify changes how `__NEXT_DATA__` is rendered in their embed pages, the scraping will break. The failure is loud (parse errors) and the fix would be updating the regex/JSON path in `src/spotify/embed.ts`.
+3. **Seasonal playlist detection: ownership edge case** — Spotify sometimes reports playlists as user-owned when they were copied rather than created. An explicit exclude list (`EXCLUDE_PLAYLIST_IDS` in `seasonal.ts`) handles known false positives. Only playlists owned by Spotify user `121776622` are considered.
+4. **Seasonal year inference: no added_at data** — new playlists without a year in the name default to current year. All existing undated playlists already have correct years from earlier syncs. The user's current naming convention always includes the year.
+5. **OAuth token drift** — if token refreshes and loses scopes, some API calls may fail. Fix: re-auth at `/auth/login`.
+6. **Learned affinities need time** — the system needs ~1000+ context-linked play events to generate meaningful affinities. Until then, cold-start rules dominate. This is working as designed.
+7. **RSS title parsing is regex-based** — imperfect, but fails safely (unparseable items are skipped, bad Spotify matches get low taste scores).
 
 ---
 
@@ -357,6 +369,10 @@ Sent at 8pm ET via Resend. Light theme for mobile readability. Contains:
 ## 13. Commit history
 
 ```
+2718a18 Fix three features silently broken by Spotify Dev Mode
+7e14204 Exclude followed-not-curated playlist from seasonal detection
+9986bd5 Add /debug/playlist-tracks for taste archaeology
+d00f888 Add PROJECT_STATUS.md for Claude.ai project context
 c77e9bb Now Playing: add like/block buttons and play context explanation
 13f0000 Add day override to discovery agent for manual feed polling
 8eac1d9 M15: Add editorial RSS feeds as discovery sources
