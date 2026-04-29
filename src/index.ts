@@ -672,6 +672,7 @@ export default {
                    af.liveness, af.loudness, af.speechiness, af.tempo, af.valence
             FROM track_taste tt
             JOIN track_audio_features af ON af.track_id = tt.track_id
+            LEFT JOIN artist_taste at2 ON at2.artist_id = tt.primary_artist_id
             WHERE af.source != 'reccobeats:not_found'
             ORDER BY tt.taste_score DESC
             LIMIT ?
