@@ -641,8 +641,96 @@ export default {
 
         case "/debug/run-audio-backfill": {
           const { runAudioBackfill } = await import("./audio/backfill");
-          const backfillResult = await runAudioBackfill(env.DB);
-          return Response.json(backfillResult);
+          const batchCount = Math.min(parseInt(url.searchParams.get("count") ?? "1") || 1, 10);
+          let totalFetched = 0, totalNotFound = 0;
+          for (let b = 0; b < batchCount; b++) {
+            const r = await runAudioBackfill(env.DB);
+            totalFetched += r.fetched;
+            totalNotFound += r.notFound;
+            if (r.remaining === 0) break;
+          }
+          return Response.json({ total_fetched: totalFetched, total_not_found: totalNotFound, batches_run: batchCount });
+        }
+
+        case "/debug/audio-features-not-found": {
+          const nfRows = await env.DB.prepare(`
+            SELECT af.track_id, tt.track_name, at2.artist_name, tt.taste_score, af.fetched_at
+            FROM track_audio_features af
+            JOIN track_taste tt ON tt.track_id = af.track_id
+            LEFT JOIN artist_taste at2 ON at2.artist_id = tt.primary_artist_id
+            WHERE af.source = 'reccobeats:not_found'
+            ORDER BY tt.taste_score DESC
+          `).all();
+          return Response.json(nfRows.results);
+        }
+
+        case "/debug/audio-features-table": {
+          const afLimit = parseInt(url.searchParams.get("limit") ?? "50") || 50;
+          const afRows = await env.DB.prepare(`
+            SELECT tt.track_name, at2.artist_name, tt.taste_score,
+                   af.acousticness, af.danceability, af.energy, af.instrumentalness,
+                   af.liveness, af.loudness, af.speechiness, af.tempo, af.valence
+            FROM track_taste tt
+            JOIN track_audio_features af ON af.track_id = tt.track_id
+            WHERE af.source != 'reccobeats:not_found'
+            ORDER BY tt.taste_score DESC
+            LIMIT ?
+          `).bind(afLimit).all<{
+            track_name: string; artist_name: string | null; taste_score: number;
+            acousticness: number; danceability: number; energy: number;
+            instrumentalness: number; liveness: number; loudness: number;
+            speechiness: number; tempo: number; valence: number;
+          }>();
+
+          const dims = ["acousticness","danceability","energy","instrumentalness","liveness","loudness","speechiness","tempo","valence"];
+          let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Audio Features</title>
+<style>
+body{font-family:-apple-system,sans-serif;background:#121212;color:#e0e0e0;padding:20px;margin:0;}
+h1{color:#1db954;font-size:20px;}
+table{border-collapse:collapse;font-size:13px;width:100%;}
+th{text-align:left;color:#b3b3b3;padding:6px 8px;border-bottom:1px solid #333;cursor:pointer;user-select:none;}
+th:hover{color:#1db954;}
+td{padding:6px 8px;border-bottom:1px solid #1e1e1e;}
+.num{text-align:right;font-variant-numeric:tabular-nums;}
+.hi{color:#1db954;} .lo{color:#e74c3c;}
+</style></head><body>
+<h1>Audio Features — Top ${afRows.results.length} Tracks</h1>
+<table id="t"><thead><tr>
+<th>#</th><th>Track</th><th>Artist</th><th class="num">Score</th>`;
+          for (const d of dims) html += `<th class="num">${d.slice(0,5)}</th>`;
+          html += `</tr></thead><tbody>`;
+
+          for (let i = 0; i < afRows.results.length; i++) {
+            const r = afRows.results[i];
+            html += `<tr><td>${i+1}</td><td>${r.track_name}</td><td>${r.artist_name ?? ""}</td><td class="num">${r.taste_score.toFixed(1)}</td>`;
+            for (const d of dims) {
+              const v = r[d as keyof typeof r] as number;
+              const fmt = d === "loudness" ? v.toFixed(1) : d === "tempo" ? v.toFixed(0) : v.toFixed(3);
+              const cls = d !== "loudness" && d !== "tempo" ? (v > 0.7 ? "num hi" : v < 0.1 ? "num lo" : "num") : "num";
+              html += `<td class="${cls}">${fmt}</td>`;
+            }
+            html += `</tr>`;
+          }
+
+          html += `</tbody></table>
+<script>
+document.querySelectorAll('#t th').forEach((th,col)=>{
+  let asc=true;
+  th.onclick=()=>{
+    const rows=[...document.querySelectorAll('#t tbody tr')];
+    rows.sort((a,b)=>{
+      const av=a.children[col].textContent, bv=b.children[col].textContent;
+      const an=parseFloat(av), bn=parseFloat(bv);
+      return isNaN(an)?av.localeCompare(bv):(asc?an-bn:bn-an);
+    });
+    asc=!asc;
+    const tb=document.querySelector('#t tbody');
+    rows.forEach(r=>tb.appendChild(r));
+  };
+});
+</script></body></html>`;
+
+          return new Response(html, { headers: { "Content-Type": "text/html" } });
         }
 
         case "/debug/playlist-tracks": {
