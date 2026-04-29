@@ -659,12 +659,16 @@ export default {
           const since = Math.floor(Date.now() / 1000) - 24 * 3600;
           const rows = await env.DB.prepare(`
             SELECT pe.track_id, pe.started_at, pe.duration_listened_ms, pe.classification,
-                   pe.hour_of_day, pe.device_type,
+                   pe.hour_of_day, pe.device_type, pe.session_id, pe.context_type, pe.context_uri,
                    COALESCE(tt.track_name, po.track_name) as track_name,
-                   tt.taste_score, tt.primary_artist_id
+                   tt.taste_score, tt.primary_artist_id,
+                   at2.artist_name as primary_artist_name,
+                   st.source as session_source
             FROM play_events pe
             LEFT JOIN track_taste tt ON tt.track_id = pe.track_id
             LEFT JOIN poll_observations po ON po.track_id = pe.track_id
+            LEFT JOIN artist_taste at2 ON at2.artist_id = tt.primary_artist_id
+            LEFT JOIN session_tracks st ON st.session_id = pe.session_id AND st.track_id = pe.track_id
             WHERE pe.started_at >= ?
             GROUP BY pe.id
             ORDER BY pe.started_at DESC

@@ -48,6 +48,10 @@
     .badge-partial { background: #f39c1233; color: #f39c12; }
     .badge-replayed { background: #9b59b633; color: #9b59b6; }
     .history-time { color: #777; font-size: 12px; white-space: nowrap; }
+    .source-agent { background: #1db95433; color: #1db954; }
+    .source-playlist { background: #3498db33; color: #3498db; }
+    .source-collection { background: #e74c3c33; color: #e74c3c; }
+    .source-album { background: #f39c1233; color: #f39c12; }
     .reason-tag { display: inline-block; background: #282828; padding: 2px 8px; border-radius: 10px; font-size: 11px; color: #b3b3b3; margin: 2px 4px 2px 0; }
     .reason-tag.context { background: #1db95422; color: #1db954; }
     .reason-tag.fresh { background: #9b59b622; color: #9b59b6; }
@@ -449,6 +453,18 @@
     }
 
     // Recent History
+    function getPlaySource(e) {
+      if (e.session_id) {
+        const isFresh = e.session_source && e.session_source.startsWith('fresh');
+        return { label: isFresh ? 'Agent (fresh)' : 'Agent', cls: 'source-agent' };
+      }
+      if (e.context_type === 'playlist') return { label: 'Playlist', cls: 'source-playlist' };
+      if (e.context_type === 'collection') return { label: 'Liked Songs', cls: 'source-collection' };
+      if (e.context_type === 'album') return { label: 'Album', cls: 'source-album' };
+      if (e.context_type === 'artist') return { label: 'Artist Radio', cls: 'source-playlist' };
+      return { label: 'Manual', cls: '' };
+    }
+
     async function loadHistory() {
       try {
         const events = await api('/api/recent-history');
@@ -458,14 +474,17 @@
           return;
         }
         const badgeClass = c => ({completed:'badge-completed',skipped:'badge-skipped',partial:'badge-partial',replayed:'badge-replayed'}[c] || '');
-        let html = '<table><tr><th>Time</th><th>Track</th><th>Result</th><th>Score</th><th></th></tr>';
+        let html = '<table><tr><th>Time</th><th>Track</th><th>Source</th><th>Result</th><th>Score</th><th></th></tr>';
         html += events.map(e => {
           const time = new Date(e.started_at * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
           const name = e.track_name || e.track_id;
+          const artist = e.primary_artist_name ? `<span class="track-artist">${e.primary_artist_name}</span>` : '';
           const score = e.taste_score != null ? e.taste_score.toFixed(1) : '\u2014';
+          const src = getPlaySource(e);
           return `<tr>
             <td class="history-time">${time}</td>
-            <td>${name}</td>
+            <td>${name}${artist ? '<br>' + artist : ''}</td>
+            <td><span class="source-tag ${src.cls}">${src.label}</span></td>
             <td><span class="badge ${badgeClass(e.classification)}">${e.classification}</span></td>
             <td class="score">${score}</td>
             <td style="white-space:nowrap;">
