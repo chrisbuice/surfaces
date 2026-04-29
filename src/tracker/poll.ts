@@ -7,7 +7,7 @@
  */
 
 import { SpotifyClient } from "../spotify/client";
-import { insertPollObservation } from "../db/queries";
+import { insertPollObservation, insertPlayEvent } from "../db/queries";
 
 interface PlayerState {
   is_playing: boolean;
@@ -81,5 +81,134 @@ export async function handlePoll(env: { DB: D1Database; KV: KVNamespace; SPOTIFY
       type: data.device.type,
       updatedAt: now,
     }));
+  }
+
+  // ── Backfill from recently-played to catch quick skips ──
+  await backfillFromRecentlyPlayed(env.DB, env.KV, spotify);
+}
+
+interface RecentlyPlayedItem {
+  track: {
+    id: string;
+    name: string;
+    artists: Array<{ id: string; name: string }>;
+    album: { id: string };
+    duration_ms: number;
+  };
+  played_at: string;
+  context: { uri: string; type: string } | null;
+}
+
+const USER_TZ = "America/New_York";
+
+async function backfillFromRecentlyPlayed(
+  db: D1Database,
+  kv: KVNamespace,
+  spotify: SpotifyClient
+): Promise<void> {
+  try {
+    const rp = await spotify.get<{ items: RecentlyPlayedItem[] }>(
+      "/v1/me/player/recently-played", { limit: "10" }
+    );
+    if (!rp.items || rp.items.length === 0) return;
+
+    // Get watermark: the last played_at we've processed
+    const watermarkStr = await kv.get("recently_played:watermark");
+    const watermark = watermarkStr ? new Date(watermarkStr).getTime() : 0;
+
+    // Filter to entries newer than the watermark (items are newest-first)
+    const newItems = rp.items.filter(
+      item => new Date(item.played_at).getTime() > watermark
+    );
+    if (newItems.length === 0) return;
+
+    // Reverse to process oldest first
+    newItems.reverse();
+
+    for (let i = 0; i < newItems.length; i++) {
+      const item = newItems[i];
+      const playedAtUnix = Math.floor(new Date(item.played_at).getTime() / 1000);
+
+      // Estimate when this track started playing:
+      // gap between this entry's played_at and the previous entry's played_at
+      let estimatedListenedMs: number;
+      if (i > 0) {
+        const prevPlayedAt = new Date(newItems[i - 1].played_at).getTime();
+        const thisPlayedAt = new Date(item.played_at).getTime();
+        estimatedListenedMs = Math.min(thisPlayedAt - prevPlayedAt, item.track.duration_ms);
+      } else {
+        // First item in batch — check against watermark or the full recently-played list
+        const prevItem = rp.items.find(
+          rpItem => new Date(rpItem.played_at).getTime() <= watermark
+        );
+        if (prevItem) {
+          const gap = new Date(item.played_at).getTime() - new Date(prevItem.played_at).getTime();
+          estimatedListenedMs = Math.min(gap, item.track.duration_ms);
+        } else {
+          // No reference point — assume completed
+          estimatedListenedMs = item.track.duration_ms;
+        }
+      }
+
+      const estimatedStartedAt = playedAtUnix - Math.floor(estimatedListenedMs / 1000);
+
+      // Check if the regular poll already captured this track around this time
+      const existing = await db.prepare(
+        "SELECT id FROM poll_observations WHERE track_id = ? AND observed_at BETWEEN ? AND ? LIMIT 1"
+      ).bind(item.track.id, estimatedStartedAt - 30, playedAtUnix + 30).first();
+
+      if (existing) continue; // Already captured by regular polling
+
+      // Classify based on fraction played
+      const fractionPlayed = estimatedListenedMs / item.track.duration_ms;
+      let classification: "completed" | "skipped" | "partial";
+      if (fractionPlayed >= 0.8) {
+        classification = "completed";
+      } else if (fractionPlayed < 0.5) {
+        classification = "skipped";
+      } else {
+        classification = "partial";
+      }
+
+      // Insert a poll observation so track metadata is available for history joins
+      await insertPollObservation(db, {
+        observed_at: estimatedStartedAt,
+        is_playing: 1,
+        track_id: item.track.id,
+        track_name: item.track.name,
+        artist_ids: JSON.stringify(item.track.artists.map(a => a.id)),
+        artist_name: item.track.artists.map(a => a.name).join(", "),
+        album_id: item.track.album.id,
+        progress_ms: estimatedListenedMs,
+        duration_ms: item.track.duration_ms,
+        device_type: null,
+        context_uri: item.context?.uri ?? null,
+        context_type: item.context?.type ?? null,
+      });
+
+      // Insert the play event directly (bypasses derive since we have full data)
+      const startDate = new Date(estimatedStartedAt * 1000);
+      const localTime = new Date(startDate.toLocaleString("en-US", { timeZone: USER_TZ }));
+
+      await insertPlayEvent(db, {
+        track_id: item.track.id,
+        started_at: estimatedStartedAt,
+        ended_at: playedAtUnix,
+        duration_listened_ms: estimatedListenedMs,
+        track_duration_ms: item.track.duration_ms,
+        classification,
+        context_uri: item.context?.uri ?? null,
+        context_type: item.context?.type ?? null,
+        device_type: null,
+        hour_of_day: localTime.getHours(),
+        day_of_week: localTime.getDay(),
+        session_id: null,
+      });
+    }
+
+    // Update watermark to the newest entry
+    await kv.put("recently_played:watermark", rp.items[0].played_at);
+  } catch {
+    // Don't let backfill failures break the regular poll
   }
 }
