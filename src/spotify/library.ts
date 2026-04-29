@@ -25,7 +25,11 @@ export interface SpotifyPlaylist {
   id: string;
   name: string;
   owner: { id: string };
-  tracks: { total: number };
+  // 'tracks' is the pre-Feb-2026 field name; 'items' is the post-rename name.
+  // Remove 'tracks' and the ?? fallback in callers once Spotify confirms
+  // the rollout cutoff for grandfathered Dev Mode apps.
+  tracks?: { total: number };
+  items?: { total: number };
 }
 
 interface PlaylistTrackItem {

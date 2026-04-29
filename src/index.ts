@@ -800,7 +800,7 @@ export default {
           const spotify = new SpotifyClient(env);
           const { getUserPlaylists } = await import("./spotify/library");
           const pls = await getUserPlaylists(spotify, 500);
-          return Response.json(pls.map(p => ({ id: p.id, name: p.name, tracks: p.tracks?.total ?? 0 })));
+          return Response.json(pls.map(p => ({ id: p.id, name: p.name, tracks: p.items?.total ?? p.tracks?.total ?? 0 })));
         }
 
         case "/mcp": {
