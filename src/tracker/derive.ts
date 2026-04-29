@@ -109,7 +109,7 @@ function classifyTrack(
     const fractionPlayed = progressAtEnd / durationMs;
     if (fractionPlayed >= 0.8) {
       classification = "completed";
-    } else if (fractionPlayed < 0.3) {
+    } else if (fractionPlayed < 0.5) {
       classification = "skipped";
     } else {
       classification = "partial";
