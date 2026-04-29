@@ -204,7 +204,8 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient):
     SELECT track_id,
       COUNT(*) as play_count,
       SUM(CASE WHEN classification = 'skipped' THEN 1 ELSE 0 END) as skip_count,
-      SUM(CASE WHEN classification = 'completed' THEN 1 ELSE 0 END) as complete_count,
+      SUM(CASE WHEN classification IN ('completed', 'replayed') THEN 1 ELSE 0 END) as complete_count,
+      SUM(CASE WHEN classification = 'replayed' THEN 1 ELSE 0 END) as replay_count,
       MAX(started_at) as last_played_at
     FROM play_events
     GROUP BY track_id
@@ -213,6 +214,7 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient):
     play_count: number;
     skip_count: number;
     complete_count: number;
+    replay_count: number;
     last_played_at: number;
   }>();
 
@@ -312,6 +314,7 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient):
       playCount: stats?.play_count ?? 0,
       skipCount: stats?.skip_count ?? 0,
       completeCount: stats?.complete_count ?? 0,
+      replayCount: stats?.replay_count ?? 0,
       lastPlayedAt: stats?.last_played_at ?? null,
       artistTasteScore: artistScore,
     });

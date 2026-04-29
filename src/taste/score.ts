@@ -15,6 +15,7 @@ export interface TrackSignals {
   playCount: number;
   skipCount: number;
   completeCount: number;
+  replayCount: number;
   lastPlayedAt: number | null; // unix seconds
   artistTasteScore: number;    // from artist_taste, 0 if unknown
 }
@@ -29,6 +30,7 @@ const WEIGHTS = {
   playCountBase: 0.5,     // per play, diminishing
   skipPenalty: -1.5,      // per skip
   completionBonus: 0.3,   // per completion
+  replayBonus: 2,         // per replay — strongest positive signal
   recencyBonus: 2,        // decays over time
   artistBoost: 0.3,       // fraction of artist score added
 };
@@ -52,6 +54,7 @@ export function computeTasteScore(signals: TrackSignals): number {
   }
   score += signals.skipCount * WEIGHTS.skipPenalty;
   score += signals.completeCount * WEIGHTS.completionBonus;
+  score += signals.replayCount * WEIGHTS.replayBonus;
 
   // Recency: bonus decays over 30 days
   if (signals.lastPlayedAt) {
