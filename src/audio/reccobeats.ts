@@ -13,6 +13,7 @@
  */
 
 const RECCOBEATS_BASE = "https://api.reccobeats.com";
+const RECCOBEATS_MAX_BATCH = 40;
 
 export interface AudioFeatures {
   acousticness: number;
@@ -54,36 +55,41 @@ export class ReccoBeatsProvider implements AudioFeaturesProvider {
   async fetchBatch(trackIds: string[]): Promise<Map<string, AudioFeatures>> {
     if (trackIds.length === 0) return new Map();
 
-    const resp = await fetch(
-      `${RECCOBEATS_BASE}/v1/audio-features?ids=${trackIds.join(",")}`,
-    );
-
-    if (!resp.ok) {
-      if (resp.status === 429) {
-        console.warn("ReccoBeats rate limited");
-      }
-      throw new Error(`ReccoBeats API error ${resp.status}`);
-    }
-
-    const data = (await resp.json()) as { content: ReccoBeatsItem[] };
     const result = new Map<string, AudioFeatures>();
 
-    for (const item of data.content) {
-      // Extract Spotify track ID from the href (https://open.spotify.com/track/{id})
-      const trackId = item.href.split("/").pop() ?? "";
-      if (!trackId) continue;
+    // ReccoBeats accepts max 40 IDs per request — chunk if needed
+    for (let i = 0; i < trackIds.length; i += RECCOBEATS_MAX_BATCH) {
+      const chunk = trackIds.slice(i, i + RECCOBEATS_MAX_BATCH);
+      const resp = await fetch(
+        `${RECCOBEATS_BASE}/v1/audio-features?ids=${chunk.join(",")}`,
+      );
 
-      result.set(trackId, {
-        acousticness: item.acousticness,
-        danceability: item.danceability,
-        energy: item.energy,
-        instrumentalness: item.instrumentalness,
-        liveness: item.liveness,
-        loudness: item.loudness,
-        speechiness: item.speechiness,
-        tempo: item.tempo,
-        valence: item.valence,
-      });
+      if (!resp.ok) {
+        if (resp.status === 429) {
+          console.warn("ReccoBeats rate limited");
+        }
+        throw new Error(`ReccoBeats API error ${resp.status}`);
+      }
+
+      const data = (await resp.json()) as { content: ReccoBeatsItem[] };
+
+      for (const item of data.content) {
+        // Extract Spotify track ID from the href (https://open.spotify.com/track/{id})
+        const trackId = item.href.split("/").pop() ?? "";
+        if (!trackId) continue;
+
+        result.set(trackId, {
+          acousticness: item.acousticness,
+          danceability: item.danceability,
+          energy: item.energy,
+          instrumentalness: item.instrumentalness,
+          liveness: item.liveness,
+          loudness: item.loudness,
+          speechiness: item.speechiness,
+          tempo: item.tempo,
+          valence: item.valence,
+        });
+      }
     }
 
     return result;

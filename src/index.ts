@@ -585,6 +585,66 @@ export default {
           return Response.json(stats);
         }
 
+        case "/debug/audio-features": {
+          const afTrackId = url.searchParams.get("track_id");
+          if (!afTrackId) return Response.json({ error: "track_id query param required" }, { status: 400 });
+
+          // Check if we already have features
+          let row = await env.DB.prepare(
+            "SELECT * FROM track_audio_features WHERE track_id = ?"
+          ).bind(afTrackId).first();
+
+          if (!row) {
+            // Fetch live from ReccoBeats and store
+            const { ReccoBeatsProvider } = await import("./audio/reccobeats");
+            const provider = new ReccoBeatsProvider();
+            const features = await provider.fetchBatch([afTrackId]);
+            const now = Math.floor(Date.now() / 1000);
+            const af = features.get(afTrackId);
+
+            if (af) {
+              await env.DB.prepare(`
+                INSERT INTO track_audio_features
+                  (track_id, acousticness, danceability, energy, instrumentalness, liveness, loudness, speechiness, tempo, valence, source, fetched_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `).bind(
+                afTrackId, af.acousticness, af.danceability, af.energy,
+                af.instrumentalness, af.liveness, af.loudness,
+                af.speechiness, af.tempo, af.valence, "reccobeats", now
+              ).run();
+            } else {
+              await env.DB.prepare(`
+                INSERT INTO track_audio_features
+                  (track_id, acousticness, danceability, energy, instrumentalness, liveness, loudness, speechiness, tempo, valence, source, fetched_at)
+                VALUES (?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?)
+              `).bind(afTrackId, "reccobeats:not_found", now).run();
+            }
+
+            row = await env.DB.prepare(
+              "SELECT * FROM track_audio_features WHERE track_id = ?"
+            ).bind(afTrackId).first();
+          }
+
+          return Response.json(row);
+        }
+
+        case "/debug/audio-features-stats": {
+          const afStats = await env.DB.prepare(`
+            SELECT
+              (SELECT COUNT(*) FROM track_taste) as total_tracks,
+              (SELECT COUNT(*) FROM track_audio_features WHERE source != 'reccobeats:not_found') as with_features,
+              (SELECT COUNT(*) FROM track_audio_features WHERE source = 'reccobeats:not_found') as not_found,
+              (SELECT COUNT(*) FROM track_taste tt LEFT JOIN track_audio_features af ON af.track_id = tt.track_id WHERE af.track_id IS NULL) as missing
+          `).first();
+          return Response.json(afStats);
+        }
+
+        case "/debug/run-audio-backfill": {
+          const { runAudioBackfill } = await import("./audio/backfill");
+          const backfillResult = await runAudioBackfill(env.DB);
+          return Response.json(backfillResult);
+        }
+
         case "/debug/playlist-tracks": {
           const playlistId = url.searchParams.get("id");
           if (!playlistId) return Response.json({ error: "id query param required" }, { status: 400 });
@@ -831,12 +891,18 @@ export default {
     }
 
     if (cron === "0 5 * * *") {
-      // Daily at 5am UTC (1am ET): derive, rebuild taste + affinities, prune
+      // Daily at 5am UTC (1am ET): derive, rebuild taste + affinities, audio backfill, prune
       const snapshotId = await getLatestSnapshotId(env.DB);
       await derivePlayEvents(env.DB, snapshotId);
       const spotify = new SpotifyClient(env);
       await rebuildTasteModel(env.DB, spotify);
       await rebuildAffinities(env.DB);
+
+      // Audio features backfill — runs after taste rebuild so newly-scored
+      // tracks are immediately eligible. Single batch request to ReccoBeats.
+      const { runAudioBackfill } = await import("./audio/backfill");
+      await runAudioBackfill(env.DB);
+
       await pruneOldObservations(env.DB, 30 * 24 * 60 * 60);
     }
 
@@ -877,11 +943,5 @@ export default {
       await generateAndSendSummary(env.DB, env.RESEND_API_KEY);
     }
 
-    if (cron === "30 */2 * * *") {
-      // Every 2 hours at :30: backfill audio features from ReccoBeats.
-      // Single batch request per run — no subrequest budget concern.
-      const { runAudioBackfill } = await import("./audio/backfill");
-      await runAudioBackfill(env.DB);
-    }
   },
 } satisfies ExportedHandler<Env>;

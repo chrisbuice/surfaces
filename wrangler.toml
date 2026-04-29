@@ -18,8 +18,7 @@ id = "7055b925a6b74bd39150201370724eeb"
 crons = [
   "* * * * *",       # every minute: poll currently-playing + derive with context linking
   "*/2 * * * *",     # every 2 minutes: in-session feedback + hourly context snapshot
-  "0 5 * * *",       # daily 5am UTC (1am ET): derive play_events + prune + taste rebuild
+  "0 5 * * *",       # daily 5am UTC (1am ET): derive, taste rebuild, audio backfill, prune
   "0 10 * * *",      # daily 10am UTC (6am ET): discovery agent
   "0 0 * * *",       # midnight UTC (8pm ET): nightly listening summary email
-  "30 */2 * * *",    # every 2 hours at :30: audio features backfill from ReccoBeats
 ]
