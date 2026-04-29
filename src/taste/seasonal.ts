@@ -32,6 +32,12 @@ const EXCLUDE_PATTERNS = [
   /AGMC/i,
 ];
 
+// Playlist IDs to exclude — playlists the user owns (or Spotify reports as owned)
+// but that aren't part of their seasonal curation history.
+const EXCLUDE_PLAYLIST_IDS = new Set([
+  "4nZccC8qFIlEsU7385ZyAv", // "boom clap vibes tumblr summer 2014" — followed, not curated
+]);
+
 const YEAR_REGEX = /\b(20\d{2})\b/;
 // Also match 2-digit year shorthand like "summer 25", "fall 24"
 const SHORT_YEAR_REGEX = /\b(\d{2})\b/;
@@ -53,6 +59,9 @@ export async function detectSeasonalPlaylists(spotify: SpotifyClient): Promise<S
   for (const pl of playlists) {
     // Only consider playlists owned by the user
     if (pl.owner?.id !== USER_SPOTIFY_ID) continue;
+
+    // Skip explicitly excluded playlist IDs
+    if (EXCLUDE_PLAYLIST_IDS.has(pl.id)) continue;
 
     // Skip excluded patterns
     if (EXCLUDE_PATTERNS.some(re => re.test(pl.name))) continue;
@@ -141,6 +150,11 @@ export async function syncSeasonalPlaylists(
   const currentSeason = getCurrentSeason();
   const currentYear = new Date().getFullYear();
   const now = Math.floor(Date.now() / 1000);
+
+  // Remove any previously-synced playlists that are now excluded
+  for (const excludedId of EXCLUDE_PLAYLIST_IDS) {
+    await db.prepare("DELETE FROM seasonal_playlists WHERE spotify_playlist_id = ?").bind(excludedId).run();
+  }
 
   let synced = 0;
   for (const pl of detected) {
