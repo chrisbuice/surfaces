@@ -160,8 +160,8 @@
       <h2>Stats</h2>
       <button class="refresh-btn" onclick="loadStats()">Refresh</button>
     </div>
-    <div class="stats-grid" id="stats-grid">
-      <div class="status-msg" style="grid-column: 1/-1;">Loading...</div>
+    <div id="stats-content">
+      <div class="status-msg">Loading...</div>
     </div>
   </div>
 
@@ -446,25 +446,64 @@
     // Stats
     async function loadStats() {
       try {
-        const [events, taste, poolStats] = await Promise.all([
-          api('/debug/recent-events'),
-          api('/debug/top-tracks-by-score?limit=5'),
-          api('/debug/fresh-pool-stats'),
-        ]);
+        const s = await api('/api/dashboard-stats');
+        const el = document.getElementById('stats-content');
 
-        const completed = events.filter(e => e.classification === 'completed').length;
-        const skipped = events.filter(e => e.classification === 'skipped').length;
-        const total = events.length;
-        const skipRate = total > 0 ? Math.round(skipped / total * 100) : 0;
+        const hrs = Math.floor(s.today.listenedMin / 60);
+        const mins = s.today.listenedMin % 60;
+        const listenedStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
 
-        document.getElementById('stats-grid').innerHTML = `
-          <div class="stat-box"><div class="stat-number">${total}</div><div class="stat-label">Recent Events</div></div>
-          <div class="stat-box"><div class="stat-number">${completed}</div><div class="stat-label">Completed</div></div>
-          <div class="stat-box"><div class="stat-number">${skipped}</div><div class="stat-label">Skipped</div></div>
-          <div class="stat-box"><div class="stat-number">${skipRate}%</div><div class="stat-label">Skip Rate</div></div>
+        const agentAcceptRate = s.agent.week.tracks > 0
+          ? Math.round(s.agent.week.completed / s.agent.week.tracks * 100) : null;
+        const freshAcceptRate = s.discovery.week.played > 0
+          ? Math.round(s.discovery.week.completed / s.discovery.week.played * 100) : null;
+
+        const rebuilt = s.tasteModel.lastRebuilt
+          ? new Date(s.tasteModel.lastRebuilt * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+          : 'never';
+
+        el.innerHTML = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <div style="font-size:12px;color:#777;margin-bottom:6px;">TODAY'S LISTENING</div>
+              <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
+                <div class="stat-box"><div class="stat-number">${s.today.tracks}</div><div class="stat-label">Tracks</div></div>
+                <div class="stat-box"><div class="stat-number">${listenedStr}</div><div class="stat-label">Listened</div></div>
+                <div class="stat-box"><div class="stat-number">${s.today.skipRate}%</div><div class="stat-label">Skip Rate</div></div>
+              </div>
+              <div style="font-size:12px;color:#777;margin-top:4px;">${s.today.completed} completed \u00b7 ${s.today.skipped} skipped \u00b7 ${s.today.partial} partial</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:#777;margin-bottom:6px;">AGENT PERFORMANCE</div>
+              <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
+                <div class="stat-box"><div class="stat-number">${s.agent.today.sessions}</div><div class="stat-label">Sessions Today</div></div>
+                <div class="stat-box"><div class="stat-number">${s.agent.week.sessions}</div><div class="stat-label">This Week</div></div>
+                <div class="stat-box"><div class="stat-number">${agentAcceptRate != null ? agentAcceptRate + '%' : '\u2014'}</div><div class="stat-label">Accept Rate</div></div>
+              </div>
+              <div style="font-size:12px;color:#777;margin-top:4px;">Week: ${s.agent.week.completed} completed \u00b7 ${s.agent.week.skipped} skipped of ${s.agent.week.tracks} picks</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:#777;margin-bottom:6px;">DISCOVERY</div>
+              <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
+                <div class="stat-box"><div class="stat-number">${s.discovery.pool.fresh}</div><div class="stat-label">Fresh Pool</div></div>
+                <div class="stat-box"><div class="stat-number">${s.discovery.week.played}</div><div class="stat-label">Played (Week)</div></div>
+                <div class="stat-box"><div class="stat-number">${freshAcceptRate != null ? freshAcceptRate + '%' : '\u2014'}</div><div class="stat-label">Accept Rate</div></div>
+              </div>
+              <div style="font-size:12px;color:#777;margin-top:4px;">Pool: ${s.discovery.pool.fresh} fresh \u00b7 ${s.discovery.pool.liked ?? 0} liked \u00b7 ${s.discovery.pool.skipped ?? 0} skipped</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:#777;margin-bottom:6px;">TASTE MODEL</div>
+              <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
+                <div class="stat-box"><div class="stat-number">${s.tasteModel.tracksScored.toLocaleString()}</div><div class="stat-label">Tracks Scored</div></div>
+                <div class="stat-box"><div class="stat-number">${s.tasteModel.seasonalPlaylists}</div><div class="stat-label">Seasonal PLs</div></div>
+                <div class="stat-box"><div class="stat-number">${s.tasteModel.freshPoolSize}</div><div class="stat-label">Pool Total</div></div>
+              </div>
+              <div style="font-size:12px;color:#777;margin-top:4px;">Last rebuilt: ${rebuilt}</div>
+            </div>
+          </div>
         `;
       } catch (e) {
-        document.getElementById('stats-grid').innerHTML = `<div class="status-msg error" style="grid-column:1/-1;">${e.message}</div>`;
+        document.getElementById('stats-content').innerHTML = `<div class="status-msg error">${e.message}</div>`;
       }
     }
 

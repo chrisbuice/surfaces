@@ -669,6 +669,112 @@ export default {
           return Response.json({ ok: true });
         }
 
+        case "/api/dashboard-stats": {
+          // Midnight ET today as unix timestamp
+          const etNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+          const midnightET = new Date(etNow.getFullYear(), etNow.getMonth(), etNow.getDate());
+          const todaySince = Math.floor(midnightET.getTime() / 1000);
+          const weekSince = todaySince - 6 * 86400;
+
+          // ── Today's listening ──
+          const todayEvents = await env.DB.prepare(`
+            SELECT classification, COUNT(*) as cnt, SUM(duration_listened_ms) as total_ms
+            FROM play_events WHERE started_at >= ?
+            GROUP BY classification
+          `).bind(todaySince).all<{ classification: string; cnt: number; total_ms: number }>();
+
+          let todayTracks = 0, todayListenedMs = 0;
+          const todayBreakdown: Record<string, number> = { completed: 0, skipped: 0, partial: 0, replayed: 0 };
+          for (const row of todayEvents.results) {
+            todayTracks += row.cnt;
+            todayListenedMs += row.total_ms ?? 0;
+            todayBreakdown[row.classification] = row.cnt;
+          }
+
+          // ── Agent performance (today + this week) ──
+          const agentToday = await env.DB.prepare(`
+            SELECT COUNT(DISTINCT s.session_id) as sessions,
+                   SUM(CASE WHEN st.outcome = 'completed' THEN 1 ELSE 0 END) as completed,
+                   SUM(CASE WHEN st.outcome = 'skipped' THEN 1 ELSE 0 END) as skipped,
+                   COUNT(st.id) as total_tracks
+            FROM sessions s
+            JOIN session_tracks st ON st.session_id = s.session_id
+            WHERE s.invoked_at >= ?
+          `).bind(todaySince).first<{ sessions: number; completed: number; skipped: number; total_tracks: number }>();
+
+          const agentWeek = await env.DB.prepare(`
+            SELECT COUNT(DISTINCT s.session_id) as sessions,
+                   SUM(CASE WHEN st.outcome = 'completed' THEN 1 ELSE 0 END) as completed,
+                   SUM(CASE WHEN st.outcome = 'skipped' THEN 1 ELSE 0 END) as skipped,
+                   COUNT(st.id) as total_tracks
+            FROM sessions s
+            JOIN session_tracks st ON st.session_id = s.session_id
+            WHERE s.invoked_at >= ?
+          `).bind(weekSince).first<{ sessions: number; completed: number; skipped: number; total_tracks: number }>();
+
+          // ── Discovery stats ──
+          const freshToday = await env.DB.prepare(`
+            SELECT COUNT(*) as played,
+                   SUM(CASE WHEN pe.classification = 'completed' THEN 1 ELSE 0 END) as completed,
+                   SUM(CASE WHEN pe.classification = 'skipped' THEN 1 ELSE 0 END) as skipped
+            FROM play_events pe
+            JOIN session_tracks st ON st.session_id = pe.session_id AND st.track_id = pe.track_id
+            WHERE pe.started_at >= ? AND st.source LIKE 'fresh:%'
+          `).bind(todaySince).first<{ played: number; completed: number; skipped: number }>();
+
+          const freshWeek = await env.DB.prepare(`
+            SELECT COUNT(*) as played,
+                   SUM(CASE WHEN pe.classification = 'completed' THEN 1 ELSE 0 END) as completed,
+                   SUM(CASE WHEN pe.classification = 'skipped' THEN 1 ELSE 0 END) as skipped
+            FROM play_events pe
+            JOIN session_tracks st ON st.session_id = pe.session_id AND st.track_id = pe.track_id
+            WHERE pe.started_at >= ? AND st.source LIKE 'fresh:%'
+          `).bind(weekSince).first<{ played: number; completed: number; skipped: number }>();
+
+          const poolStats = await env.DB.prepare(`
+            SELECT status, COUNT(*) as cnt FROM fresh_pool GROUP BY status
+          `).all<{ status: string; cnt: number }>();
+          const pool: Record<string, number> = {};
+          for (const row of poolStats.results) pool[row.status] = row.cnt;
+
+          // ── Taste model health ──
+          const tasteHealth = await env.DB.prepare(`
+            SELECT COUNT(*) as tracks_scored,
+                   MAX(refreshed_at) as last_rebuilt
+            FROM track_taste
+          `).first<{ tracks_scored: number; last_rebuilt: number }>();
+
+          const seasonalCount = await env.DB.prepare(
+            "SELECT COUNT(*) as cnt FROM seasonal_playlists"
+          ).first<{ cnt: number }>();
+
+          return Response.json({
+            today: {
+              tracks: todayTracks,
+              listenedMin: Math.round(todayListenedMs / 60000),
+              completed: todayBreakdown.completed,
+              skipped: todayBreakdown.skipped,
+              partial: todayBreakdown.partial,
+              skipRate: todayTracks > 0 ? Math.round(todayBreakdown.skipped / todayTracks * 100) : 0,
+            },
+            agent: {
+              today: { sessions: agentToday?.sessions ?? 0, tracks: agentToday?.total_tracks ?? 0, completed: agentToday?.completed ?? 0, skipped: agentToday?.skipped ?? 0 },
+              week: { sessions: agentWeek?.sessions ?? 0, tracks: agentWeek?.total_tracks ?? 0, completed: agentWeek?.completed ?? 0, skipped: agentWeek?.skipped ?? 0 },
+            },
+            discovery: {
+              today: { played: freshToday?.played ?? 0, completed: freshToday?.completed ?? 0, skipped: freshToday?.skipped ?? 0 },
+              week: { played: freshWeek?.played ?? 0, completed: freshWeek?.completed ?? 0, skipped: freshWeek?.skipped ?? 0 },
+              pool: { fresh: pool.fresh ?? 0, queued: pool.queued ?? 0, played: pool.played ?? 0, liked: pool.liked ?? 0, skipped: pool.skipped ?? 0 },
+            },
+            tasteModel: {
+              tracksScored: tasteHealth?.tracks_scored ?? 0,
+              lastRebuilt: tasteHealth?.last_rebuilt ?? null,
+              seasonalPlaylists: seasonalCount?.cnt ?? 0,
+              freshPoolSize: Object.values(pool).reduce((a, b) => a + b, 0),
+            },
+          });
+        }
+
         case "/api/recent-history": {
           const since = Math.floor(Date.now() / 1000) - 24 * 3600;
           const rows = await env.DB.prepare(`
