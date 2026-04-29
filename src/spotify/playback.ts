@@ -19,10 +19,21 @@ export async function getDevices(spotify: SpotifyClient): Promise<SpotifyDevice[
   return resp.devices;
 }
 
-/** Get the active device, or the first available one */
+// When no device is active, prefer the phone over speakers/TVs/etc.
+// Spotify device types: "Smartphone", "Computer", "Speaker", "TV", "CastAudio", etc.
+const DEVICE_TYPE_PRIORITY = ["Smartphone", "Computer", "Tablet"];
+
+/** Get the active device, or prefer the phone if nothing is playing */
 export async function getActiveDevice(spotify: SpotifyClient): Promise<SpotifyDevice | null> {
   const devices = await getDevices(spotify);
-  return devices.find(d => d.is_active) ?? devices[0] ?? null;
+  const active = devices.find(d => d.is_active);
+  if (active) return active;
+
+  for (const preferred of DEVICE_TYPE_PRIORITY) {
+    const match = devices.find(d => d.type === preferred);
+    if (match) return match;
+  }
+  return devices[0] ?? null;
 }
 
 /**
