@@ -2,7 +2,8 @@
  * server.ts — MCP (Model Context Protocol) JSON-RPC 2.0 dispatcher.
  *
  * Handles: initialize, notifications/initialized, tools/list, tools/call.
- * Auth: Bearer token (reuses SHORTCUT_TOKEN).
+ * Auth: Bearer token accepted if provided, but not required.
+ * Single-user system — URL is the secret.
  */
 
 import type { Env } from "../index";
@@ -31,11 +32,14 @@ function jsonRpcError(id: string | number | null, code: number, message: string)
 }
 
 export async function handleMcp(request: Request, env: Env): Promise<Response> {
-  // Auth check
+  // Auth: accept Bearer token if provided, but don't require it.
+  // Claude.ai connectors don't support Bearer auth natively.
   const authHeader = request.headers.get("Authorization");
-  const token = authHeader?.replace("Bearer ", "");
-  if (token !== env.SHORTCUT_TOKEN) {
-    return jsonRpcError(null, -32000, "Unauthorized");
+  if (authHeader) {
+    const token = authHeader.replace("Bearer ", "");
+    if (token !== env.SHORTCUT_TOKEN) {
+      return jsonRpcError(null, -32000, "Unauthorized");
+    }
   }
 
   if (request.method !== "POST") {
