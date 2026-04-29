@@ -577,57 +577,25 @@ export default {
           const maxLimit = 1000;
           const trackLimit = Math.min(parseInt(url.searchParams.get("limit") ?? "200") || 200, maxLimit);
 
-          // Dev Mode blocks all Spotify API playlist-track endpoints (both user
-          // and client-credentials tokens). Workaround: scrape the public embed
-          // page which includes track data in __NEXT_DATA__ without auth.
-          const embedResp = await fetch(
-            `https://open.spotify.com/embed/playlist/${playlistId}`,
-            { headers: { "User-Agent": "Mozilla/5.0 (compatible; SpotifyAgent/1.0)" } }
-          );
-          if (!embedResp.ok) {
-            return Response.json({ error: `Embed fetch failed (${embedResp.status})` }, { status: 502 });
-          }
-          const html = await embedResp.text();
-          const match = html.match(/__NEXT_DATA__.*?type="application\/json">(.*?)<\/script>/);
-          if (!match) {
-            return Response.json({ error: "Could not parse embed data" }, { status: 502 });
-          }
+          const { getPlaylistTracksViaEmbed } = await import("./spotify/embed");
+          const result = await getPlaylistTracksViaEmbed(playlistId, trackLimit);
 
-          interface EmbedTrack {
-            uri: string;
-            title: string;
-            subtitle: string;
-            duration: number;
-            isPlayable: boolean;
-          }
-          const nextData = JSON.parse(match[1]) as {
-            props: { pageProps: { state: { data: { entity: {
-              name: string;
-              trackList: EmbedTrack[];
-            } } } } };
-          };
-          const entity = nextData.props.pageProps.state.data.entity;
-          const embedTracks = entity.trackList.slice(0, trackLimit);
-
-          const tracks = embedTracks.map((t, i) => {
-            const trackId = t.uri.replace("spotify:track:", "");
-            return {
-              track_id: trackId,
-              track_name: t.title,
-              artist_names: t.subtitle.split(/,\s*/).map(s => s.replace(/\u00a0/g, " ").trim()),
-              artist_ids: null,   // not available via embed
-              album_name: null,   // not available via embed
-              album_id: null,     // not available via embed
-              added_at: null,     // not available via embed
-              added_at_iso: null, // not available via embed
-              duration_ms: t.duration,
-              position: i,
-            };
-          });
+          const tracks = result.tracks.map((t, i) => ({
+            track_id: t.trackId,
+            track_name: t.trackName,
+            artist_names: t.artistNames,
+            artist_ids: null,   // not available via embed
+            album_name: null,   // not available via embed
+            album_id: null,     // not available via embed
+            added_at: null,     // not available via embed
+            added_at_iso: null, // not available via embed
+            duration_ms: t.durationMs,
+            position: i,
+          }));
 
           return Response.json({
-            playlist_name: entity.name,
-            track_count: entity.trackList.length,
+            playlist_name: result.playlistName,
+            track_count: result.tracks.length,
             source: "embed_scrape",
             note: "added_at, album, and artist_ids unavailable in Dev Mode (embed scraping fallback)",
             tracks,

@@ -79,10 +79,10 @@ export async function startSession(
     const blockedPlaylistId = await kv.get("playlist:blocked");
     if (blockedPlaylistId) {
       try {
-        const { getPlaylistTracks } = await import("../spotify/library");
-        const blockedTracks = await getPlaylistTracks(spotify, blockedPlaylistId, 500);
-        for (const item of blockedTracks) {
-          if (item.track?.id) blockedIds.add(item.track.id);
+        const { getPlaylistTracksViaEmbed } = await import("../spotify/embed");
+        const { tracks: blockedTracks } = await getPlaylistTracksViaEmbed(blockedPlaylistId, 500);
+        for (const t of blockedTracks) {
+          blockedIds.add(t.trackId);
         }
       } catch { /* playlist may not exist yet */ }
     }

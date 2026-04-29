@@ -10,7 +10,7 @@
  */
 
 import { SpotifyClient } from "../spotify/client";
-import { getUserPlaylists, getPlaylistTracks } from "../spotify/library";
+import { getUserPlaylists } from "../spotify/library";
 
 // Patterns are checked in order; first match wins.
 // Regexes use \b on the left but not the right, so "springing", "falling",
@@ -91,14 +91,13 @@ export async function detectSeasonalPlaylists(spotify: SpotifyClient): Promise<S
       }
     }
 
-    // If no year found in name, infer from track add dates
+    // If no year found in name, default to current year.
+    // (Previously we inferred from track added_at dates, but Dev Mode blocks
+    // the playlist-tracks API and the embed fallback doesn't include added_at.
+    // All existing undated playlists are already synced with correct years from
+    // earlier runs; new playlists without a year are most likely current.)
     if (!year) {
-      try {
-        year = await inferYearFromTracks(spotify, pl.id, matchedSeason.months);
-      } catch (err) {
-        console.warn(`Skipping playlist "${pl.name}" (${pl.id}): ${err}`);
-        continue;
-      }
+      year = new Date().getFullYear();
     }
 
     results.push({
@@ -110,26 +109,6 @@ export async function detectSeasonalPlaylists(spotify: SpotifyClient): Promise<S
   }
 
   return results;
-}
-
-/** Infer the year of a seasonal playlist from the median add date of its tracks */
-async function inferYearFromTracks(
-  spotify: SpotifyClient,
-  playlistId: string,
-  seasonMonths: number[]
-): Promise<number> {
-  const items = await getPlaylistTracks(spotify, playlistId, 100);
-  if (items.length === 0) return new Date().getFullYear();
-
-  const dates = items
-    .map(item => new Date(item.added_at))
-    .filter(d => !isNaN(d.getTime()))
-    .sort((a, b) => a.getTime() - b.getTime());
-
-  if (dates.length === 0) return new Date().getFullYear();
-
-  const median = dates[Math.floor(dates.length / 2)];
-  return median.getFullYear();
 }
 
 /** Determine the current season based on month */

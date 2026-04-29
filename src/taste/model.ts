@@ -9,9 +9,10 @@
 import { SpotifyClient } from "../spotify/client";
 import {
   getSavedTracks, getTopTracks, getTopArtists,
-  getFollowedArtists, getPlaylistTracks,
+  getFollowedArtists,
   type SpotifyTrack
 } from "../spotify/library";
+import { getPlaylistTracksViaEmbed } from "../spotify/embed";
 import { syncSeasonalPlaylists } from "./seasonal";
 import { computeTasteScore, computeArtistTasteScore } from "./score";
 
@@ -95,16 +96,35 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient):
   for (const t of topTracksLong) ensureTrack(t).in_top_tracks_long = true;
 
   // ── Add seasonal playlist tracks ──
+  // Dev Mode blocks the playlist-tracks API, so we use embed scraping.
+  // The embed provides track IDs and names but not artist IDs or album data.
+  // Tracks that also appear in liked songs / top tracks already have full
+  // metadata; seasonal-only tracks get correct playlist counts but incomplete
+  // artist/album info (acceptable tradeoff).
   const seasonalRows = await db.prepare(
     "SELECT spotify_playlist_id, is_current FROM seasonal_playlists"
   ).all<{ spotify_playlist_id: string; is_current: number }>();
 
   for (const row of seasonalRows.results) {
     try {
-      const playlistTracks = await getPlaylistTracks(spotify, row.spotify_playlist_id, 500);
-      for (const item of playlistTracks) {
-        if (!item.track) continue;
-        const acc = ensureTrack(item.track);
+      const { tracks: embedTracks } = await getPlaylistTracksViaEmbed(row.spotify_playlist_id, 500);
+      for (const et of embedTracks) {
+        let acc = tracks.get(et.trackId);
+        if (!acc) {
+          acc = {
+            track_name: et.trackName,
+            artist_ids: [],
+            primary_artist_id: "",
+            album_id: null,
+            in_liked_songs: false,
+            in_top_tracks_short: false,
+            in_top_tracks_medium: false,
+            in_top_tracks_long: false,
+            seasonal_playlist_count: 0,
+            current_season_present: false,
+          };
+          tracks.set(et.trackId, acc);
+        }
         acc.seasonal_playlist_count++;
         if (row.is_current) acc.current_season_present = true;
       }
