@@ -339,6 +339,24 @@ export default {
           ).first<{ session_id: string; mode: string; context_snapshot_id: number | null }>();
           if (!lastSess) return Response.json({ error: "No sessions yet" });
 
+          // Load acoustic centroid for the session's mode (for fit explanation)
+          const { computeAcousticFit: explainFit, dominantDimension } = await import("./audio/fit");
+          let explainCentroid = new Map<string, { mean: number; stddev: number }>();
+          try {
+            const explainMinSamples = 10;
+            let cRows = await env.DB.prepare(
+              "SELECT dimension, mean, stddev, sample_size FROM acoustic_profile WHERE mode = ?"
+            ).bind(lastSess.mode).all<{ dimension: string; mean: number; stddev: number; sample_size: number }>();
+            if (cRows.results.length === 0 || cRows.results[0].sample_size < explainMinSamples) {
+              cRows = await env.DB.prepare(
+                "SELECT dimension, mean, stddev, sample_size FROM acoustic_profile WHERE mode = 'overall'"
+              ).all<{ dimension: string; mean: number; stddev: number; sample_size: number }>();
+            }
+            if (cRows.results.length > 0 && cRows.results[0].sample_size >= explainMinSamples) {
+              explainCentroid = new Map(cRows.results.map(r => [r.dimension, { mean: r.mean, stddev: r.stddev }]));
+            }
+          } catch { /* no profile */ }
+
           const sessTracks = await env.DB.prepare(
             "SELECT position, track_id, source, outcome FROM session_tracks WHERE session_id = ? ORDER BY position"
           ).bind(lastSess.session_id).all<{
@@ -411,12 +429,38 @@ export default {
               trackName = obs?.track_name ?? st.track_id;
             }
 
+            // Compute acoustic fit for explanation
+            let acousticFit: number | null = null;
+            let acousticFitNote: string | null = null;
+            if (explainCentroid.size > 0) {
+              const afRow = await env.DB.prepare(
+                "SELECT acousticness, danceability, energy, instrumentalness, liveness, loudness, speechiness, tempo, valence FROM track_audio_features WHERE track_id = ? AND acousticness IS NOT NULL"
+              ).bind(st.track_id).first<{
+                acousticness: number; danceability: number; energy: number;
+                instrumentalness: number; liveness: number; loudness: number;
+                speechiness: number; tempo: number; valence: number;
+              }>();
+              if (afRow) {
+                acousticFit = explainFit(afRow, explainCentroid);
+                const dom = dominantDimension(afRow, explainCentroid);
+                if (dom && acousticFit !== null) {
+                  if (acousticFit > 1.1) {
+                    acousticFitNote = `${dom.direction === "high" ? "High" : "Low"} ${dom.dimension} match for ${lastSess.mode}`;
+                  } else if (acousticFit < 0.9) {
+                    acousticFitNote = `${dom.direction === "high" ? "High" : "Low"} ${dom.dimension} for ${lastSess.mode}`;
+                  }
+                }
+              }
+            }
+
             explanations.push({
               position: st.position + 1,
               trackName,
               source: st.source,
               outcome: st.outcome,
               score: taste?.taste_score ?? null,
+              acousticFit: acousticFit !== null ? Math.round(acousticFit * 100) / 100 : null,
+              acousticFitNote,
               reasons,
             });
           }

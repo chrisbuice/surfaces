@@ -327,8 +327,14 @@
               : 'reason-tag';
             return `<span class="${cls}">${r}</span>`;
           }).join('');
+          // Acoustic fit tag — only show if meaningfully away from 1.0
+          let fitTag = '';
+          if (t.acousticFit != null && t.acousticFitNote) {
+            const fitCls = t.acousticFit > 1.1 ? 'reason-tag context' : 'reason-tag';
+            fitTag = `<span class="${fitCls}">\u266B ${t.acousticFitNote} (${t.acousticFit.toFixed(2)}x)</span>`;
+          }
           const outcomeStr = t.outcome ? ` <span class="badge badge-${t.outcome}">${t.outcome}</span>` : '';
-          return `<tr><td style="color:#b3b3b3;">${t.position}</td><td>${t.trackName}${outcomeStr}</td><td>${tags}</td></tr>`;
+          return `<tr><td style="color:#b3b3b3;">${t.position}</td><td>${t.trackName}${outcomeStr}</td><td>${tags}${fitTag}</td></tr>`;
         }).join('');
         html += '</table>';
         document.getElementById('explain-content').innerHTML = html;
