@@ -204,8 +204,11 @@ export async function startSession(
       };
     });
 
-  if (familiarPool.length === 0) {
+  if (familiarPool.length === 0 && mode !== "discover") {
     throw new Error("No tracks available for curation. Run /debug/rebuild-taste first.");
+  }
+  if (freshPool.length === 0 && mode === "discover") {
+    throw new Error("Fresh pool is empty. Run /debug/run-discovery first.");
   }
 
   // ── Build session position by position ──
@@ -216,7 +219,10 @@ export async function startSession(
 
   for (let i = 0; i < targetTrackCount; i++) {
     const position = targetTrackCount > 1 ? i / (targetTrackCount - 1) : 0;
-    const useFresh = freshPool.length > 0 && shouldBeFresh(position, freshMultiplier);
+    // Discover mode: 100% fresh, skip the arc entirely
+    const useFresh = mode === "discover"
+      ? freshPool.length > 0
+      : freshPool.length > 0 && shouldBeFresh(position, freshMultiplier);
     const pool = useFresh ? freshPool : familiarPool;
     const lastArtist = selected.length > 0 ? selected[selected.length - 1].primary_artist_id : null;
 

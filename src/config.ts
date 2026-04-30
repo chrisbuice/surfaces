@@ -51,6 +51,12 @@ export const MODES: Record<string, ModeConfig> = {
     defaultOutput: "playlist",
     freshMultiplier: 0.2,
   },
+  discover: {
+    defaultHours: [0, 24], // any time — manually invoked
+    defaultDurationMin: 45,
+    defaultOutput: "queue",
+    freshMultiplier: 100, // effectively forces 100% fresh via the arc
+  },
 };
 
 /** Average track duration assumed for calculating track count from minutes */
