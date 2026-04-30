@@ -124,8 +124,21 @@ export async function pullAllCandidates(
     await searchTopArtists(spotify, candidates, debug);
   }
 
-  // ── 2. Editorial RSS feed (1 feed per day, rotated) ──
-  await searchEditorialRss(spotify, candidates, day, debug);
+  // ── 2. Editorial feed (1 source per day, rotated across 6 sources) ──
+  // Sources 0-2: core RSS feeds (Stereogum, Line of Best Fit, EARMILK)
+  // Sources 3-4: extras (Gorilla vs Bear, Hype Machine)
+  const feedIndex = day % 5;
+  if (feedIndex < 3) {
+    await searchEditorialRss(spotify, candidates, feedIndex, debug);
+  } else {
+    const { searchGorillaVsBear, searchHypeMachine } = await import("./rss_extras");
+    const maxSearches = 6; // subrequest budget: 16 (existing) + 25 (Last.fm) + 6 = 47
+    if (feedIndex === 3) {
+      await searchGorillaVsBear(spotify, candidates, maxSearches, debug);
+    } else {
+      await searchHypeMachine(spotify, candidates, maxSearches, debug);
+    }
+  }
 
   // ── 3. Last.fm similar-artist discovery ──
   if (db && lastfmApiKey) {
@@ -232,10 +245,10 @@ async function searchTopArtists(
 async function searchEditorialRss(
   spotify: SpotifyClient,
   candidates: DiscoveryCandidate[],
-  day: number,
+  feedIndex: number,
   debug?: string[]
 ): Promise<void> {
-  const feed = RSS_FEEDS[day % RSS_FEEDS.length];
+  const feed = RSS_FEEDS[feedIndex % RSS_FEEDS.length];
   debug?.push(`RSS feed today: ${feed.name} (${feed.url})`);
 
   try {
@@ -249,7 +262,7 @@ async function searchEditorialRss(
     debug?.push(`RSS items parsed: ${items.length}`);
 
     let searched = 0;
-    const MAX_SEARCHES = 10;
+    const MAX_SEARCHES = 6; // subrequest budget cap
 
     for (const item of items) {
       if (searched >= MAX_SEARCHES) break;
