@@ -187,6 +187,7 @@ spotifygenie/
 | M16 | ReccoBeats audio features | Done | `src/audio/reccobeats.ts`, `src/audio/backfill.ts`, `src/db/migrations/001_audio_features.sql` |
 | M17 | Acoustic preference profile | Done | `src/audio/profile.ts`, `src/db/migrations/002_acoustic_profile.sql` |
 | M18 | Last.fm discovery | Done | `src/discovery/lastfm.ts`, `src/discovery/similar.ts`, `src/db/migrations/003_lastfm_cache.sql` |
+| M19 | Expanded external sources | Done | `src/discovery/rss_extras.ts` (Gorilla vs Bear, Hype Machine) |
 
 ---
 
