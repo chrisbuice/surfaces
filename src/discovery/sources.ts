@@ -124,23 +124,29 @@ export async function pullAllCandidates(
     await searchTopArtists(spotify, candidates, debug);
   }
 
-  // ── 2. Editorial feed (1 source per day, rotated across 6 sources) ──
-  // Sources 0-2: core RSS feeds (Stereogum, Line of Best Fit, EARMILK)
-  // Sources 3-4: extras (Gorilla vs Bear, Hype Machine)
+  // ── 2. Tier 1: Hype Machine (daily — structured API, highest reliability) ──
+  try {
+    const { searchHypeMachine } = await import("./rss_extras");
+    await searchHypeMachine(spotify, candidates, 10, debug);
+  } catch (err) {
+    debug?.push(`Hype Machine error: ${err}`);
+  }
+
+  // ── 3. Tier 2: Editorial RSS (1 per day, 5-source rotation) ──
+  // 0: Stereogum, 1: Line of Best Fit, 2: EARMILK, 3: Gorilla vs Bear, 4: Aquarium Drunkard
   const feedIndex = day % 5;
   if (feedIndex < 3) {
     await searchEditorialRss(spotify, candidates, feedIndex, debug);
   } else {
-    const { searchGorillaVsBear, searchHypeMachine } = await import("./rss_extras");
-    const maxSearches = 6; // subrequest budget: 16 (existing) + 25 (Last.fm) + 6 = 47
+    const { searchGorillaVsBear, searchAquariumDrunkard } = await import("./rss_extras");
     if (feedIndex === 3) {
-      await searchGorillaVsBear(spotify, candidates, maxSearches, debug);
+      await searchGorillaVsBear(spotify, candidates, 10, debug);
     } else {
-      await searchHypeMachine(spotify, candidates, maxSearches, debug);
+      await searchAquariumDrunkard(spotify, candidates, 10, debug);
     }
   }
 
-  // ── 3. Last.fm similar-artist discovery ──
+  // ── 4. Last.fm similar-artist discovery ──
   if (db && lastfmApiKey) {
     try {
       const { pullLastFmCandidates } = await import("./similar");
@@ -262,7 +268,7 @@ async function searchEditorialRss(
     debug?.push(`RSS items parsed: ${items.length}`);
 
     let searched = 0;
-    const MAX_SEARCHES = 6; // subrequest budget cap
+    const MAX_SEARCHES = 10; // paid tier: no subrequest budget concern
 
     for (const item of items) {
       if (searched >= MAX_SEARCHES) break;

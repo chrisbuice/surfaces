@@ -16,7 +16,7 @@ import type { DiscoveryCandidate } from "./sources";
 
 const MAX_SEED_ARTISTS = 6;
 const SIMILAR_PER_ARTIST = 4;
-const MAX_SUBREQUESTS = 25; // defensive cap — leave headroom for other sources
+const MAX_SUBREQUESTS = 80; // paid tier: 1000 subrequest limit, let Last.fm run to completion
 
 interface SearchTrack {
   id: string;
