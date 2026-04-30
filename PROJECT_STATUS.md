@@ -40,9 +40,18 @@ Everything runs on Cloudflare's free tier. Zero monthly cost.
 |------|-----|-----|------|
 | `* * * * *` | Every min | Every min | Poll Spotify playback, derive play events |
 | `*/2 * * * *` | Every 2 min | Every 2 min | In-session feedback (skip/replay detection), context snapshots |
-| `0 5 * * *` | 5:00 AM | 1:00 AM | Derive events, rebuild taste model, rebuild learned affinities, prune old data |
-| `0 10 * * *` | 10:00 AM | 6:00 AM | Discovery agent (artist search + editorial RSS) |
+| `0 5 * * *` | 5:00 AM | 1:00 AM | Derive events, rebuild taste model, audio backfill, acoustic profile, prune |
+| `0 10 * * *` | 10:00 AM | 6:00 AM | Discovery agent (multi-source, see below) |
 | `0 0 * * *` | Midnight | 8:00 PM | Nightly listening summary email |
+
+### Discovery source rotation
+
+| Tier | Frequency | Sources |
+|------|-----------|---------|
+| Artist search | Daily (alternating) | Followed artists (even days) / Top artists (odd days) |
+| Tier 1 editorial | Daily | Hype Machine (JSON API) |
+| Tier 2 editorial | 5-day rotation | Stereogum → Line of Best Fit → EARMILK → Gorilla vs Bear → Aquarium Drunkard |
+| Similar artists | Daily | Last.fm artist.getSimilar (top 6 seed artists, 7-day cache) |
 
 ### Spotify API limitations
 
@@ -187,7 +196,7 @@ spotifygenie/
 | M16 | ReccoBeats audio features | Done | `src/audio/reccobeats.ts`, `src/audio/backfill.ts`, `src/db/migrations/001_audio_features.sql` |
 | M17 | Acoustic preference profile | Done | `src/audio/profile.ts`, `src/db/migrations/002_acoustic_profile.sql` |
 | M18 | Last.fm discovery | Done | `src/discovery/lastfm.ts`, `src/discovery/similar.ts`, `src/db/migrations/003_lastfm_cache.sql` |
-| M19 | Expanded external sources | Done | `src/discovery/rss_extras.ts` (Gorilla vs Bear, Hype Machine) |
+| M19 | Expanded external sources | Done | `src/discovery/rss_extras.ts` (Gorilla vs Bear, Hype Machine, Aquarium Drunkard) |
 
 ---
 
