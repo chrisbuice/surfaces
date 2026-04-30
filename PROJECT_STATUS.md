@@ -3,7 +3,7 @@
 **Last updated:** April 29, 2026 (end of session 4)
 **Codebase:** 32 TypeScript files + 1 HTML dashboard, ~7,640 lines
 **Commits:** 52 on main branch
-**All planned milestones (M0–M16) are complete** (M12 skipped by choice)
+**All planned milestones (M0–M20) are complete** (M12 skipped by choice)
 
 This document is intended to bring a new conversation up to speed on the full state of the application — what exists, how it works, what files do what, and what's left to explore.
 
@@ -197,6 +197,7 @@ spotifygenie/
 | M17 | Acoustic preference profile | Done | `src/audio/profile.ts`, `src/db/migrations/002_acoustic_profile.sql` |
 | M18 | Last.fm discovery | Done | `src/discovery/lastfm.ts`, `src/discovery/similar.ts`, `src/db/migrations/003_lastfm_cache.sql` |
 | M19 | Expanded external sources | Done | `src/discovery/rss_extras.ts` (Gorilla vs Bear, Hype Machine, Aquarium Drunkard) |
+| M20 | Acoustic-aware curation | Done | `src/audio/fit.ts`, `src/curation/agent.ts`, `src/db/migrations/004_track_taste_acoustic_fit.sql` |
 
 ---
 
