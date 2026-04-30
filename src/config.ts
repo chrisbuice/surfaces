@@ -82,6 +82,10 @@ export const CENTROID_HOUR_WINDOWS: Record<string, [number, number, boolean?]> =
 /** Minimum sample size for a centroid to be considered trained */
 export const ACOUSTIC_PROFILE_MIN_SAMPLES = 10;
 
+/** Acoustic fit multiplier clamp range (M20) */
+export const ACOUSTIC_FIT_MIN = 0.7;
+export const ACOUSTIC_FIT_MAX = 1.4;
+
 /** Discovery: fraction of fresh_pool reserved for editorial sources */
 export const EDITORIAL_RESERVED_RATIO = 0.3;
 

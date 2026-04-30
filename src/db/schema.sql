@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS track_taste (
   complete_count INTEGER DEFAULT 0,
   last_played_at INTEGER,
   taste_score REAL,
+  acoustic_fit_to_overall REAL,  -- M20: cached fit against 'overall' centroid
   refreshed_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_track_taste_score ON track_taste(taste_score DESC);
