@@ -620,9 +620,16 @@ export default {
         }
 
         case "/debug/fresh-pool": {
-          const limit = parseInt(url.searchParams.get("limit") ?? "20");
-          const entries = await getTopFresh(env.DB, limit);
-          return Response.json(entries);
+          const fpLimit = parseInt(url.searchParams.get("limit") ?? "20");
+          const fpRows = await env.DB.prepare(`
+            SELECT fp.*, at2.artist_name as primary_artist_name
+            FROM fresh_pool fp
+            LEFT JOIN artist_taste at2 ON at2.artist_id = fp.primary_artist_id
+            WHERE fp.status = 'fresh'
+            ORDER BY fp.taste_score DESC
+            LIMIT ?
+          `).bind(fpLimit).all();
+          return Response.json(fpRows.results);
         }
 
         case "/debug/fresh-pool-stats": {

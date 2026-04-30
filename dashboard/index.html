@@ -442,9 +442,24 @@
           html += '<div class="status-msg">Fresh pool is empty. Run discovery first.</div>';
         } else {
           html += '<table><tr><th>Track</th><th>Source</th><th>Score</th><th></th></tr>';
-          html += pool.map(t =>
-            `<tr><td>${t.track_name}</td><td><span class="source-tag">${t.source_detail || t.source}</span></td><td class="score">${t.taste_score.toFixed(1)}</td><td><button class="queue-btn" onclick="queueTrack(this, '${t.track_id}')">+ Queue</button></td></tr>`
-          ).join('');
+          html += pool.map(t => {
+            const artist = t.primary_artist_name || t.source_detail || '';
+            const artistLine = artist ? `<br><span class="track-artist">${artist}</span>` : '';
+            // Format source for display
+            const srcMap = {
+              'followed_artist_search': 'Followed Artist',
+              'top_artist_search': 'Top Artist',
+              'hype_machine': 'Hype Machine',
+              'editorial_rss': t.source_detail || 'RSS',
+            };
+            let srcLabel = srcMap[t.source];
+            if (!srcLabel) {
+              if (t.source.startsWith('lastfm:')) srcLabel = 'Last.fm';
+              else if (t.source.startsWith('rss:')) srcLabel = t.source.replace('rss:', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+              else srcLabel = t.source;
+            }
+            return `<tr><td>${t.track_name}${artistLine}</td><td><span class="source-tag">${srcLabel}</span></td><td class="score">${t.taste_score.toFixed(1)}</td><td><button class="queue-btn" onclick="queueTrack(this, '${t.track_id}')">+ Queue</button></td></tr>`;
+          }).join('');
           html += '</table>';
         }
         document.getElementById('fresh-pool-content').innerHTML = html;
