@@ -6,7 +6,7 @@
  * Context multipliers added in M8.
  */
 
-import { MODES, AVG_TRACK_DURATION_MIN, RECENCY_AVOID_COUNT } from "../config";
+import { MODES, AVG_TRACK_DURATION_MIN, RECENCY_AVOID_COUNT, ACOUSTIC_PROFILE_MIN_SAMPLES } from "../config";
 import { resolveMode } from "./modes";
 import { shouldBeFresh } from "./arc";
 import { SpotifyClient } from "../spotify/client";
@@ -14,6 +14,7 @@ import { playTracks, queueTracks, createPlaylist, getActiveDevice } from "../spo
 import { getTopFresh, markFreshUsed } from "../discovery/pool";
 import { captureContext, type ContextInput, type ContextSnapshot } from "../context/capture";
 import { computeContextMultiplier, summarizeBiases, type ScoredContext } from "./context_score";
+import { computeAcousticFit, type AudioFeatureValues } from "../audio/fit";
 
 interface TrackCandidate {
   track_id: string;
@@ -88,6 +89,48 @@ export async function startSession(
     }
   }
 
+  // ── Load acoustic profile centroid for this mode ──
+  // Try mode-specific centroid first; fall back to 'overall' if undertrained
+  let modeCentroid = new Map<string, { mean: number; stddev: number }>();
+  try {
+    let centroidMode = mode;
+    const modeRows = await db.prepare(
+      "SELECT dimension, mean, stddev, sample_size FROM acoustic_profile WHERE mode = ?"
+    ).bind(mode).all<{ dimension: string; mean: number; stddev: number; sample_size: number }>();
+
+    if (modeRows.results.length > 0 && modeRows.results[0].sample_size >= ACOUSTIC_PROFILE_MIN_SAMPLES) {
+      modeCentroid = new Map(modeRows.results.map(r => [r.dimension, { mean: r.mean, stddev: r.stddev }]));
+    } else {
+      // Fall back to 'overall' centroid
+      centroidMode = "overall";
+      const overallRows = await db.prepare(
+        "SELECT dimension, mean, stddev, sample_size FROM acoustic_profile WHERE mode = 'overall'"
+      ).all<{ dimension: string; mean: number; stddev: number; sample_size: number }>();
+      if (overallRows.results.length > 0 && overallRows.results[0].sample_size >= ACOUSTIC_PROFILE_MIN_SAMPLES) {
+        modeCentroid = new Map(overallRows.results.map(r => [r.dimension, { mean: r.mean, stddev: r.stddev }]));
+      }
+    }
+  } catch { /* no acoustic profile yet — all tracks get fit=1.0 */ }
+
+  // Load audio features for all tracks (used for per-track acoustic fit)
+  const audioFeaturesMap = new Map<string, AudioFeatureValues>();
+  try {
+    const afRows = await db.prepare(
+      "SELECT track_id, acousticness, danceability, energy, instrumentalness, liveness, loudness, speechiness, tempo, valence FROM track_audio_features WHERE acousticness IS NOT NULL"
+    ).all<{ track_id: string } & AudioFeatureValues>();
+    for (const r of afRows.results) {
+      audioFeaturesMap.set(r.track_id, r);
+    }
+  } catch { /* no features yet */ }
+
+  // Helper: compute acoustic fit for a track (1.0 if no features or no centroid)
+  const getAcousticFit = (trackId: string): number => {
+    if (modeCentroid.size === 0) return 1.0;
+    const features = audioFeaturesMap.get(trackId);
+    if (!features) return 1.0;
+    return computeAcousticFit(features, modeCentroid);
+  };
+
   // ── Build familiar candidate pool ──
   const recentRows = await db.prepare(
     "SELECT DISTINCT track_id FROM play_events ORDER BY started_at DESC LIMIT ?"
@@ -136,11 +179,12 @@ export async function startSession(
         album_id: t.album_id,
       }, affinityMap.get(t.track_id));
       allBiases.push(...ctx.biases);
+      const acousticFit = getAcousticFit(t.track_id);
       return {
         track_id: t.track_id,
         track_name: t.track_name,
         primary_artist_id: t.primary_artist_id,
-        taste_score: t.taste_score * ctx.multiplier,
+        taste_score: t.taste_score * ctx.multiplier * acousticFit,
         source: "familiar",
       };
     });
@@ -149,13 +193,16 @@ export async function startSession(
   const freshEntries = await getTopFresh(db, 50);
   const freshPool: TrackCandidate[] = freshEntries
     .filter(f => !recentIds.has(f.track_id) && !blockedIds.has(f.track_id))
-    .map(f => ({
-      track_id: f.track_id,
-      track_name: f.track_name,
-      primary_artist_id: f.primary_artist_id,
-      taste_score: f.taste_score,
-      source: `fresh:${f.source}`,
-    }));
+    .map(f => {
+      const acousticFit = getAcousticFit(f.track_id);
+      return {
+        track_id: f.track_id,
+        track_name: f.track_name,
+        primary_artist_id: f.primary_artist_id,
+        taste_score: f.taste_score * acousticFit,
+        source: `fresh:${f.source}`,
+      };
+    });
 
   if (familiarPool.length === 0) {
     throw new Error("No tracks available for curation. Run /debug/rebuild-taste first.");

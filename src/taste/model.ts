@@ -362,9 +362,48 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient):
     await db.batch(trackBatch.slice(i, i + 100));
   }
 
+  // ── Compute acoustic_fit_to_overall for tracks with audio features ──
+  let acousticFitCount = 0;
+  try {
+    const { computeAcousticFit } = await import("../audio/fit");
+
+    // Load 'overall' centroid
+    const centroidRows = await db.prepare(
+      "SELECT dimension, mean, stddev FROM acoustic_profile WHERE mode = 'overall'"
+    ).all<{ dimension: string; mean: number; stddev: number }>();
+
+    if (centroidRows.results.length > 0) {
+      const centroid = new Map(centroidRows.results.map(r => [r.dimension, { mean: r.mean, stddev: r.stddev }]));
+
+      // Load all audio features
+      const featureRows = await db.prepare(
+        "SELECT track_id, acousticness, danceability, energy, instrumentalness, liveness, loudness, speechiness, tempo, valence FROM track_audio_features WHERE acousticness IS NOT NULL"
+      ).all<{
+        track_id: string; acousticness: number; danceability: number; energy: number;
+        instrumentalness: number; liveness: number; loudness: number;
+        speechiness: number; tempo: number; valence: number;
+      }>();
+
+      const fitBatch: D1PreparedStatement[] = [];
+      for (const f of featureRows.results) {
+        if (!tracks.has(f.track_id)) continue; // only tracks in the taste model
+        const fit = computeAcousticFit(f, centroid);
+        fitBatch.push(
+          db.prepare("UPDATE track_taste SET acoustic_fit_to_overall = ? WHERE track_id = ?").bind(fit, f.track_id)
+        );
+        acousticFitCount++;
+      }
+
+      for (let i = 0; i < fitBatch.length; i += 100) {
+        await db.batch(fitBatch.slice(i, i + 100));
+      }
+    }
+  } catch { /* acoustic profile may not exist yet */ }
+
   return {
     tracksScored: tracks.size,
     artistsScored: artists.size,
     seasonalPlaylists: seasonalSync.total,
+    acousticFitComputed: acousticFitCount,
   };
 }
