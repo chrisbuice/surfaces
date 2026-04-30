@@ -191,6 +191,10 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || `${resp.status}`);
+      }
       return resp.json();
     }
 
