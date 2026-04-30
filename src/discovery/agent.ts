@@ -12,8 +12,13 @@
 import { SpotifyClient } from "../spotify/client";
 import { pullAllCandidates, type DiscoveryCandidate } from "./sources";
 import { addToFreshPool, expireStaleEntries } from "./pool";
+import { EDITORIAL_RESERVED_RATIO } from "../config";
 
 const FRESH_POOL_TARGET = 50;
+
+// Sources classified as "editorial" — curated by humans, not derived from taste model.
+// These get reserved slots to prevent artist-search from crowding them out.
+const EDITORIAL_SOURCE_PREFIXES = ["rss:", "hype_machine", "lastfm:", "editorial_rss"];
 
 interface DiscoveryResult {
   candidatesFound: number;
@@ -93,14 +98,34 @@ export async function runDiscoveryAgent(
     score: scoreCandidate(c, artistScores, seasonalArtists),
   }));
 
-  // Sort by score descending, take top N
-  scored.sort((a, b) => b.score - a.score);
-  const topCandidates = scored.slice(0, FRESH_POOL_TARGET);
+  // Split into editorial and artist-search buckets, score within each
+  const isEditorial = (source: string) =>
+    EDITORIAL_SOURCE_PREFIXES.some(p => source.startsWith(p));
+
+  const editorialCandidates = scored.filter(c => isEditorial(c.source));
+  const artistSearchCandidates = scored.filter(c => !isEditorial(c.source));
+
+  editorialCandidates.sort((a, b) => b.score - a.score);
+  artistSearchCandidates.sort((a, b) => b.score - a.score);
+
+  // Reserve EDITORIAL_RESERVED_RATIO of pool for editorial sources
+  const editorialSlots = Math.ceil(FRESH_POOL_TARGET * EDITORIAL_RESERVED_RATIO);
+  const artistSlots = FRESH_POOL_TARGET - editorialSlots;
+
+  const topCandidates = [
+    ...artistSearchCandidates.slice(0, artistSlots),
+    ...editorialCandidates.slice(0, editorialSlots),
+  ];
+
+  debug.push(`Pool allocation: ${artistSlots} artist-search slots, ${editorialSlots} editorial slots`);
+  debug.push(`  artist-search: ${artistSearchCandidates.length} candidates, taking top ${Math.min(artistSearchCandidates.length, artistSlots)}`);
+  debug.push(`  editorial: ${editorialCandidates.length} candidates, taking top ${Math.min(editorialCandidates.length, editorialSlots)}`);
 
   // ── Insert into fresh pool ──
   let added = 0;
   for (const c of topCandidates) {
-    if (c.score > 0) {
+    // Allow score >= 0 for editorial (they may score 0 with unknown artists)
+    if (c.score >= 0) {
       const ok = await addToFreshPool(db, {
         trackId: c.trackId,
         trackName: c.trackName,

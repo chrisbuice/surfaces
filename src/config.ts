@@ -82,6 +82,9 @@ export const CENTROID_HOUR_WINDOWS: Record<string, [number, number, boolean?]> =
 /** Minimum sample size for a centroid to be considered trained */
 export const ACOUSTIC_PROFILE_MIN_SAMPLES = 10;
 
+/** Discovery: fraction of fresh_pool reserved for editorial sources */
+export const EDITORIAL_RESERVED_RATIO = 0.3;
+
 /** Audio features backfill (M16) */
 export const AUDIO_BACKFILL_BATCH_SIZE = 40; // ReccoBeats max per request is 40
 export const AUDIO_NOT_FOUND_RESCAN_DAYS = 30;
