@@ -1,0 +1,2532 @@
+export default `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Sonic Life</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Sonic Life">
+  <meta name="theme-color" content="#121212">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%231db954'/><text x='50' y='65' text-anchor='middle' font-size='45' fill='%23121212'>&#9835;</text></svg>">
+  <style>
+    :root {
+      --accent: #1db954;
+      --accent2: #ff6b9d;
+      --accent3: #ffb84d;
+      --accent4: #5dd4ff;
+      --accent5: #b794f6;
+      --bg: #121212;
+      --panel: #1e1e1e;
+      --surface: #282828;
+      --ink: #e0e0e0;
+      --ink2: #b3b3b3;
+      --ink3: #777;
+      --border: #333;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--ink); padding: 20px; padding-top: calc(20px + env(safe-area-inset-top)); padding-bottom: calc(20px + env(safe-area-inset-bottom)); max-width: 900px; margin: 0 auto; }
+    h1 { color: var(--accent); margin-bottom: 20px; font-size: 24px; }
+    h2 { color: var(--ink2); font-size: 16px; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+    .card { background: var(--panel); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .now-playing { display: flex; align-items: center; gap: 12px; }
+    .now-playing .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+    .now-playing .dot.inactive { background: #555; animation: none; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .track-name { font-size: 18px; font-weight: 600; }
+    .track-artist { color: var(--ink2); font-size: 14px; }
+    .mode-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+    .mode-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 10px 16px; color: var(--ink); cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .mode-btn:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+    .mode-btn:active { transform: scale(0.97); }
+    .mode-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { text-align: left; color: var(--ink2); font-weight: 500; padding: 8px 4px; border-bottom: 1px solid var(--border); }
+    td { padding: 8px 4px; border-bottom: 1px solid var(--panel); }
+    .score { color: var(--accent); font-weight: 600; }
+    .source-tag { background: var(--surface); padding: 2px 8px; border-radius: 10px; font-size: 12px; color: var(--ink2); }
+    .context-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .context-item { background: var(--surface); padding: 8px 12px; border-radius: 6px; }
+    .context-label { color: var(--ink2); font-size: 12px; }
+    .context-value { font-size: 14px; margin-top: 2px; }
+    .bias-list { list-style: none; }
+    .bias-list li { padding: 4px 0; font-size: 13px; color: var(--ink2); }
+    .bias-list li .mult { color: var(--accent); }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .stat-box { background: var(--surface); padding: 12px; border-radius: 6px; text-align: center; }
+    .stat-number { font-size: 24px; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 12px; color: var(--ink2); margin-top: 4px; }
+    .status-msg { padding: 12px; background: var(--surface); border-radius: 6px; color: var(--ink2); text-align: center; }
+    .refresh-btn { background: none; border: 1px solid #555; color: var(--ink2); padding: 4px 12px; border-radius: 12px; cursor: pointer; font-size: 12px; }
+    .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .error { color: #e74c3c; }
+    .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+    .badge-completed { background: #1db95433; color: var(--accent); }
+    .badge-skipped { background: #e74c3c33; color: #e74c3c; }
+    .badge-partial { background: #f39c1233; color: #f39c12; }
+    .badge-replayed { background: #9b59b633; color: #9b59b6; }
+    .history-time { color: var(--ink3); font-size: 12px; white-space: nowrap; }
+    .source-agent { background: #1db95433; color: var(--accent); }
+    .source-playlist { background: #3498db33; color: #3498db; }
+    .source-collection { background: #e74c3c33; color: #e74c3c; }
+    .source-album { background: #f39c1233; color: #f39c12; }
+    .reason-tag { display: inline-block; background: var(--surface); padding: 2px 8px; border-radius: 10px; font-size: 11px; color: var(--ink2); margin: 2px 4px 2px 0; }
+    .reason-tag.context { background: #1db95422; color: var(--accent); }
+    .reason-tag.fresh { background: #9b59b622; color: #9b59b6; }
+    .queue-btn { background: none; border: 1px solid #555; color: var(--ink2); padding: 3px 10px; border-radius: 12px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+    .queue-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .queue-btn.done { border-color: var(--accent); color: var(--accent); pointer-events: none; }
+    #output-select { background: var(--surface); color: var(--ink); border: 1px solid #555; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; font-size: 13px; }
+    /* Listening History */
+    .heatmap-grid { display: grid; grid-template-columns: repeat(53, 1fr); gap: 2px; }
+    .heatmap-cell { width: 100%; aspect-ratio: 1; border-radius: 2px; background: #1a1a1a; cursor: pointer; }
+    .heatmap-cell[data-level="1"] { background: #0e4429; }
+    .heatmap-cell[data-level="2"] { background: #006d32; }
+    .heatmap-cell[data-level="3"] { background: #26a641; }
+    .heatmap-cell[data-level="4"] { background: var(--accent); }
+    .heatmap-dow { font-size: 10px; color: #555; text-align: right; padding-right: 4px; line-height: 14px; }
+    .heatmap-months { display: flex; font-size: 10px; color: #555; margin-bottom: 4px; }
+    .heatmap-months span { flex: 1; }
+    .heatmap-legend { display: flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 11px; color: var(--ink3); }
+    .heatmap-legend .heatmap-cell { width: 12px; height: 12px; cursor: default; }
+    .year-nav { display: flex; align-items: center; gap: 12px; }
+    .year-nav button { background: var(--surface); border: 1px solid #555; color: var(--ink2); padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .year-nav button:hover { border-color: var(--accent); color: var(--accent); }
+    .year-nav span { font-size: 16px; font-weight: 600; color: var(--ink); min-width: 50px; text-align: center; }
+    .eras-list { display: flex; flex-direction: column; gap: 16px; }
+    .era-card { background: var(--surface); border-radius: 12px; padding: 20px 24px; border-left: 4px solid transparent; transition: border-color 0.2s; }
+    .era-card:nth-child(1) { border-left-color: var(--accent); }
+    .era-card:nth-child(2) { border-left-color: var(--accent4); }
+    .era-card:nth-child(3) { border-left-color: var(--accent3); }
+    .era-card:nth-child(4) { border-left-color: var(--accent2); }
+    .era-card:nth-child(5) { border-left-color: var(--accent5); }
+    .era-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .era-name { font-size: 20px; font-weight: 700; color: var(--ink); line-height: 1.2; }
+    .era-years { font-size: 13px; color: var(--accent); font-weight: 600; letter-spacing: 0.05em; }
+    .era-summary { font-size: 14px; color: var(--ink2); line-height: 1.5; margin-bottom: 14px; }
+    .era-metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 14px; }
+    @media (max-width: 600px) { .era-metrics { grid-template-columns: repeat(3, 1fr); } }
+    .era-metric { text-align: center; }
+    .era-metric .v { font-size: 18px; font-weight: 700; color: var(--accent); }
+    .era-metric .l { font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.05em; }
+    .era-top-track { background: var(--bg); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .era-top-track .label { font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px; }
+    .era-top-track .title { font-size: 14px; font-weight: 600; }
+    .era-top-track .artist { font-size: 12px; color: var(--ink2); }
+    .era-top-track .plays { font-size: 16px; font-weight: 700; color: var(--accent); }
+    .era-artists { display: flex; gap: 6px; flex-wrap: wrap; }
+    .era-artists .pill { display: inline-block; background: var(--bg); padding: 4px 10px; border-radius: 10px; font-size: 12px; color: var(--ink2); cursor: pointer; transition: color 0.2s; }
+    .era-artists .pill:hover { color: var(--accent); }
+    .era-artists .pill .plays { color: var(--ink3); font-size: 11px; margin-left: 4px; }
+    .era-sparkline { display: flex; align-items: flex-end; gap: 3px; height: 30px; margin-bottom: 14px; }
+    .month-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; margin-bottom: 12px; }
+    .month-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 2px; color: var(--ink2); cursor: pointer; font-size: 12px; text-align: center; transition: all 0.2s; }
+    .month-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .month-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+    .tm-track { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--panel); }
+    .tm-track-info { flex: 1; }
+    .tm-track-name { font-size: 14px; cursor: pointer; }
+    .tm-track-name:hover { color: var(--accent); }
+    .tm-track-artist { font-size: 12px; color: var(--ink2); cursor: pointer; }
+    .tm-track-artist:hover { color: var(--accent); }
+    .tm-plays { font-size: 14px; color: var(--accent); font-weight: 600; min-width: 50px; text-align: right; }
+
+    /* ── Hero Strip ── */
+    .hero { background: var(--panel); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .hero-metrics { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+    .km { flex: 1; min-width: 100px; border-top: 3px solid var(--accent); padding: 10px 8px 6px; background: var(--surface); border-radius: 0 0 6px 6px; text-align: center; }
+    .km .v { font-size: 22px; font-weight: 700; color: var(--ink); }
+    .km .l { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink3); margin-top: 2px; }
+    .km .delta { font-size: 12px; font-weight: 600; }
+    .km .delta.up { color: var(--accent); }
+    .km .delta.down { color: var(--accent2); }
+    .km .delta.flat { color: var(--ink3); }
+    .search-wrap { position: relative; }
+    .search-wrap input { width: 100%; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--ink); font-size: 15px; outline: none; }
+    .search-wrap input:focus { border-color: var(--accent); }
+    .search-wrap input::placeholder { color: #555; }
+    .search-results { position: absolute; top: 100%; left: 0; right: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 0 0 8px 8px; max-height: 400px; overflow-y: auto; z-index: 50; display: none; }
+    .search-results.open { display: block; }
+    .sr-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px; cursor: pointer; font-size: 14px; }
+    .sr-item:hover, .sr-item.active { background: var(--surface); }
+    .sr-type { font-size: 10px; text-transform: uppercase; padding: 2px 6px; border-radius: 6px; background: var(--surface); color: var(--ink3); font-weight: 600; letter-spacing: 0.05em; }
+    .sr-name { flex: 1; }
+    .sr-name .by { color: var(--ink3); font-size: 12px; }
+    .sr-plays { color: var(--accent); font-weight: 600; font-size: 13px; }
+
+    /* ── Tab Navigation ── */
+    .tab-nav { display: flex; gap: 6px; margin-bottom: 16px; overflow-x: auto; scrollbar-width: none; }
+    .tab-nav::-webkit-scrollbar { display: none; }
+    .tab-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 8px 18px; color: var(--ink); cursor: pointer; font-size: 14px; white-space: nowrap; transition: all 0.2s; }
+    .tab-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .tab-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+    .tab-btn.hidden { display: none; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── Eyebrow + Lede ── */
+    .eyebrow { font-size: 11px; letter-spacing: 0.18em; color: var(--accent); text-transform: uppercase; font-weight: 700; margin-bottom: 8px; }
+    .lede { color: var(--ink2); font-size: 14px; margin-bottom: 12px; }
+    .lede a { color: var(--accent); text-decoration: none; cursor: pointer; }
+    .lede a:hover { text-decoration: underline; }
+
+    /* ── Row list pattern ── */
+    .row { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #1a1a1a; font-size: 14px; }
+    .row .rank { color: var(--ink3); font-size: 13px; text-align: right; }
+    .row .title { font-weight: 500; }
+    .row .title a { color: var(--ink); text-decoration: none; cursor: pointer; }
+    .row .title a:hover { color: var(--accent); }
+    .row .sub { color: var(--ink2); font-size: 12px; }
+    .row .sub a { color: var(--ink2); text-decoration: none; cursor: pointer; }
+    .row .sub a:hover { color: var(--accent); }
+    .row .val { text-align: right; font-weight: 600; color: var(--accent); white-space: nowrap; }
+    .row .val.gold { color: var(--accent3); }
+    .row .val .skip-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent2); margin-left: 4px; }
+
+    /* ── Pulse grid ── */
+    .pulse-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 700px) { .pulse-grid { grid-template-columns: 1fr; } }
+    .pulse-full { grid-column: 1 / -1; }
+
+    /* ── Detail panel ── */
+    .detail-header { margin-bottom: 16px; }
+    .detail-header h2 { color: var(--ink); font-size: 22px; text-transform: none; letter-spacing: 0; margin-bottom: 4px; }
+    .detail-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .detail-stats .km { min-width: 80px; flex: 1; }
+    .detail-stats .km .sub-label { font-size: 9px; color: var(--ink3); }
+
+    /* ── Year dots (artist detail) ── */
+    .yrs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 16px; }
+    .yrs .y { display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: var(--surface); color: var(--ink3); }
+    .yrs .y.on { background: var(--accent); color: #000; }
+    .yrs .y.now { background: var(--accent2); color: #000; }
+
+    /* ── Chart cards (Trends) ── */
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
+    .chart-card { background: var(--panel); border-radius: 8px; padding: 16px; }
+    .chart-card h3 { font-size: 15px; color: var(--ink); margin-bottom: 4px; }
+    .chart-card .sub { font-size: 12px; color: var(--ink3); margin-bottom: 12px; }
+    .chart-card svg { width: 100%; display: block; }
+
+    /* ── Tooltip ── */
+    #tip { position: fixed; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--ink); pointer-events: none; opacity: 0; transition: opacity 0.1s; z-index: 100; max-width: 240px; }
+    .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #282828; color: #e0e0e0; padding: 10px 20px; border-radius: 20px; font-size: 14px; opacity: 0; transition: opacity 0.3s; z-index: 200; pointer-events: none; }
+    .toast.show { opacity: 1; }
+    .ctrl-btn { background: none; border: 1px solid var(--border); color: var(--ink2); padding: 4px 8px; border-radius: 8px; cursor: pointer; font-size: 16px; line-height: 1; transition: all 0.2s; }
+    .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .ctrl-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(29,185,84,0.1); }
+    /* Intelligence tab */
+    .gauge { text-align: center; }
+    .gauge-ring { position: relative; width: 80px; height: 80px; margin: 0 auto 6px; }
+    .gauge-ring svg { transform: rotate(-90deg); }
+    .gauge-ring .gauge-val { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; font-weight: 700; }
+    .gauge-label { font-size: 11px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.05em; }
+    .gauge-sub { font-size: 11px; color: var(--ink2); margin-top: 2px; }
+    .bar-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .bar-h-label { font-size: 13px; color: var(--ink2); min-width: 100px; }
+    .bar-h-track { flex: 1; height: 20px; background: var(--surface); border-radius: 4px; overflow: hidden; position: relative; }
+    .bar-h-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .bar-h-val { font-size: 12px; color: var(--ink); font-weight: 600; min-width: 40px; text-align: right; }
+    .signal-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .signal-row:last-child { border-bottom: none; }
+    .signal-name { font-size: 13px; color: var(--ink2); flex: 1; }
+    .signal-bar { width: 80px; height: 6px; background: var(--surface); border-radius: 3px; overflow: hidden; }
+    .signal-bar-fill { height: 100%; border-radius: 3px; }
+    .signal-pct { font-size: 13px; font-weight: 600; min-width: 40px; text-align: right; }
+    .win-signals { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+    .win-signal { background: var(--surface); padding: 1px 6px; border-radius: 8px; font-size: 10px; color: var(--ink3); }
+    @media (max-width: 700px) { #tab-intelligence .card { } #tab-intelligence [style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; } }
+    .row a, .tm-track-name a { cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    #tip.on { opacity: 1; }
+    #tip b { color: var(--accent); }
+
+    /* ── Queue builder ── */
+    .qb-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .qb-controls select, .qb-controls input[type=range] { background: var(--surface); color: var(--ink); border: 1px solid #555; border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+    .qb-controls input[type=range] { flex: 1; min-width: 100px; }
+    .pill-btn { background: var(--accent); color: #000; border: none; border-radius: 20px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    .pill-btn:hover { opacity: 0.85; }
+    .pill-btn.secondary { background: var(--surface); color: var(--ink); border: 1px solid var(--border); }
+    .pill-btn.secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Clickable track/artist ── */
+    .clickable { cursor: pointer; }
+    .clickable:hover { color: var(--accent); }
+
+    /* ── Never-stale badge ── */
+    .core-badge { display: inline-block; background: var(--accent3); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 8px; }
+
+    /* ── Skip bar ── */
+    .skip-bars { display: flex; align-items: flex-end; gap: 6px; height: 40px; margin-bottom: 6px; }
+    .skip-bars .bar { width: 40px; border-radius: 3px 3px 0 0; }
+    .skip-caption { font-size: 12px; color: var(--ink3); }
+
+    /* ── Mobile ── */
+    @media (max-width: 600px) {
+      .hero-metrics { gap: 6px; }
+      .km { min-width: 70px; }
+      .km .v { font-size: 18px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .detail-stats { gap: 6px; }
+      .detail-stats .km { min-width: 60px; }
+      .month-grid { grid-template-columns: repeat(6, 1fr); }
+    }
+    @media (max-width: 400px) {
+      .stats-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Surfaces</h1>
+
+  <!-- ════ Hero Strip ════ -->
+  <div class="hero">
+    <div class="hero-metrics" id="hero-metrics">
+      <div class="km"><div class="v">--</div><div class="l">Plays</div></div>
+      <div class="km"><div class="v">--</div><div class="l">Hours</div></div>
+      <div class="km"><div class="v">--</div><div class="l">Tracks</div></div>
+      <div class="km"><div class="v">--</div><div class="l">Last 7 Days</div></div>
+      <div class="km"><div class="v">--</div><div class="l">Last 30 Days</div></div>
+    </div>
+    <div class="search-wrap">
+      <input type="text" id="search-input" placeholder="Search tracks or artists..." autocomplete="off">
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <!-- ════ Tab Navigation ════ -->
+  <div class="tab-nav" id="tab-nav">
+    <button class="tab-btn active" data-tab="pulse">Pulse</button>
+    <button class="tab-btn hidden" data-tab="detail" id="detail-tab-btn">Detail</button>
+    <button class="tab-btn" data-tab="eras">Eras</button>
+    <button class="tab-btn" data-tab="calendar">Calendar</button>
+    <button class="tab-btn" data-tab="discover">Discover</button>
+    <button class="tab-btn" data-tab="intelligence">Intelligence</button>
+    <button class="tab-btn" data-tab="trends">Trends</button>
+  </div>
+
+  <!-- Now Playing (persistent, visible on all tabs) -->
+  <div class="card" id="now-playing-card">
+    <div class="now-playing">
+      <div class="dot inactive" id="playing-dot"></div>
+      <div style="flex:1;min-width:0;">
+        <div class="track-name" id="track-name">Loading...</div>
+        <div class="track-artist" id="track-artist"></div>
+      </div>
+      <div id="np-controls" style="display:none;white-space:nowrap;margin-left:8px;">
+        <button class="ctrl-btn" onclick="playerPrevious()" title="Previous">&#9198;</button>
+        <button class="ctrl-btn" onclick="playerSkip()" title="Skip">&#9197;</button>
+        <button class="ctrl-btn" id="np-repeat-btn" onclick="playerRepeat()" title="Repeat">&#128257;</button>
+      </div>
+      <div id="now-playing-actions" style="display:none;white-space:nowrap;margin-left:8px;">
+        <button class="queue-btn" id="np-like-btn" title="Add to Liked via Agent playlist">&#9825;</button>
+        <button class="queue-btn" id="np-block-btn" title="Block from future sessions" style="margin-left:4px;">&#10005;</button>
+      </div>
+    </div>
+    <div id="np-context" style="display:none;margin-top:6px;font-size:12px;color:var(--ink2);"></div>
+    <div id="np-queue" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;">UP NEXT</div>
+      <div id="np-queue-list"></div>
+    </div>
+  </div>
+
+  <!-- ════ Pulse Tab ════ -->
+  <div class="tab-content active" id="tab-pulse">
+
+    <!-- Pulse history sections (loaded from /api/listening/pulse) -->
+    <div class="pulse-grid" id="pulse-grid">
+
+      <!-- This Week -->
+      <div class="card">
+        <div class="eyebrow">This Week</div>
+        <div id="pulse-week"><div class="status-msg">Loading...</div></div>
+      </div>
+
+      <!-- This Month -->
+      <div class="card">
+        <div class="eyebrow">This Month</div>
+        <div id="pulse-month"><div class="status-msg">Loading...</div></div>
+      </div>
+
+      <!-- Rising -->
+      <div class="card">
+        <div class="eyebrow" style="color:var(--accent);">Rising</div>
+        <div id="pulse-rising"><div class="status-msg">Loading...</div></div>
+      </div>
+
+      <!-- Falling -->
+      <div class="card">
+        <div class="eyebrow" style="color:var(--accent2);">Falling</div>
+        <div id="pulse-falling"><div class="status-msg">Loading...</div></div>
+      </div>
+
+      <!-- New Entries -->
+      <div class="card">
+        <div class="eyebrow" style="color:var(--accent5);">New This Month</div>
+        <div id="pulse-new"><div class="status-msg">Loading...</div></div>
+      </div>
+
+      <!-- Skip Rate -->
+      <div class="card">
+        <div class="eyebrow">Skip Rate</div>
+        <div id="pulse-skip"><div class="status-msg">Loading...</div></div>
+      </div>
+
+      <!-- Lost Favorites -->
+      <div class="card pulse-full">
+        <div class="eyebrow" style="color:var(--accent3);">Lost Favorites</div>
+        <div id="pulse-lost"><div class="status-msg">Loading...</div></div>
+      </div>
+
+      <!-- Queue Builder -->
+      <div class="card pulse-full">
+        <div class="eyebrow">Queue Builder</div>
+        <div class="qb-controls">
+          <select id="qb-mode">
+            <option value="default">Default</option>
+            <option value="rediscover">Rediscover</option>
+            <option value="era">Era</option>
+            <option value="morning">Morning</option>
+          </select>
+          <input type="range" id="qb-length" min="30" max="120" value="60">
+          <span id="qb-length-label" style="font-size:13px;color:var(--ink3);min-width:40px;">60m</span>
+          <button class="pill-btn" onclick="generateQueue()">Generate</button>
+        </div>
+        <div id="qb-results"></div>
+      </div>
+    </div>
+
+    <!-- Start Session -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Start Session</h2>
+        <select id="output-select">
+          <option value="play_now">Play Now</option>
+          <option value="queue">Queue</option>
+        </select>
+      </div>
+      <div class="mode-buttons">
+        <button class="mode-btn" data-mode="waking_up">Waking Up</button>
+        <button class="mode-btn" data-mode="working">Working</button>
+        <button class="mode-btn" data-mode="driving">Driving</button>
+        <button class="mode-btn" data-mode="brainstorming">Brainstorming</button>
+        <button class="mode-btn" data-mode="unwinding">Unwinding</button>
+        <button class="mode-btn" data-mode="sleeping">Sleeping</button>
+        <button class="mode-btn" data-mode="discover" style="border-color:var(--accent);">Discover</button>
+      </div>
+      <div id="session-status" class="status-msg" style="display:none;"></div>
+      <div id="session-queue" style="display:none; margin-top:12px;"></div>
+    </div>
+
+    <!-- Why These Tracks -->
+    <div class="card" id="explain-card" style="display:none;">
+      <div class="card-header">
+        <h2>Why These Tracks</h2>
+        <button class="refresh-btn" onclick="loadExplanation()">Refresh</button>
+      </div>
+      <div id="explain-content"></div>
+    </div>
+
+    <!-- Context -->
+    <div class="card" id="context-card">
+      <div class="card-header">
+        <h2>Latest Context</h2>
+        <button class="refresh-btn" onclick="loadContext()">Refresh</button>
+      </div>
+      <div class="context-grid" id="context-grid">
+        <div class="status-msg">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Active Session Biases -->
+    <div class="card" id="biases-card" style="display:none;">
+      <h2>Session Biases Applied</h2>
+      <ul class="bias-list" id="bias-list"></ul>
+    </div>
+
+    <!-- Stats -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Stats</h2>
+        <button class="refresh-btn" onclick="loadStats()">Refresh</button>
+      </div>
+      <div id="stats-content">
+        <div class="status-msg">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Recent History -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Last 24 Hours</h2>
+        <button class="refresh-btn" onclick="loadHistory()">Refresh</button>
+      </div>
+      <div id="history-content">
+        <div class="status-msg">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Learned Affinities -->
+    <div class="card" id="affinities-card" style="display:none;">
+      <div class="card-header">
+        <h2>Learned Affinities</h2>
+        <button class="refresh-btn" onclick="loadAffinities()">Refresh</button>
+      </div>
+      <div id="affinities-content">
+        <div class="status-msg">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Fresh Pool -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Fresh Pool</h2>
+        <button class="refresh-btn" onclick="loadFreshPool()">Refresh</button>
+      </div>
+      <div id="fresh-pool-content">
+        <div class="status-msg">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ Detail Tab ════ -->
+  <div class="tab-content" id="tab-detail">
+    <div id="detail-content">
+      <div class="status-msg">Select a track or artist to see details.</div>
+    </div>
+  </div>
+
+  <!-- ════ Eras Tab ════ -->
+  <div class="tab-content" id="tab-eras">
+    <div class="card">
+      <div class="eyebrow">The Five Eras</div>
+      <h2 style="color:var(--ink);text-transform:none;letter-spacing:0;font-size:18px;">How your taste moved.</h2>
+      <div style="margin-top:12px;">
+        <div id="eras-content" class="eras-list">
+          <div class="status-msg">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ Calendar Tab ════ -->
+  <div class="tab-content" id="tab-calendar">
+    <!-- Heatmap -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Listening Calendar</h2>
+        <div class="year-nav">
+          <button onclick="changeHeatmapYear(-1)">&larr;</button>
+          <span id="heatmap-year">2026</span>
+          <button onclick="changeHeatmapYear(1)">&rarr;</button>
+        </div>
+      </div>
+      <div id="heatmap-content">
+        <div class="status-msg">Loading...</div>
+      </div>
+      <div class="heatmap-legend">
+        <span>Less</span>
+        <div class="heatmap-cell" style="cursor:default;"></div>
+        <div class="heatmap-cell" data-level="1" style="cursor:default;"></div>
+        <div class="heatmap-cell" data-level="2" style="cursor:default;"></div>
+        <div class="heatmap-cell" data-level="3" style="cursor:default;"></div>
+        <div class="heatmap-cell" data-level="4" style="cursor:default;"></div>
+        <span>More</span>
+      </div>
+    </div>
+
+    <!-- Time Machine -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Time Machine</h2>
+        <span class="source-tag">From local history</span>
+      </div>
+      <div class="year-nav" style="margin-bottom: 12px;">
+        <button onclick="changeTmYear(-1)">&larr;</button>
+        <span id="tm-year">2024</span>
+        <button onclick="changeTmYear(1)">&rarr;</button>
+      </div>
+      <div id="tm-months" class="month-grid"></div>
+      <div id="tm-stats" style="display: none;">
+        <div class="stats-grid" style="margin-bottom: 12px;">
+          <div class="stat-box"><div class="stat-number" id="tm-plays">-</div><div class="stat-label">Plays</div></div>
+          <div class="stat-box"><div class="stat-number" id="tm-hours">-</div><div class="stat-label">Hours</div></div>
+          <div class="stat-box"><div class="stat-number" id="tm-tracks">-</div><div class="stat-label">Tracks</div></div>
+          <div class="stat-box"><div class="stat-number" id="tm-artists">-</div><div class="stat-label">Artists</div></div>
+        </div>
+        <div id="tm-era" style="font-size: 13px; color: var(--ink3); margin-bottom: 12px;"></div>
+      </div>
+      <div id="tm-tracklist"></div>
+    </div>
+  </div>
+
+  <!-- ════ Trends Tab ════ -->
+  <!-- Intelligence Tab -->
+  <div class="tab-content" id="tab-intelligence">
+    <div class="eyebrow">Agent Intelligence</div>
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:6px;">How well is the agent learning you?</h2>
+    <p style="color:var(--ink2);font-size:14px;margin-bottom:16px;">Health scores, taste model calibration, signal effectiveness, and discovery pipeline performance.</p>
+
+    <!-- Health Gauges -->
+    <div class="card">
+      <div class="card-header"><h2 style="font-size:14px;">Health Scores</h2></div>
+      <div id="intel-health" class="detail-stats" style="grid-template-columns:repeat(4,1fr);">
+        <div class="status-msg" style="grid-column:1/-1;">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Session Performance Timeline -->
+    <div class="card">
+      <div class="card-header"><h2 style="font-size:14px;">Session Performance</h2><span class="source-tag">Last 30 sessions</span></div>
+      <div id="intel-sessions"></div>
+    </div>
+
+    <!-- Two-column grid -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <!-- Taste Calibration -->
+      <div class="card">
+        <div class="card-header"><h2 style="font-size:14px;">Taste Score Calibration</h2></div>
+        <p style="color:var(--ink3);font-size:12px;margin-bottom:12px;">Do higher taste scores predict satisfaction?</p>
+        <div id="intel-calibration"></div>
+      </div>
+
+      <!-- Signal Effectiveness -->
+      <div class="card">
+        <div class="card-header"><h2 style="font-size:14px;">Signal Effectiveness</h2></div>
+        <p style="color:var(--ink3);font-size:12px;margin-bottom:12px;">Which signals best predict you'll complete the track?</p>
+        <div id="intel-signals"></div>
+      </div>
+    </div>
+
+    <!-- Agent Wins -->
+    <div class="card">
+      <div class="card-header"><h2 style="font-size:14px;">Agent Wins</h2><span class="source-tag">Tracks you engaged with</span></div>
+      <p style="color:var(--ink3);font-size:12px;margin-bottom:12px;">Completed and replayed tracks from agent sessions, with the signals that picked them.</p>
+      <div id="intel-wins"></div>
+    </div>
+
+    <!-- Two-column grid -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <!-- Discovery Pipeline -->
+      <div class="card">
+        <div class="card-header"><h2 style="font-size:14px;">Discovery Pipeline</h2></div>
+        <p style="color:var(--ink3);font-size:12px;margin-bottom:12px;">Which sources find tracks you actually like?</p>
+        <div id="intel-discovery"></div>
+      </div>
+
+      <!-- Model Maturity -->
+      <div class="card">
+        <div class="card-header"><h2 style="font-size:14px;">Model Maturity</h2></div>
+        <p style="color:var(--ink3);font-size:12px;margin-bottom:12px;">Training status of acoustic profiles and context affinities.</p>
+        <div id="intel-maturity"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Discover Tab -->
+  <div class="tab-content" id="tab-discover">
+    <div class="eyebrow">Discovery Feed</div>
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:6px;">Fresh from the internet.</h2>
+    <p style="color:var(--ink2);font-size:14px;margin-bottom:16px;">Tracks surfaced from music blogs, RSS feeds, Last.fm, and your artist graph. Tap to play, long-press to queue.</p>
+    <div id="discover-stats" style="margin-bottom:16px;"></div>
+    <div id="discover-sources">
+      <div class="status-msg">Loading...</div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-trends">
+    <div class="eyebrow">Listening Rhythm</div>
+    <h2 style="color:var(--ink);text-transform:none;letter-spacing:0;font-size:18px;margin-bottom:16px;">The shape of your history.</h2>
+    <div class="grid2" id="trends-grid">
+      <div class="card chart-card">
+        <h3>Skip rate over time</h3>
+        <p class="sub">Share of plays ending with the forward button.</p>
+        <div id="chart-skip"><div class="status-msg">Loading...</div></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Discovery rate by year</h3>
+        <p class="sub">First-ever plays per year.</p>
+        <div id="chart-discovery"><div class="status-msg">Loading...</div></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Top-100 concentration</h3>
+        <p class="sub">Higher = you settled into favorites. Lower = more diverse.</p>
+        <div id="chart-concentration"><div class="status-msg">Loading...</div></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Hour-of-day distribution</h3>
+        <p class="sub">When you listen. Hours in US Eastern.</p>
+        <div id="chart-hourly"><div class="status-msg">Loading...</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ Shared Tooltip ════ -->
+  <div id="tip"></div>
+
+  <script>
+    const API = location.protocol === 'file:' ? 'https://spotify-agent.chrisbuice.workers.dev' : '';
+
+    // ── API helpers ──
+    async function api(path) {
+      const resp = await fetch(\`\${API}\${path}\`);
+      if (!resp.ok) throw new Error(\`\${resp.status}: \${await resp.text()}\`);
+      return resp.json();
+    }
+
+    async function apiPost(path, body) {
+      const resp = await fetch(\`\${API}\${path}\`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(text || \`\${resp.status}\`);
+      }
+      return resp.json();
+    }
+
+    // ── Tooltip ──
+    const tip = document.getElementById('tip');
+    function showTip(e, html) {
+      tip.innerHTML = html;
+      tip.classList.add('on');
+      moveTip(e);
+    }
+    function moveTip(e) {
+      tip.style.left = (e.clientX + 12) + 'px';
+      tip.style.top = (e.clientY - 10) + 'px';
+    }
+    function hideTip() { tip.classList.remove('on'); }
+    document.addEventListener('mousemove', e => { if (tip.classList.contains('on')) moveTip(e); });
+
+    // ── Escape HTML ──
+    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    // ── Track press: short press = play now, long press = add to queue ──
+    // Renders a track link with touch/click handlers
+    function trackLink(name, artist, extraClass) {
+      const cls = extraClass ? \` class="\${extraClass}"\` : '';
+      const safeName = esc(name).replace(/'/g, "\\\\'");
+      const safeArtist = esc(artist || '').replace(/'/g, "\\\\'");
+      return \`<a\${cls} ontouchstart="trackPressStart(event,'\${safeName}','\${safeArtist}')"
+        ontouchend="trackPressEnd(event)" ontouchcancel="trackPressCancel()"
+        onmousedown="trackPressStart(event,'\${safeName}','\${safeArtist}')"
+        onmouseup="trackPressEnd(event)" onmouseleave="trackPressCancel()"
+        oncontextmenu="return false">\${esc(name)}</a>\`;
+    }
+
+    let _pressTimer = null;
+    let _pressData = null;
+    let _pressTriggered = false;
+    let _pressUsedTouch = false;
+    const LONG_PRESS_MS = 500;
+
+    function trackPressStart(e, name, artist) {
+      if (e.type === 'touchstart') { _pressUsedTouch = true; }
+      if (e.type === 'mousedown' && _pressUsedTouch) { _pressUsedTouch = false; return; }
+      e.preventDefault();
+      if (_pressData) return;
+      _pressTriggered = false;
+      _pressData = { name, artist };
+      _pressTimer = setTimeout(() => {
+        _pressTriggered = true;
+        doTrackQueue(name, artist);
+        _pressData = null;
+      }, LONG_PRESS_MS);
+    }
+
+    function trackPressEnd(e) {
+      if (e.type === 'mouseup' && _pressUsedTouch) return;
+      e.preventDefault();
+      clearTimeout(_pressTimer);
+      if (!_pressTriggered && _pressData) {
+        const d = _pressData;
+        _pressData = null;
+        doTrackPlay(d.name, d.artist);
+      } else {
+        _pressData = null;
+      }
+    }
+
+    function trackPressCancel() {
+      clearTimeout(_pressTimer);
+      _pressData = null;
+      _pressTriggered = false;
+    }
+
+    // Track link variant with a known Spotify track ID (no lookup needed)
+    function trackLinkWithId(name, artist, trackId) {
+      const safeName = esc(name).replace(/'/g, "\\\\'");
+      const safeArtist = esc(artist || '').replace(/'/g, "\\\\'");
+      const safeId = esc(trackId).replace(/'/g, "\\\\'");
+      return \`<a ontouchstart="trackIdPressStart(event,'\${safeId}','\${safeName}')"
+        ontouchend="trackIdPressEnd(event)" ontouchcancel="trackIdPressCancel()"
+        onmousedown="trackIdPressStart(event,'\${safeId}','\${safeName}')"
+        onmouseup="trackIdPressEnd(event)" onmouseleave="trackIdPressCancel()"
+        oncontextmenu="return false">\${esc(name)}</a>\`;
+    }
+
+    let _idPressTimer = null;
+    let _idPressData = null;
+    let _idPressTriggered = false;
+    let _idUsedTouch = false;
+
+    function trackIdPressStart(e, trackId, name) {
+      // Prevent mouse events from firing after touch events (mobile double-fire)
+      if (e.type === 'touchstart') { _idUsedTouch = true; }
+      if (e.type === 'mousedown' && _idUsedTouch) { _idUsedTouch = false; return; }
+      e.preventDefault();
+      if (_idPressData) return; // already tracking a press
+      _idPressTriggered = false;
+      _idPressData = { trackId, name };
+      _idPressTimer = setTimeout(() => {
+        _idPressTriggered = true;
+        doTrackIdQueue(trackId, name);
+        _idPressData = null;
+      }, LONG_PRESS_MS);
+    }
+
+    function trackIdPressEnd(e) {
+      if (e.type === 'mouseup' && _idUsedTouch) return;
+      e.preventDefault();
+      clearTimeout(_idPressTimer);
+      if (!_idPressTriggered && _idPressData) {
+        const d = _idPressData;
+        _idPressData = null;
+        doTrackIdPlay(d.trackId, d.name);
+      } else {
+        _idPressData = null;
+      }
+    }
+
+    function trackIdPressCancel() {
+      clearTimeout(_idPressTimer);
+      _idPressData = null;
+      _idPressTriggered = false;
+    }
+
+    let _playInFlight = false;
+    async function doTrackIdPlay(trackId, name) {
+      if (_playInFlight) return; // debounce rapid taps
+      _playInFlight = true;
+      showToast('Playing...');
+      try {
+        await apiPost('/api/play-track', { track_id: trackId });
+        showToast('\\u25B6 ' + name);
+      } catch (e) { showToast('Error: ' + e.message); }
+      setTimeout(() => { _playInFlight = false; }, 1000);
+    }
+
+    let _queueInFlight = false;
+    async function doTrackIdQueue(trackId, name) {
+      if (_queueInFlight) return;
+      _queueInFlight = true;
+      showToast('Adding to queue...');
+      try {
+        await apiPost('/api/queue-track', { track_id: trackId });
+        showToast('+ Queued: ' + name);
+      } catch (e) { showToast('Error: ' + e.message); }
+      setTimeout(() => { _queueInFlight = false; }, 1000);
+    }
+
+    // Cache of track name+artist → canonical URI
+    const _uriCache = {};
+    async function resolveTrackUri(name, artist) {
+      const key = \`\${name}|||\${artist}\`.toLowerCase();
+      if (_uriCache[key]) return _uriCache[key];
+      try {
+        const data = await api(\`/api/listening/track?name=\${encodeURIComponent(name)}&artist=\${encodeURIComponent(artist)}\`);
+        if (data.canonicalUri) {
+          // Extract track ID from URI (spotify:track:XXXX)
+          const id = data.canonicalUri.replace('spotify:track:', '');
+          _uriCache[key] = id;
+          return id;
+        }
+      } catch {}
+      return null;
+    }
+
+    async function doTrackPlay(name, artist) {
+      if (_playInFlight) return;
+      _playInFlight = true;
+      showToast('Playing...');
+      try {
+        const trackId = await resolveTrackUri(name, artist);
+        if (!trackId) { showToast('Track not found'); _playInFlight = false; return; }
+        await apiPost('/api/play-track', { track_id: trackId });
+        showToast('\\u25B6 ' + name);
+      } catch (e) { showToast('Error: ' + e.message); }
+      setTimeout(() => { _playInFlight = false; }, 1000);
+    }
+
+    async function doTrackQueue(name, artist) {
+      if (_queueInFlight) return;
+      _queueInFlight = true;
+      showToast('Adding to queue...');
+      try {
+        const trackId = await resolveTrackUri(name, artist);
+        if (!trackId) { showToast('Track not found'); _queueInFlight = false; return; }
+        await apiPost('/api/queue-track', { track_id: trackId });
+        showToast('+ Queued: ' + name);
+      } catch (e) { showToast('Error: ' + e.message); }
+      setTimeout(() => { _queueInFlight = false; }, 1000);
+    }
+
+    // Small toast notification
+    function showToast(msg) {
+      let toast = document.getElementById('toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast';
+        document.body.appendChild(toast);
+      }
+      toast.textContent = msg;
+      toast.className = 'toast show';
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => toast.className = 'toast', 2000);
+    }
+
+    // ── Tab switching ──
+    function switchTab(name) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      const tab = document.getElementById('tab-' + name);
+      if (tab) tab.classList.add('active');
+      const btn = document.querySelector(\`.tab-btn[data-tab="\${name}"]\`);
+      if (btn) btn.classList.add('active');
+
+      // Lazy-load tabs
+      if (name === 'trends' && !trendsLoaded) loadTrends();
+      if (name === 'eras' && !erasLoaded) { loadEras(); erasLoaded = true; }
+      if (name === 'calendar' && !calendarLoaded) { loadHeatmap(); renderTmMonths(); calendarLoaded = true; }
+      if (name === 'discover' && !discoverLoaded) loadDiscover();
+      if (name === 'intelligence' && !intelligenceLoaded) loadIntelligence();
+    }
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+
+    let trendsLoaded = false;
+    let erasLoaded = false;
+    let calendarLoaded = false;
+    let discoverLoaded = false;
+    let intelligenceLoaded = false;
+
+    // ── Hero ──
+    async function loadHero() {
+      try {
+        const data = await api('/api/listening/hero');
+        const el = document.getElementById('hero-metrics');
+        const fmt = n => n != null ? Number(n).toLocaleString() : '--';
+        const deltaHtml = (val, pct) => {
+          if (val == null || pct == null) return '';
+          const cls = Math.abs(pct) < 2 ? 'flat' : pct > 0 ? 'up' : 'down';
+          const arrow = pct > 0 ? '\\u25B2' : pct < 0 ? '\\u25BC' : '';
+          const sign = pct > 0 ? '+' : '';
+          return \`<div class="delta \${cls}">\${arrow} \${sign}\${Math.round(pct)}%</div>\`;
+        };
+        el.innerHTML = \`
+          <div class="km"><div class="v">\${fmt(data.totalPlays)}</div><div class="l">Plays</div></div>
+          <div class="km"><div class="v">\${fmt(data.totalHours)}</div><div class="l">Hours</div></div>
+          <div class="km"><div class="v">\${fmt(data.totalTracks)}</div><div class="l">Tracks</div></div>
+          <div class="km"><div class="v">\${fmt(data.last7days)}</div><div class="l">Last 7 Days</div>\${deltaHtml(data.last7days, data.last7daysDelta)}</div>
+          <div class="km"><div class="v">\${fmt(data.last30days)}</div><div class="l">Last 30 Days</div>\${deltaHtml(data.last30days, data.last30daysDelta)}</div>
+        \`;
+      } catch { /* hero is non-critical */ }
+    }
+
+    // ── Search ──
+    let searchTimeout = null;
+    let searchResults = [];
+    let searchIdx = -1;
+    const searchInput = document.getElementById('search-input');
+    const searchBox = document.getElementById('search-results');
+
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      const q = searchInput.value.trim();
+      if (q.length < 2) { closeSearch(); return; }
+      searchTimeout = setTimeout(() => runSearch(q), 200);
+    });
+
+    searchInput.addEventListener('keydown', e => {
+      if (!searchBox.classList.contains('open')) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); searchIdx = Math.min(searchIdx + 1, searchResults.length - 1); highlightSearch(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); searchIdx = Math.max(searchIdx - 1, 0); highlightSearch(); }
+      else if (e.key === 'Enter' && searchIdx >= 0) { e.preventDefault(); selectSearchResult(searchResults[searchIdx]); }
+      else if (e.key === 'Escape') { closeSearch(); }
+    });
+
+    async function runSearch(q) {
+      try {
+        const data = await api(\`/api/listening/search?q=\${encodeURIComponent(q)}\`);
+        searchResults = data.results || [];
+        searchIdx = -1;
+        if (searchResults.length === 0) { closeSearch(); return; }
+        searchBox.innerHTML = searchResults.map((r, i) => {
+          const byLine = r.type === 'track' && r.artist ? \`<span class="by"> by \${esc(r.artist)}</span>\` : '';
+          return \`<div class="sr-item" data-idx="\${i}">
+            <span class="sr-type">\${r.type}</span>
+            <span class="sr-name">\${esc(r.name)}\${byLine}</span>
+            <span class="sr-plays">\${(r.plays || 0).toLocaleString()}</span>
+          </div>\`;
+        }).join('');
+        searchBox.classList.add('open');
+        searchBox.querySelectorAll('.sr-item').forEach(el => {
+          el.addEventListener('click', () => selectSearchResult(searchResults[+el.dataset.idx]));
+        });
+      } catch { closeSearch(); }
+    }
+
+    function highlightSearch() {
+      searchBox.querySelectorAll('.sr-item').forEach((el, i) => {
+        el.classList.toggle('active', i === searchIdx);
+      });
+    }
+
+    function closeSearch() {
+      searchBox.classList.remove('open');
+      searchResults = [];
+      searchIdx = -1;
+    }
+
+    function selectSearchResult(r) {
+      closeSearch();
+      searchInput.value = r.name;
+      if (r.type === 'track') showTrackDetail(r.name, r.artist);
+      else showArtistDetail(r.name);
+    }
+
+    // Close search on outside click
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.search-wrap')) closeSearch();
+    });
+
+    // ── Detail Tab activation ──
+    function activateDetailTab() {
+      const btn = document.getElementById('detail-tab-btn');
+      btn.classList.remove('hidden');
+      switchTab('detail');
+    }
+
+    // ── Track Detail ──
+    async function showTrackDetail(name, artist) {
+      activateDetailTab();
+      const el = document.getElementById('detail-content');
+      el.innerHTML = '<div class="status-msg">Loading track detail...</div>';
+      try {
+        const data = await api(\`/api/listening/track?name=\${encodeURIComponent(name)}&artist=\${encodeURIComponent(artist || '')}\`);
+        const skipColor = data.skipRate > (data.avgSkipRate || 29.8) ? 'var(--accent2)' : 'var(--accent)';
+        const compColor = data.completionRate > (data.avgCompletionRate || 39.2) ? 'var(--accent)' : 'var(--accent2)';
+        let html = \`
+          <div class="detail-header">
+            <div class="eyebrow">Track Detail</div>
+            <h2>\${esc(data.track || name)}</h2>
+            <p class="lede"><a onclick="showArtistDetail('\${esc(data.artist || artist)}')">\${esc(data.artist || artist)}</a></p>
+            <span class="source-tag">From local history</span>
+          </div>
+          <div class="detail-stats">
+            <div class="km"><div class="v">\${(data.totalPlays || 0).toLocaleString()}</div><div class="l">Total Plays</div></div>
+            <div class="km"><div class="v">\${esc(data.peakMonth || '--')}</div><div class="l">Peak (\${data.peakPlays || 0})</div></div>
+            <div class="km"><div class="v">\${esc(data.firstPlayed || '--')}</div><div class="l">First Played</div></div>
+            <div class="km"><div class="v">\${esc(data.lastPlayed || '--')}</div><div class="l">Last Played</div></div>
+          </div>
+          <div class="detail-stats">
+            <div class="km"><div class="v">\${data.totalMinutes != null ? Math.round(data.totalMinutes).toLocaleString() : '--'}</div><div class="l">Minutes</div></div>
+            <div class="km"><div class="v" style="color:\${skipColor}">\${data.skipRate != null ? data.skipRate + '%' : '--'}</div><div class="l">Skip Rate</div><div class="sub-label">avg \${data.avgSkipRate || 29.8}%</div></div>
+            <div class="km"><div class="v" style="color:\${compColor}">\${data.completionRate != null ? data.completionRate + '%' : '--'}</div><div class="l">Completion</div><div class="sub-label">avg \${data.avgCompletionRate || 39.2}%</div></div>
+            <div class="km"><div class="v">\${esc(data.era || '--')}</div><div class="l">Era</div></div>
+          </div>
+        \`;
+
+        // Sparkline
+        if (data.monthlyPlays && data.monthlyPlays.length > 0) {
+          html += renderSparkline(data.monthlyPlays, data.peakMonth);
+        }
+
+        // Action
+        if (data.canonicalUri) {
+          html += \`<div style="margin-top:12px;"><button class="pill-btn" onclick="generateQueueWithSeed('\${esc(data.canonicalUri)}')">Add to queue</button></div>\`;
+        }
+
+        el.innerHTML = html;
+      } catch (e) {
+        el.innerHTML = \`<div class="status-msg error">\${e.message}</div>\`;
+      }
+    }
+
+    function renderSparkline(monthlyPlays, peakMonth) {
+      const w = 800, h = 80, pad = 2;
+      const n = monthlyPlays.length;
+      if (n === 0) return '';
+      const max = Math.max(...monthlyPlays.map(m => m.plays));
+      if (max === 0) return '';
+      const barW = Math.max(2, Math.min(12, (w - pad * 2) / n - 1));
+      const gap = 1;
+      const totalW = n * (barW + gap) + pad * 2;
+      let svg = \`<div style="overflow-x:auto;"><svg width="\${totalW}" height="\${h + 16}" viewBox="0 0 \${totalW} \${h + 16}" style="display:block;">\`;
+      monthlyPlays.forEach((m, i) => {
+        const barH = max > 0 ? (m.plays / max) * h : 0;
+        const x = pad + i * (barW + gap);
+        const y = h - barH;
+        const fill = m.month === peakMonth ? '#84e9a8' : '#1db954';
+        svg += \`<rect x="\${x}" y="\${y}" width="\${barW}" height="\${barH}" fill="\${fill}" rx="1"
+          onmouseover="showTip(event, '<b>\${esc(m.month)}</b>: \${m.plays} plays')"
+          onmouseout="hideTip()"/>\`;
+      });
+      svg += '</svg></div>';
+      return svg;
+    }
+
+    // ── Artist Detail ──
+    async function showArtistDetail(name) {
+      activateDetailTab();
+      const el = document.getElementById('detail-content');
+      el.innerHTML = '<div class="status-msg">Loading artist detail...</div>';
+      try {
+        const data = await api(\`/api/listening/artist?name=\${encodeURIComponent(name)}\`);
+        let html = \`
+          <div class="detail-header">
+            <div class="eyebrow">Artist Detail</div>
+            <h2>\${esc(data.artist || name)}\${data.isNeverStaleCore ? \`<span class="core-badge">Never-stale core</span>\` : ''}</h2>
+            <span class="source-tag">From local history</span>
+          </div>
+          <div class="detail-stats">
+            <div class="km"><div class="v">\${data.totalHours != null ? Number(data.totalHours).toLocaleString() : '--'}</div><div class="l">Hours</div></div>
+            <div class="km"><div class="v">\${(data.totalPlays || 0).toLocaleString()}</div><div class="l">Plays</div></div>
+            <div class="km"><div class="v">\${(data.distinctTracks || 0).toLocaleString()}</div><div class="l">Tracks</div></div>
+            <div class="km"><div class="v">\${(data.distinctAlbums || 0).toLocaleString()}</div><div class="l">Albums</div></div>
+            <div class="km"><div class="v">\${esc(data.firstPlayed || '--')}</div><div class="l">First</div></div>
+            <div class="km"><div class="v">\${esc(data.lastPlayed || '--')}</div><div class="l">Last</div></div>
+          </div>
+        \`;
+
+        // Year dots
+        if (data.yearsInTop50) {
+          const allYears = [];
+          for (let y = 2011; y <= 2026; y++) allYears.push(y);
+          const top50Set = new Set(data.yearsInTop50);
+          const currentYear = new Date().getFullYear();
+          html += '<div class="yrs">';
+          allYears.forEach(y => {
+            const cls = y === currentYear && top50Set.has(y) ? 'y now' : top50Set.has(y) ? 'y on' : 'y';
+            html += \`<span class="\${cls}">\${y}</span>\`;
+          });
+          html += '</div>';
+        }
+
+        // Plays per year bar chart
+        if (data.yearlyPlays && data.yearlyPlays.length > 0) {
+          html += renderYearlyBarChart(data.yearlyPlays);
+        }
+
+        // Top tracks
+        if (data.topTracks && data.topTracks.length > 0) {
+          html += '<div class="card" style="margin-top:12px;"><div class="eyebrow">Top Tracks</div>';
+          data.topTracks.forEach((t, i) => {
+            html += \`<div class="row">
+              <div class="rank">\${i + 1}</div>
+              <div class="title">\${trackLink(t.track || t.name, data.artist || name)}</div>
+              <div class="val">\${(t.plays || 0).toLocaleString()}</div>
+            </div>\`;
+          });
+          html += '</div>';
+        }
+
+        // Companions
+        if (data.companions && data.companions.length > 0) {
+          html += '<div class="card" style="margin-top:12px;"><div class="eyebrow">Companion Artists</div>';
+          data.companions.forEach(c => {
+            html += \`<div class="row">
+              <div class="rank"></div>
+              <div class="title"><a onclick="showArtistDetail('\${esc(c.artist || c.name)}')">\${esc(c.artist || c.name)}</a></div>
+              <div class="val">\${(c.coOccurrences || c.count || 0).toLocaleString()}</div>
+            </div>\`;
+          });
+          html += '</div>';
+        }
+
+        // Action
+        html += \`<div style="margin-top:12px;"><button class="pill-btn" onclick="generateQueueWithSeed('\${esc(data.artist || name)}')">Build artist queue</button></div>\`;
+
+        el.innerHTML = html;
+      } catch (e) {
+        el.innerHTML = \`<div class="status-msg error">\${e.message}</div>\`;
+      }
+    }
+
+    function renderYearlyBarChart(yearlyPlays) {
+      const w = 800, h = 120, pad = 30;
+      const n = yearlyPlays.length;
+      if (n === 0) return '';
+      const max = Math.max(...yearlyPlays.map(y => y.plays));
+      if (max === 0) return '';
+      const barW = Math.max(8, Math.min(36, (w - pad * 2) / n - 4));
+      const gap = 4;
+      const totalW = n * (barW + gap) + pad * 2;
+      let svg = \`<div style="overflow-x:auto;"><svg width="\${totalW}" height="\${h + 24}" viewBox="0 0 \${totalW} \${h + 24}" style="display:block;">\`;
+      yearlyPlays.forEach((y, i) => {
+        const barH = max > 0 ? (y.plays / max) * h : 0;
+        const x = pad + i * (barW + gap);
+        const bY = h - barH;
+        const fill = y.plays === max ? '#84e9a8' : '#1db954';
+        svg += \`<rect x="\${x}" y="\${bY}" width="\${barW}" height="\${barH}" fill="\${fill}" rx="2"
+          onmouseover="showTip(event, '<b>\${y.year}</b>: \${y.plays.toLocaleString()} plays')"
+          onmouseout="hideTip()"/>\`;
+        // Year label
+        const labelY = String(y.year).slice(-2);
+        svg += \`<text x="\${x + barW / 2}" y="\${h + 14}" text-anchor="middle" fill="#777" font-size="10">\${labelY}</text>\`;
+      });
+      svg += '</svg></div>';
+      return svg;
+    }
+
+    // ── Pulse ──
+    async function loadPulse() {
+      try {
+        const data = await api('/api/listening/pulse');
+
+        // This Week
+        const weekEl = document.getElementById('pulse-week');
+        const weekTracks = data.week?.topTracks || data.week || [];
+        if (weekTracks.length > 0) {
+          weekEl.innerHTML = weekTracks.map((t, i) => \`
+            <div class="row">
+              <div class="rank">\${i + 1}</div>
+              <div class="title">\${trackLink(t.track, t.artist)}<div class="sub"><a onclick="showArtistDetail('\${esc(t.artist)}')">\${esc(t.artist)}</a></div></div>
+              <div class="val">\${t.plays}\${t.skipRate > 50 ? '<span class="skip-dot"></span>' : ''}</div>
+            </div>
+          \`).join('');
+        } else { weekEl.innerHTML = '<div class="status-msg">No data</div>'; }
+
+        // This Month
+        const monthEl = document.getElementById('pulse-month');
+        const monthArtists = data.month?.topArtists || data.month || [];
+        if (monthArtists.length > 0) {
+          monthEl.innerHTML = monthArtists.map((a, i) => {
+            const deltaColor = (a.delta || 0) >= 0 ? 'var(--accent)' : 'var(--accent2)';
+            const arrow = (a.delta || 0) >= 0 ? '\\u25B2' : '\\u25BC';
+            const deltaStr = a.delta != null ? \` <span style="color:\${deltaColor};font-size:12px;">\${arrow} \${a.delta >= 0 ? '+' : ''}\${a.delta}</span>\` : '';
+            return \`<div class="row">
+              <div class="rank">\${i + 1}</div>
+              <div class="title"><a onclick="showArtistDetail('\${esc(a.artist)}')">\${esc(a.artist)}</a></div>
+              <div class="val">\${a.hours != null ? a.hours + 'h' : a.plays}\${deltaStr}</div>
+            </div>\`;
+          }).join('');
+        } else { monthEl.innerHTML = '<div class="status-msg">No data</div>'; }
+
+        // Rising
+        const risingEl = document.getElementById('pulse-rising');
+        if (data.rising && data.rising.length > 0) {
+          risingEl.innerHTML = data.rising.map((a, i) => \`
+            <div class="row">
+              <div class="rank">\${i + 1}</div>
+              <div class="title"><a onclick="showArtistDetail('\${esc(a.artist)}')">\${esc(a.artist)}</a></div>
+              <div class="val">\${a.plays} <span style="color:var(--accent);font-size:12px;">+\${a.delta || 0}</span></div>
+            </div>
+          \`).join('');
+        } else { risingEl.innerHTML = '<div class="status-msg">No data</div>'; }
+
+        // Falling
+        const fallingEl = document.getElementById('pulse-falling');
+        if (data.falling && data.falling.length > 0) {
+          fallingEl.innerHTML = data.falling.map((a, i) => \`
+            <div class="row">
+              <div class="rank">\${i + 1}</div>
+              <div class="title"><a onclick="showArtistDetail('\${esc(a.artist)}')">\${esc(a.artist)}</a></div>
+              <div class="val">\${a.plays} <span style="color:var(--accent2);font-size:12px;">\${a.delta || 0}</span></div>
+            </div>
+          \`).join('');
+        } else { fallingEl.innerHTML = '<div class="status-msg">No data</div>'; }
+
+        // New Entries
+        const newEl = document.getElementById('pulse-new');
+        if (data.newEntries && data.newEntries.length > 0) {
+          newEl.innerHTML = data.newEntries.map((t, i) => \`
+            <div class="row">
+              <div class="rank">\${i + 1}</div>
+              <div class="title">\${trackLink(t.track, t.artist)}<div class="sub"><a onclick="showArtistDetail('\${esc(t.artist)}')">\${esc(t.artist)}</a></div></div>
+              <div class="val">\${t.plays}</div>
+            </div>
+          \`).join('');
+        } else { newEl.innerHTML = '<div class="status-msg">No new tracks</div>'; }
+
+        // Skip Rate
+        const skipEl = document.getElementById('pulse-skip');
+        if (data.skipRate) {
+          const thisW = data.skipRate.thisWeek || 0;
+          const lastW = data.skipRate.lastWeek || 0;
+          const maxR = Math.max(thisW, lastW, 1);
+          const thisH = Math.round((thisW / maxR) * 36);
+          const lastH = Math.round((lastW / maxR) * 36);
+          const thisColor = thisW > lastW ? 'var(--accent2)' : 'var(--accent)';
+          skipEl.innerHTML = \`
+            <div class="skip-bars">
+              <div class="bar" style="height:\${lastH}px;background:var(--surface);"></div>
+              <div class="bar" style="height:\${thisH}px;background:\${thisColor};"></div>
+            </div>
+            <div class="skip-caption">\${thisW}% this week vs \${lastW}% last week</div>
+          \`;
+        } else { skipEl.innerHTML = '<div class="status-msg">No data</div>'; }
+
+        // Lost Favorites
+        const lostEl = document.getElementById('pulse-lost');
+        if (data.lostFavorites && data.lostFavorites.length > 0) {
+          lostEl.innerHTML = data.lostFavorites.map((t, i) => \`
+            <div class="row">
+              <div class="rank">\${i + 1}</div>
+              <div class="title">\${trackLink(t.track, t.artist)}<div class="sub"><a onclick="showArtistDetail('\${esc(t.artist)}')">\${esc(t.artist)}</a></div></div>
+              <div class="val gold">\${t.plays} plays<div class="sub">last \${esc(t.lastHeard || '')}</div></div>
+            </div>
+          \`).join('');
+        } else { lostEl.innerHTML = '<div class="status-msg">No lost favorites</div>'; }
+
+      } catch (e) {
+        // Non-critical: leave individual sections as-is on error
+        console.error('Pulse load error:', e);
+      }
+    }
+
+    // ── Queue Builder ──
+    const qbLength = document.getElementById('qb-length');
+    const qbLabel = document.getElementById('qb-length-label');
+    qbLength.addEventListener('input', () => { qbLabel.textContent = qbLength.value + 'm'; });
+
+    async function generateQueue() {
+      const resultsEl = document.getElementById('qb-results');
+      resultsEl.innerHTML = '<div class="status-msg">Generating...</div>';
+      try {
+        const data = await apiPost('/api/listening/queue', {
+          mode: document.getElementById('qb-mode').value,
+          length_min: parseInt(qbLength.value),
+        });
+        if (data.tracks && data.tracks.length > 0) {
+          resultsEl.innerHTML = data.tracks.map((t, i) => {
+            const reasons = (t.reasons || []).map(r => \`<span class="reason-tag">\${esc(r)}</span>\`).join(' ');
+            return \`<div class="row">
+              <div class="rank">\${i + 1}</div>
+              <div class="title">\${trackLink(t.name || t.track, t.artist)}<div class="sub"><a onclick="showArtistDetail('\${esc(t.artist)}')">\${esc(t.artist)}</a> \${reasons}</div></div>
+              <div class="val"><button class="queue-btn" onclick="queueTrack(this, '\${esc(t.uri || t.track_id || '')}')">+ Queue</button></div>
+            </div>\`;
+          }).join('');
+        } else {
+          resultsEl.innerHTML = '<div class="status-msg">No tracks generated</div>';
+        }
+      } catch (e) {
+        resultsEl.innerHTML = \`<div class="status-msg error">\${e.message}</div>\`;
+      }
+    }
+
+    async function generateQueueWithSeed(seed) {
+      const resultsEl = document.getElementById('qb-results');
+      resultsEl.innerHTML = '<div class="status-msg">Generating with seed...</div>';
+      switchTab('pulse');
+      try {
+        const data = await apiPost('/api/listening/queue', {
+          mode: 'default',
+          length_min: 60,
+          seed: seed,
+        });
+        if (data.tracks && data.tracks.length > 0) {
+          resultsEl.innerHTML = data.tracks.map((t, i) => {
+            const reasons = (t.reasons || []).map(r => \`<span class="reason-tag">\${esc(r)}</span>\`).join(' ');
+            return \`<div class="row">
+              <div class="rank">\${i + 1}</div>
+              <div class="title">\${trackLink(t.name || t.track, t.artist)}<div class="sub"><a onclick="showArtistDetail('\${esc(t.artist)}')">\${esc(t.artist)}</a> \${reasons}</div></div>
+              <div class="val"><button class="queue-btn" onclick="queueTrack(this, '\${esc(t.uri || t.track_id || '')}')">+ Queue</button></div>
+            </div>\`;
+          }).join('');
+        } else {
+          resultsEl.innerHTML = '<div class="status-msg">No tracks generated</div>';
+        }
+      } catch (e) {
+        resultsEl.innerHTML = \`<div class="status-msg error">\${e.message}</div>\`;
+      }
+    }
+
+    // ── Now Playing (live from Spotify, polls every 5s) ──
+    let currentTrackId = null;
+    // ── Playback controls ──
+    async function playerSkip() {
+      try { await apiPost('/api/player/skip', {}); showToast('Skipped'); setTimeout(loadNowPlaying, 500); } catch (e) { showToast('Error: ' + e.message); }
+    }
+    async function playerPrevious() {
+      try { await apiPost('/api/player/previous', {}); showToast('Previous'); setTimeout(loadNowPlaying, 500); } catch (e) { showToast('Error: ' + e.message); }
+    }
+    let _repeatState = 'off'; // off → track → off
+    async function playerRepeat() {
+      const next = _repeatState === 'off' ? 'track' : 'off';
+      try {
+        await apiPost('/api/player/repeat', { state: next });
+        _repeatState = next;
+        const btn = document.getElementById('np-repeat-btn');
+        if (btn) btn.className = next === 'off' ? 'ctrl-btn' : 'ctrl-btn active';
+        showToast(next === 'track' ? 'Repeat: on' : 'Repeat: off');
+      } catch (e) { showToast('Error: ' + e.message); }
+    }
+
+    async function loadNowPlaying() {
+      try {
+        const data = await api('/api/now-playing');
+        const dot = document.getElementById('playing-dot');
+        const name = document.getElementById('track-name');
+        const artist = document.getElementById('track-artist');
+        const actions = document.getElementById('now-playing-actions');
+        if (data.track_name) {
+          dot.className = data.is_playing ? 'dot' : 'dot inactive';
+          name.textContent = data.track_name;
+          const fmt = ms => \`\${Math.floor(ms / 60000)}:\${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}\`;
+          const timeStr = data.is_playing && data.progress_ms != null && data.duration_ms ? \` \\u2022 \${fmt(data.progress_ms)} / \${fmt(data.duration_ms)}\` : '';
+          const device = data.device_name ? \` \\u2022 \${data.device_name}\` : '';
+          artist.textContent = data.artist_name + (data.is_playing ? '' : ' \\u2022 Paused') + timeStr + device;
+          // Reset buttons if track changed
+          if (data.track_id !== currentTrackId) {
+            currentTrackId = data.track_id;
+            const likeBtn = document.getElementById('np-like-btn');
+            const blockBtn = document.getElementById('np-block-btn');
+            likeBtn.innerHTML = '&#9825;';
+            likeBtn.className = 'queue-btn';
+            likeBtn.onclick = () => likeTrack(likeBtn, currentTrackId);
+            blockBtn.innerHTML = '&#10005;';
+            blockBtn.className = 'queue-btn';
+            blockBtn.onclick = () => blockTrack(blockBtn, currentTrackId);
+          }
+          actions.style.display = '';
+          document.getElementById('np-controls').style.display = '';
+          // Show play context
+          const ctxEl = document.getElementById('np-context');
+          const pc = data.play_context;
+          if (pc && pc.inSession) {
+            const srcTag = pc.source === 'fresh'
+              ? '<span class="reason-tag fresh">fresh</span>'
+              : '<span class="reason-tag">familiar</span>';
+            const reasonTags = (pc.reasons || []).map(r => {
+              const cls = r.startsWith('Discovery') ? 'reason-tag fresh' : 'reason-tag';
+              return \`<span class="\${cls}">\${r}</span>\`;
+            }).join(' ');
+            ctxEl.innerHTML = \`Agent (\${pc.mode}) \${srcTag} \${reasonTags}\`;
+            ctxEl.style.display = '';
+          } else if (pc && pc.source === 'discovery' && pc.reasons && pc.reasons.length > 0) {
+            const reasonTags = pc.reasons.map(r => \`<span class="reason-tag fresh">\${r}</span>\`).join(' ');
+            ctxEl.innerHTML = reasonTags;
+            ctxEl.style.display = '';
+          } else if (pc && !pc.inSession) {
+            ctxEl.innerHTML = '<span style="color:#888;">Manual play</span>';
+            ctxEl.style.display = '';
+          } else {
+            ctxEl.style.display = 'none';
+          }
+          // Up next queue
+          const queueEl = document.getElementById('np-queue');
+          const queueList = document.getElementById('np-queue-list');
+          if (data.up_next && data.up_next.length > 0) {
+            queueList.innerHTML = data.up_next.map(t =>
+              \`<div style="font-size:13px;padding:2px 0;"><span style="color:var(--ink);">\${t.track_name}</span> <span style="color:var(--ink3);">— \${t.artist_name}</span></div>\`
+            ).join('');
+            queueEl.style.display = '';
+          } else {
+            queueEl.style.display = 'none';
+          }
+        } else {
+          dot.className = 'dot inactive';
+          name.textContent = 'Nothing playing';
+          artist.textContent = '';
+          actions.style.display = 'none';
+          document.getElementById('np-controls').style.display = 'none';
+          document.getElementById('np-context').style.display = 'none';
+          document.getElementById('np-queue').style.display = 'none';
+          currentTrackId = null;
+        }
+      } catch { }
+    }
+
+    // ── Context ──
+    async function loadContext() {
+      try {
+        const [snap, nowPlaying] = await Promise.all([
+          api('/debug/last-snapshot'),
+          api('/api/now-playing').catch(() => ({})),
+        ]);
+        if (snap.error) {
+          document.getElementById('context-grid').innerHTML = '<div class="status-msg">No snapshots yet</div>';
+          return;
+        }
+        const capturedDate = new Date(snap.captured_at * 1000);
+        const timeStr = capturedDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+        // Device: prefer live from now-playing, then snapshot
+        const deviceDisplay = nowPlaying.device_name
+          ? \`\${nowPlaying.device_name} (\${nowPlaying.device_type})\`
+          : snap.device_type || 'No active device';
+        // Location: show label + source, or coords if no label
+        let locationDisplay;
+        if (snap.location_label) {
+          locationDisplay = \`\${snap.location_label} (\${snap.location_source})\`;
+        } else if (snap.location_lat && snap.location_lon) {
+          locationDisplay = \`\${snap.location_lat.toFixed(2)}, \${snap.location_lon.toFixed(2)} (\${snap.location_source})\`;
+        } else {
+          locationDisplay = 'No location data';
+        }
+        const items = [
+          { label: 'Captured', value: timeStr },
+          { label: 'Daylight', value: snap.daylight_phase },
+          { label: 'Weather', value: \`\${snap.weather_condition || 'unknown'}, \${snap.weather_temp_f ? snap.weather_temp_f + '\\u00b0F' : '?'}\` },
+          { label: 'Location', value: locationDisplay },
+          { label: 'Device', value: deviceDisplay },
+          { label: 'Wind', value: snap.weather_wind_mph ? snap.weather_wind_mph + ' mph' : '?' },
+          { label: 'Cloud', value: snap.weather_cloud_pct != null ? snap.weather_cloud_pct + '%' : '?' },
+        ];
+        if (snap.user_note) items.push({ label: 'Note', value: snap.user_note });
+        document.getElementById('context-grid').innerHTML = items.map(i =>
+          \`<div class="context-item"><div class="context-label">\${i.label}</div><div class="context-value">\${i.value}</div></div>\`
+        ).join('');
+      } catch (e) {
+        document.getElementById('context-grid').innerHTML = \`<div class="status-msg error">\${e.message}</div>\`;
+      }
+    }
+
+    // ── Why These Tracks — explain session picks ──
+    async function loadExplanation() {
+      try {
+        const data = await api('/api/session-explain');
+        if (data.error) {
+          document.getElementById('explain-card').style.display = 'none';
+          return;
+        }
+        document.getElementById('explain-card').style.display = 'block';
+        let html = '<table><tr><th>#</th><th>Track</th><th>Why</th></tr>';
+        html += data.tracks.map(t => {
+          const isFresh = t.source.includes('fresh');
+          const tags = t.reasons.map(r => {
+            const cls = r.startsWith('Weather') || r.startsWith('Night') ? 'reason-tag context'
+              : r.startsWith('Discovery') || r.startsWith('Fresh') ? 'reason-tag fresh'
+              : 'reason-tag';
+            return \`<span class="\${cls}">\${r}</span>\`;
+          }).join('');
+          // Acoustic fit tag — only show if meaningfully away from 1.0
+          let fitTag = '';
+          if (t.acousticFit != null && t.acousticFitNote) {
+            const fitCls = t.acousticFit > 1.1 ? 'reason-tag context' : 'reason-tag';
+            fitTag = \`<span class="\${fitCls}">\\u266B \${t.acousticFitNote} (\${t.acousticFit.toFixed(2)}x)</span>\`;
+          }
+          const outcomeStr = t.outcome ? \` <span class="badge badge-\${t.outcome}">\${t.outcome}</span>\` : '';
+          return \`<tr><td style="color:var(--ink2);">\${t.position}</td><td>\${t.trackName}\${outcomeStr}</td><td>\${tags}\${fitTag}</td></tr>\`;
+        }).join('');
+        html += '</table>';
+        document.getElementById('explain-content').innerHTML = html;
+      } catch {
+        document.getElementById('explain-card').style.display = 'none';
+      }
+    }
+
+    // ── Like a track (add to "Liked via Agent" playlist) ──
+    async function likeTrack(btn, trackId) {
+      const original = btn.innerHTML;
+      btn.textContent = '...';
+      try {
+        const resp = await apiPost('/api/like-track', { track_id: trackId });
+        if (resp.ok) {
+          btn.innerHTML = '&#9829;';
+          btn.className = 'queue-btn done';
+          btn.title = 'Added to Liked via Agent';
+        } else {
+          btn.innerHTML = original;
+          btn.title = resp.error || 'Failed';
+          btn.style.borderColor = '#e74c3c';
+          btn.style.color = '#e74c3c';
+        }
+      } catch {
+        btn.innerHTML = original;
+      }
+    }
+
+    // ── Block a track (add to "Blocked" playlist, excluded from future curation) ──
+    async function blockTrack(btn, trackId) {
+      btn.textContent = '...';
+      try {
+        const resp = await apiPost('/api/block-track', { track_id: trackId });
+        if (resp.ok) {
+          btn.innerHTML = '&#10005;';
+          btn.className = 'queue-btn done';
+          btn.style.borderColor = '#e74c3c';
+          btn.style.color = '#e74c3c';
+          btn.title = 'Blocked from future sessions';
+          // Dim the whole row
+          btn.closest('tr').style.opacity = '0.4';
+        } else {
+          btn.innerHTML = '&#10005;';
+        }
+      } catch {
+        btn.innerHTML = '&#10005;';
+      }
+    }
+
+    // ── Queue a single track ──
+    async function queueTrack(btn, trackId) {
+      btn.textContent = '...';
+      try {
+        await apiPost('/api/queue-track', { track_id: trackId });
+        btn.textContent = 'Queued';
+        btn.className = 'queue-btn done';
+      } catch {
+        btn.textContent = 'Failed';
+        setTimeout(() => { btn.textContent = '+ Queue'; }, 2000);
+      }
+    }
+
+    // ── Learned Affinities ──
+    async function loadAffinities() {
+      try {
+        const data = await api('/api/top-affinities');
+        const card = document.getElementById('affinities-card');
+        if (!data.buckets || data.buckets.length === 0) {
+          card.style.display = 'none';
+          return;
+        }
+        card.style.display = 'block';
+        let html = \`<div style="margin-bottom:8px;color:var(--ink2);font-size:13px;">\${data.totalAffinities} significant affinities learned</div>\`;
+        for (const b of data.buckets) {
+          html += \`<div style="margin-bottom:12px;">\`;
+          html += \`<div style="font-weight:600;margin-bottom:4px;"><span class="reason-tag context">\${b.bucket}</span> <span style="color:var(--ink2);font-size:12px;">\${b.dimension.replace(/_/g, ' ')}</span></div>\`;
+          html += '<table><tr><th>Track</th><th>Affinity</th><th>Plays</th></tr>';
+          html += b.tracks.map(t =>
+            \`<tr><td>\${t.trackName}</td><td class="score">\${t.affinity.toFixed(2)}x</td><td style="color:var(--ink2);">\${t.sampleSize}</td></tr>\`
+          ).join('');
+          html += '</table></div>';
+        }
+        document.getElementById('affinities-content').innerHTML = html;
+      } catch {
+        document.getElementById('affinities-card').style.display = 'none';
+      }
+    }
+
+    // ── Fresh Pool ──
+    async function loadFreshPool() {
+      try {
+        const [pool, stats] = await Promise.all([
+          api('/debug/fresh-pool?limit=15'),
+          api('/debug/fresh-pool-stats'),
+        ]);
+        let html = \`<div style="margin-bottom:8px;color:var(--ink2);font-size:13px;">
+          \${stats.fresh} fresh, \${stats.queued} queued, \${stats.played} played, \${stats.liked} liked, \${stats.skipped} skipped
+        </div>\`;
+        if (pool.length === 0) {
+          html += '<div class="status-msg">Fresh pool is empty. Run discovery first.</div>';
+        } else {
+          html += '<table><tr><th>Track</th><th>Source</th><th>Score</th><th></th></tr>';
+          html += pool.map(t => {
+            const artist = t.primary_artist_name || t.source_detail || '';
+            const artistLine = artist ? \`<br><span class="track-artist">\${artist}</span>\` : '';
+            // Format source for display
+            const srcMap = {
+              'followed_artist_search': 'Followed Artist',
+              'top_artist_search': 'Top Artist',
+              'hype_machine': 'Hype Machine',
+              'editorial_rss': t.source_detail || 'RSS',
+            };
+            let srcLabel = srcMap[t.source];
+            if (!srcLabel) {
+              if (t.source.startsWith('lastfm:')) srcLabel = 'Last.fm';
+              else if (t.source.startsWith('rss:')) srcLabel = t.source.replace('rss:', '').replace(/_/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase());
+              else srcLabel = t.source;
+            }
+            return \`<tr><td>\${t.track_name}\${artistLine}</td><td><span class="source-tag">\${srcLabel}</span></td><td class="score">\${t.taste_score.toFixed(1)}</td><td><button class="queue-btn" onclick="queueTrack(this, '\${t.track_id}')">+ Queue</button></td></tr>\`;
+          }).join('');
+          html += '</table>';
+        }
+        document.getElementById('fresh-pool-content').innerHTML = html;
+      } catch (e) {
+        document.getElementById('fresh-pool-content').innerHTML = \`<div class="status-msg error">\${e.message}</div>\`;
+      }
+    }
+
+    // ── Stats ──
+    async function loadStats() {
+      try {
+        const s = await api('/api/dashboard-stats');
+        const el = document.getElementById('stats-content');
+
+        const hrs = Math.floor(s.today.listenedMin / 60);
+        const mins = s.today.listenedMin % 60;
+        const listenedStr = hrs > 0 ? \`\${hrs}h \${mins}m\` : \`\${mins}m\`;
+
+        const agentAcceptRate = s.agent.week.tracks > 0
+          ? Math.round(s.agent.week.completed / s.agent.week.tracks * 100) : null;
+        const freshAcceptRate = s.discovery.week.played > 0
+          ? Math.round(s.discovery.week.completed / s.discovery.week.played * 100) : null;
+
+        const rebuilt = s.tasteModel.lastRebuilt
+          ? new Date(s.tasteModel.lastRebuilt * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+          : 'never';
+
+        el.innerHTML = \`
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <div style="font-size:12px;color:var(--ink3);margin-bottom:6px;">TODAY'S LISTENING</div>
+              <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
+                <div class="stat-box"><div class="stat-number">\${s.today.tracks}</div><div class="stat-label">Tracks</div></div>
+                <div class="stat-box"><div class="stat-number">\${listenedStr}</div><div class="stat-label">Listened</div></div>
+                <div class="stat-box"><div class="stat-number">\${s.today.skipRate}%</div><div class="stat-label">Skip Rate</div></div>
+              </div>
+              <div style="font-size:12px;color:var(--ink3);margin-top:4px;">\${s.today.completed} completed \\u00b7 \${s.today.skipped} skipped \\u00b7 \${s.today.partial} partial</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--ink3);margin-bottom:6px;">AGENT PERFORMANCE</div>
+              <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
+                <div class="stat-box"><div class="stat-number">\${s.agent.today.sessions}</div><div class="stat-label">Sessions Today</div></div>
+                <div class="stat-box"><div class="stat-number">\${s.agent.week.sessions}</div><div class="stat-label">This Week</div></div>
+                <div class="stat-box"><div class="stat-number">\${agentAcceptRate != null ? agentAcceptRate + '%' : '\\u2014'}</div><div class="stat-label">Accept Rate</div></div>
+              </div>
+              <div style="font-size:12px;color:var(--ink3);margin-top:4px;">Week: \${s.agent.week.completed} completed \\u00b7 \${s.agent.week.skipped} skipped of \${s.agent.week.tracks} picks</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--ink3);margin-bottom:6px;">DISCOVERY</div>
+              <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
+                <div class="stat-box"><div class="stat-number">\${s.discovery.pool.fresh}</div><div class="stat-label">Fresh Pool</div></div>
+                <div class="stat-box"><div class="stat-number">\${s.discovery.week.played}</div><div class="stat-label">Played (Week)</div></div>
+                <div class="stat-box"><div class="stat-number">\${freshAcceptRate != null ? freshAcceptRate + '%' : '\\u2014'}</div><div class="stat-label">Accept Rate</div></div>
+              </div>
+              <div style="font-size:12px;color:var(--ink3);margin-top:4px;">Pool: \${s.discovery.pool.fresh} fresh \\u00b7 \${s.discovery.pool.liked ?? 0} liked \\u00b7 \${s.discovery.pool.skipped ?? 0} skipped</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--ink3);margin-bottom:6px;">TASTE MODEL</div>
+              <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
+                <div class="stat-box"><div class="stat-number">\${s.tasteModel.tracksScored.toLocaleString()}</div><div class="stat-label">Tracks Scored</div></div>
+                <div class="stat-box"><div class="stat-number">\${s.tasteModel.seasonalPlaylists}</div><div class="stat-label">Seasonal PLs</div></div>
+                <div class="stat-box"><div class="stat-number">\${s.tasteModel.freshPoolSize}</div><div class="stat-label">Pool Total</div></div>
+              </div>
+              <div style="font-size:12px;color:var(--ink3);margin-top:4px;">Last rebuilt: \${rebuilt}</div>
+            </div>
+          </div>
+        \`;
+      } catch (e) {
+        document.getElementById('stats-content').innerHTML = \`<div class="status-msg error">\${e.message}</div>\`;
+      }
+    }
+
+    // ── Recent History ──
+    function getPlaySource(e) {
+      if (e.session_id) {
+        const isFresh = e.session_source && e.session_source.startsWith('fresh');
+        return { label: isFresh ? 'Agent (fresh)' : 'Agent', cls: 'source-agent' };
+      }
+      if (e.context_type === 'playlist') return { label: 'Playlist', cls: 'source-playlist' };
+      if (e.context_type === 'collection') return { label: 'Liked Songs', cls: 'source-collection' };
+      if (e.context_type === 'album') return { label: 'Album', cls: 'source-album' };
+      if (e.context_type === 'artist') return { label: 'Artist Radio', cls: 'source-playlist' };
+      // No context from Spotify — show device as a hint
+      const device = e.device_type || '';
+      const deviceHints = { Smartphone: 'Phone', Computer: 'Desktop', Speaker: 'Speaker', TV: 'TV', CastAudio: 'Cast' };
+      const hint = deviceHints[device] || device;
+      return { label: hint ? \`Direct \\u00b7 \${hint}\` : 'Direct', cls: '' };
+    }
+
+    async function loadHistory() {
+      try {
+        const events = await api('/api/recent-history');
+        const el = document.getElementById('history-content');
+        if (events.length === 0) {
+          el.innerHTML = '<div class="status-msg">No play events in the last 24 hours.</div>';
+          return;
+        }
+        const badgeClass = c => ({completed:'badge-completed',skipped:'badge-skipped',partial:'badge-partial',replayed:'badge-replayed'}[c] || '');
+        let html = '<table><tr><th>Time</th><th>Track</th><th>Source</th><th>Result</th><th>Score</th><th></th></tr>';
+        html += events.map(e => {
+          const time = new Date(e.started_at * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+          const name = e.track_name || e.track_id;
+          const artist = e.primary_artist_name ? \`<span class="track-artist">\${e.primary_artist_name}</span>\` : '';
+          const score = e.taste_score != null ? e.taste_score.toFixed(1) : '\\u2014';
+          const src = getPlaySource(e);
+          return \`<tr>
+            <td class="history-time">\${time}</td>
+            <td>\${name}\${artist ? '<br>' + artist : ''}</td>
+            <td><span class="source-tag \${src.cls}">\${src.label}</span></td>
+            <td><span class="badge \${badgeClass(e.classification)}">\${e.classification}</span></td>
+            <td class="score">\${score}</td>
+            <td style="white-space:nowrap;">
+              <button class="queue-btn" onclick="likeTrack(this, '\${e.track_id}')" title="Add to Liked via Agent playlist">&#9825;</button>
+              <button class="queue-btn" onclick="blockTrack(this, '\${e.track_id}')" title="Block from future sessions" style="margin-left:4px;">&#10005;</button>
+            </td>
+          </tr>\`;
+        }).join('');
+        html += '</table>';
+        el.innerHTML = html;
+      } catch (e) {
+        document.getElementById('history-content').innerHTML = \`<div class="status-msg error">\${e.message}</div>\`;
+      }
+    }
+
+    // ── Mode buttons ──
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const mode = btn.dataset.mode;
+        const output = document.getElementById('output-select').value;
+        const status = document.getElementById('session-status');
+        status.style.display = 'block';
+        status.textContent = \`Starting \${mode} session...\`;
+        status.className = 'status-msg';
+        status.onclick = null;
+        status.style.cursor = '';
+        btn.classList.add('active');
+
+        try {
+          const result = await apiPost('/api/start-session', { mode, output, duration_min: 60 });
+          const ctx = result.contextSummary;
+          let msg = \`\${result.mode}: \${result.trackCount} tracks (\${result.familiarCount} familiar, \${result.freshCount} fresh)\`;
+          if (ctx.weatherCondition) msg += \` | \${ctx.weatherCondition} \${ctx.tempF}\\u00b0F\`;
+
+          status.textContent = msg;
+
+          // Show session queue
+          const queueDiv = document.getElementById('session-queue');
+          if (result.tracks && result.tracks.length > 0) {
+            queueDiv.style.display = 'block';
+            queueDiv.innerHTML = '<table><tr><th>#</th><th>Track</th><th>Type</th></tr>' +
+              result.tracks.map((t, i) => {
+                const isFresh = t.source.includes('fresh');
+                const tag = isFresh ? '<span class="source-tag" style="background:var(--accent);color:#000;">Fresh</span>' : '<span class="source-tag">Familiar</span>';
+                return \`<tr><td style="color:var(--ink2);width:30px;">\${i + 1}</td><td>\${t.name}</td><td>\${tag}</td></tr>\`;
+              }).join('') + '</table>';
+          } else {
+            queueDiv.style.display = 'none';
+          }
+
+          // Show biases
+          if (ctx.biasesApplied && ctx.biasesApplied.length > 0) {
+            document.getElementById('biases-card').style.display = 'block';
+            document.getElementById('bias-list').innerHTML = ctx.biasesApplied.map(b =>
+              \`<li><span class="mult">\\u00d7\${b.avgMultiplier}</span> \${b.reason} (\${b.appliedToTracks} tracks)</li>\`
+            ).join('');
+          } else {
+            document.getElementById('biases-card').style.display = 'none';
+          }
+
+          // Load track explanations
+          loadExplanation();
+        } catch (e) {
+          status.textContent = \`Error: \${e.message} (tap to dismiss)\`;
+          status.className = 'status-msg error';
+          status.style.cursor = 'pointer';
+          status.onclick = () => {
+            status.style.display = 'none';
+            status.onclick = null;
+            status.style.cursor = '';
+          };
+        }
+
+        setTimeout(() => btn.classList.remove('active'), 2000);
+      });
+    });
+
+    // ── Listening History: Eras ──
+    async function loadEras() {
+      try {
+        const data = await api('/api/listening/eras');
+        const container = document.getElementById('eras-content');
+        if (!data.eras || !data.eras.length) { container.innerHTML = '<div class="status-msg">No eras data</div>'; return; }
+        container.innerHTML = data.eras.map(era => {
+          // Artist pills with play counts
+          const artistPills = (era.topArtistsByPlays || []).map(a =>
+            \`<span class="pill" onclick="showArtistDetail('\${esc(a.artist)}')">\${esc(a.artist)}<span class="plays">\${a.hours ? a.hours + 'h' : a.plays}</span></span>\`
+          ).join('');
+
+          // Top track callout
+          const topTrackHtml = era.topTrack
+            ? \`<div class="era-top-track">
+                <div>
+                  <div class="label">Defining track</div>
+                  <div class="title">\${trackLink(era.topTrack.track, era.topTrack.artist)}</div>
+                  <div class="artist">\${esc(era.topTrack.artist)}</div>
+                </div>
+                <div class="plays">\${era.topTrack.plays}</div>
+              </div>\`
+            : '';
+
+          // Mini sparkline (per-year bars)
+          const yearlyPlays = era.yearlyPlays || [];
+          const maxYearPlays = Math.max(...yearlyPlays.map(y => y.plays), 1);
+          const sparkHtml = yearlyPlays.length > 1
+            ? \`<div class="era-sparkline">\${yearlyPlays.map(y => {
+                const h = Math.max(3, Math.round((y.plays / maxYearPlays) * 28));
+                return \`<div style="display:flex;flex-direction:column;align-items:center;flex:1;">
+                  <div style="width:100%;height:\${h}px;background:var(--accent);border-radius:2px;"></div>
+                  <div style="font-size:9px;color:var(--ink3);margin-top:2px;">\${String(y.year).slice(-2)}</div>
+                </div>\`;
+              }).join('')}</div>\`
+            : '';
+
+          return \`<div class="era-card">
+            <div class="era-header">
+              <div>
+                <div class="era-name">\${esc(era.name)}</div>
+                <div class="era-years">\${era.years[0]}\\u2013\${era.years[era.years.length - 1]}</div>
+              </div>
+            </div>
+            <div class="era-summary">\${esc(era.summary || '')}</div>
+            <div class="era-metrics">
+              <div class="era-metric"><div class="v">\${(era.totalPlays || 0).toLocaleString()}</div><div class="l">Plays</div></div>
+              <div class="era-metric"><div class="v">\${era.totalHours || 0}</div><div class="l">Hours</div></div>
+              <div class="era-metric"><div class="v">\${(era.uniqueTracks || 0).toLocaleString()}</div><div class="l">Tracks</div></div>
+              <div class="era-metric"><div class="v">\${(era.uniqueArtists || 0).toLocaleString()}</div><div class="l">Artists</div></div>
+              <div class="era-metric"><div class="v">\${era.skipRate || 0}%</div><div class="l">Skip Rate</div></div>
+            </div>
+            \${sparkHtml}
+            \${topTrackHtml}
+            <div class="era-artists">\${artistPills}</div>
+          </div>\`;
+        }).join('');
+      } catch (e) { document.getElementById('eras-content').innerHTML = \`<div class="status-msg error">\${e.message}</div>\`; }
+    }
+
+    // ── Listening History: Calendar Heatmap ──
+    let heatmapYear = 2026;
+    function changeHeatmapYear(delta) {
+      heatmapYear += delta;
+      if (heatmapYear < 2011) heatmapYear = 2011;
+      if (heatmapYear > 2026) heatmapYear = 2026;
+      document.getElementById('heatmap-year').textContent = heatmapYear;
+      loadHeatmap();
+    }
+    async function loadHeatmap() {
+      const container = document.getElementById('heatmap-content');
+      container.innerHTML = '<div class="status-msg">Loading...</div>';
+      try {
+        const data = await api(\`/api/listening/heatmap?year=\${heatmapYear}\`);
+        if (!data.days || !data.days.length) { container.innerHTML = '<div class="status-msg">No data for this year</div>'; return; }
+        const playsByDate = {};
+        let maxPlays = 0;
+        data.days.forEach(d => { playsByDate[d.date] = d.plays; if (d.plays > maxPlays) maxPlays = d.plays; });
+        const jan1 = new Date(heatmapYear, 0, 1);
+        const startDow = jan1.getDay();
+        const isLeap = (heatmapYear % 4 === 0 && (heatmapYear % 100 !== 0 || heatmapYear % 400 === 0));
+        const totalDays = isLeap ? 366 : 365;
+        // Build 7-row grid (Sun=0 to Sat=6), each column is a week
+        let html = '<div class="heatmap-grid" style="grid-template-rows: repeat(7, 1fr);">';
+        const cells = [];
+        // Pad start
+        for (let i = 0; i < startDow; i++) cells.push('<div class="heatmap-cell" style="visibility:hidden;"></div>');
+        for (let d = 0; d < totalDays; d++) {
+          const date = new Date(heatmapYear, 0, d + 1);
+          const key = date.toISOString().split('T')[0];
+          const plays = playsByDate[key] || 0;
+          const level = plays === 0 ? 0 : plays <= maxPlays * 0.25 ? 1 : plays <= maxPlays * 0.5 ? 2 : plays <= maxPlays * 0.75 ? 3 : 4;
+          const month = date.getMonth() + 1;
+          cells.push(\`<div class="heatmap-cell" data-level="\${level}" data-date="\${key}" data-month="\${month}"
+            title="\${key}: \${plays} plays"
+            onmouseover="showTip(event, '<b>\${key}</b>: \${plays} plays')"
+            onmouseout="hideTip()"
+            onclick="heatmapCellClick(\${date.getFullYear()}, \${month})"></div>\`);
+        }
+        html += cells.join('') + '</div>';
+        container.innerHTML = html;
+      } catch (e) { container.innerHTML = \`<div class="status-msg error">\${e.message}</div>\`; }
+    }
+
+    function heatmapCellClick(year, month) {
+      tmYear = year;
+      document.getElementById('tm-year').textContent = tmYear;
+      selectTmMonth(month);
+    }
+
+    // ── Listening History: Time Machine ──
+    let tmYear = 2024;
+    let tmMonth = null;
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    function changeTmYear(delta) {
+      tmYear += delta;
+      if (tmYear < 2011) tmYear = 2011;
+      if (tmYear > 2026) tmYear = 2026;
+      document.getElementById('tm-year').textContent = tmYear;
+      tmMonth = null;
+      renderTmMonths();
+      document.getElementById('tm-stats').style.display = 'none';
+      document.getElementById('tm-tracklist').innerHTML = '';
+    }
+    function renderTmMonths() {
+      const container = document.getElementById('tm-months');
+      container.innerHTML = monthNames.map((m, i) =>
+        \`<button class="month-btn\${tmMonth === i + 1 ? ' active' : ''}" onclick="selectTmMonth(\${i + 1})">\${m}</button>\`
+      ).join('');
+    }
+    async function selectTmMonth(month) {
+      tmMonth = month;
+      renderTmMonths();
+      try {
+        const data = await api(\`/api/listening/month?year=\${tmYear}&month=\${month}\`);
+        document.getElementById('tm-stats').style.display = 'block';
+        document.getElementById('tm-plays').textContent = (data.totalPlays || 0).toLocaleString();
+        document.getElementById('tm-hours').textContent = data.totalHours || 0;
+        document.getElementById('tm-tracks').textContent = data.uniqueTracks || 0;
+        document.getElementById('tm-artists').textContent = data.uniqueArtists || 0;
+        document.getElementById('tm-era').textContent = data.era ? \`Era: \${data.era}\` : '';
+        const list = document.getElementById('tm-tracklist');
+        if (data.topTracks && data.topTracks.length) {
+          list.innerHTML = data.topTracks.map(t =>
+            \`<div class="tm-track">
+              <div class="tm-track-info">
+                <div class="tm-track-name">\${trackLink(t.track, t.artist)}</div>
+                <div class="tm-track-artist" onclick="showArtistDetail('\${esc(t.artist)}')">\${t.artist}</div>
+              </div>
+              <div class="tm-plays">\${t.plays}</div>
+            </div>\`
+          ).join('');
+        } else {
+          list.innerHTML = '<div class="status-msg">No plays this month</div>';
+        }
+      } catch (e) {
+        document.getElementById('tm-tracklist').innerHTML = \`<div class="status-msg error">\${e.message}</div>\`;
+      }
+    }
+
+    // ── Trends ──
+    // ── Intelligence Tab ──
+    function renderGauge(value, max, color, label, sub) {
+      const pct = Math.min(value / max, 1);
+      const r = 34, circ = 2 * Math.PI * r;
+      const offset = circ * (1 - pct);
+      const gaugeColor = value >= 70 ? 'var(--accent)' : value >= 40 ? 'var(--accent3)' : 'var(--accent2)';
+      return \`<div class="gauge">
+        <div class="gauge-ring">
+          <svg width="80" height="80" viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="\${r}" fill="none" stroke="var(--surface)" stroke-width="6"/>
+            <circle cx="40" cy="40" r="\${r}" fill="none" stroke="\${gaugeColor}" stroke-width="6"
+              stroke-dasharray="\${circ}" stroke-dashoffset="\${offset}" stroke-linecap="round"/>
+          </svg>
+          <div class="gauge-val" style="color:\${gaugeColor}">\${value}%</div>
+        </div>
+        <div class="gauge-label">\${label}</div>
+        \${sub ? \`<div class="gauge-sub">\${sub}</div>\` : ''}
+      </div>\`;
+    }
+
+    async function loadIntelligence() {
+      intelligenceLoaded = true;
+      try {
+        const data = await api('/api/listening/intelligence');
+        const h = data.health || {};
+
+        // Health gauges
+        document.getElementById('intel-health').innerHTML = \`
+          \${renderGauge(h.satisfaction || 0, 100, 'var(--accent)', 'Satisfaction', \`\${h.totalTracksServed || 0} tracks served\`)}
+          \${renderGauge(h.discoveryHitRate || 0, 100, 'var(--accent5)', 'Discovery Hit', 'fresh tracks completed')}
+          \${renderGauge(h.contextMaturity || 0, 100, 'var(--accent4)', 'Context Trained', 'affinities learned')}
+          \${renderGauge(h.acousticCoverage || 0, 100, 'var(--accent3)', 'Acoustic Fit', 'modes profiled')}
+        \`;
+
+        // Session timeline (bar chart)
+        const sessions = data.sessions || [];
+        if (sessions.length > 0) {
+          const maxTracks = Math.max(...sessions.map(s => s.tracks || 1));
+          document.getElementById('intel-sessions').innerHTML = sessions.reverse().map(s => {
+            const w = Math.round((s.tracks / maxTracks) * 100);
+            const completedW = s.tracks > 0 ? Math.round((s.completed / s.tracks) * 100) : 0;
+            const skippedW = s.tracks > 0 ? Math.round((s.skipped / s.tracks) * 100) : 0;
+            const replayedW = s.tracks > 0 ? Math.round((s.replayed / s.tracks) * 100) : 0;
+            const freshBadge = s.fresh > 0 ? \` <span style="color:var(--accent5);font-size:11px;">\${s.fresh} fresh</span>\` : '';
+            return \`<div class="bar-h">
+              <div class="bar-h-label">\${s.date}<br><span style="font-size:11px;color:var(--ink3)">\${s.mode}</span></div>
+              <div class="bar-h-track" style="width:\${w}%;" title="\${s.tracks} tracks: \${s.completed} completed, \${s.skipped} skipped, \${s.replayed} replayed">
+                <div style="display:flex;height:100%;">
+                  <div class="bar-h-fill" style="width:\${completedW}%;background:var(--accent);"></div>
+                  <div class="bar-h-fill" style="width:\${replayedW}%;background:var(--accent5);"></div>
+                  <div class="bar-h-fill" style="width:\${skippedW}%;background:var(--accent2);"></div>
+                </div>
+              </div>
+              <div class="bar-h-val">\${s.completionRate}%\${freshBadge}</div>
+            </div>\`;
+          }).join('') +
+          '<div style="display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--ink3);">' +
+          '<span><span style="display:inline-block;width:10px;height:10px;background:var(--accent);border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Completed</span>' +
+          '<span><span style="display:inline-block;width:10px;height:10px;background:var(--accent5);border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Replayed</span>' +
+          '<span><span style="display:inline-block;width:10px;height:10px;background:var(--accent2);border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Skipped</span>' +
+          '</div>';
+        } else {
+          document.getElementById('intel-sessions').innerHTML = '<div class="status-msg">No completed sessions yet.</div>';
+        }
+
+        // Taste calibration (horizontal bars)
+        const cal = data.calibration || [];
+        if (cal.length > 0) {
+          document.getElementById('intel-calibration').innerHTML = cal.map(c => {
+            const rate = c.plays > 0 ? Math.round((c.satisfied / c.plays) * 100) : 0;
+            const color = rate >= 70 ? 'var(--accent)' : rate >= 50 ? 'var(--accent3)' : 'var(--accent2)';
+            return \`<div class="bar-h">
+              <div class="bar-h-label">\${esc(c.tier)}</div>
+              <div class="bar-h-track"><div class="bar-h-fill" style="width:\${rate}%;background:\${color};"></div></div>
+              <div class="bar-h-val" style="color:\${color}">\${rate}%</div>
+            </div>
+            <div style="font-size:11px;color:var(--ink3);margin:-4px 0 8px 108px;">\${c.plays} plays · \${c.satisfied} satisfied · \${c.skipped} skipped</div>\`;
+          }).join('');
+        } else {
+          document.getElementById('intel-calibration').innerHTML = '<div class="status-msg">No session data yet.</div>';
+        }
+
+        // Signal effectiveness
+        const sigs = (data.signals || []).filter(s => s.tracks > 0).sort((a, b) => b.hitRate - a.hitRate);
+        if (sigs.length > 0) {
+          document.getElementById('intel-signals').innerHTML = sigs.map(s => {
+            const color = s.hitRate >= 70 ? 'var(--accent)' : s.hitRate >= 50 ? 'var(--accent3)' : 'var(--accent2)';
+            return \`<div class="signal-row">
+              <div class="signal-name">\${esc(s.signal)}<br><span style="font-size:11px;color:var(--ink3)">\${s.tracks} tracks</span></div>
+              <div class="signal-bar"><div class="signal-bar-fill" style="width:\${s.hitRate}%;background:\${color};"></div></div>
+              <div class="signal-pct" style="color:\${color}">\${s.hitRate}%</div>
+            </div>\`;
+          }).join('');
+        } else {
+          document.getElementById('intel-signals').innerHTML = '<div class="status-msg">No signal data yet.</div>';
+        }
+
+        // Agent wins
+        const wins = data.wins || [];
+        if (wins.length > 0) {
+          document.getElementById('intel-wins').innerHTML = wins.map((w, i) => {
+            const replayBadge = w.outcome === 'replayed' ? '<span class="badge" style="background:var(--accent5);color:#000;margin-left:6px;">replayed</span>' : '';
+            const isFresh = (w.source || '').startsWith('fresh:');
+            const freshBadge = isFresh ? '<span class="badge" style="background:var(--accent4);color:#000;margin-left:6px;">discovery</span>' : '';
+            const signalPills = (w.signals || []).map(s => \`<span class="win-signal">\${s}</span>\`).join('');
+            return \`<div class="row">
+              <div class="rank">\${i + 1}</div>
+              <div class="title">
+                \${trackLinkWithId(w.track, w.artist, w.trackId)}\${replayBadge}\${freshBadge}
+                <div class="sub">\${esc(w.artist)} · \${w.mode} · \${w.date}</div>
+                \${signalPills ? \`<div class="win-signals">\${signalPills}</div>\` : ''}
+              </div>
+              <div class="val">\${w.tasteScore != null ? w.tasteScore : '--'}</div>
+            </div>\`;
+          }).join('');
+        } else {
+          document.getElementById('intel-wins').innerHTML = '<div class="status-msg">No agent wins yet. Start a session!</div>';
+        }
+
+        // Discovery pipeline
+        const disc = data.discovery || [];
+        if (disc.length > 0) {
+          document.getElementById('intel-discovery').innerHTML = disc.map(d => {
+            const engageRate = (d.engaged + d.liked) > 0 && d.total > 0
+              ? Math.round(((d.engaged || 0) / d.total) * 100) : 0;
+            const likeRate = d.liked > 0 && (d.liked + d.skipped) > 0
+              ? Math.round((d.liked / (d.liked + d.skipped)) * 100) : null;
+            const color = engageRate >= 30 ? 'var(--accent)' : engageRate >= 10 ? 'var(--accent3)' : 'var(--ink3)';
+            return \`<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-size:14px;font-weight:600;">\${esc(d.source_label)}</div>
+                <div style="font-size:13px;color:var(--ink3)">\${d.total} tracks · avg \${d.avg_score}</div>
+              </div>
+              <div style="display:flex;gap:12px;margin-top:4px;font-size:12px;">
+                <span style="color:var(--accent)">\${d.fresh || 0} fresh</span>
+                <span style="color:var(--accent3)">\${d.liked || 0} liked</span>
+                <span style="color:var(--accent2)">\${d.skipped || 0} skipped</span>
+                \${likeRate != null ? \`<span style="color:var(--ink2)">Like rate: \${likeRate}%</span>\` : ''}
+              </div>
+            </div>\`;
+          }).join('');
+        } else {
+          document.getElementById('intel-discovery').innerHTML = '<div class="status-msg">No discovery data yet.</div>';
+        }
+
+        // Model maturity
+        const acoustic = data.acoustic || [];
+        const context = data.context || [];
+        let maturityHtml = '';
+        if (acoustic.length > 0) {
+          const curatedModes = ['sleeping', 'waking_up', 'unwinding', 'driving', 'brainstorming'];
+          const curatedVibes = {
+            sleeping: 'Calm, quiet, slow',
+            waking_up: 'Empowering, energizing',
+            unwinding: 'Relaxing, chill',
+            driving: 'Sing-along energy',
+            brainstorming: 'Contemplative, thought-provoking',
+          };
+          maturityHtml += '<div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">ACOUSTIC PROFILES</div>';
+          // Show curated overrides first
+          curatedModes.forEach(m => {
+            maturityHtml += \`<div class="bar-h" style="margin-bottom:4px;">
+              <div class="bar-h-label" style="min-width:100px;font-size:12px;">\${m.replace(/_/g, ' ')}</div>
+              <div class="bar-h-track" style="height:12px;"><div class="bar-h-fill" style="width:100%;background:var(--accent4);height:12px;"></div></div>
+              <div style="font-size:11px;color:var(--accent4);min-width:70px;text-align:right;">Curated</div>
+            </div>
+            <div style="font-size:11px;color:var(--ink3);margin:-2px 0 6px 104px;">\${curatedVibes[m] || ''}</div>\`;
+          });
+          // Show learned profiles (non-overridden)
+          maturityHtml += acoustic.filter(a => !curatedModes.includes(a.mode)).map(a => {
+            const status = (a.min_samples || 0) >= 10 ? 'Trained' : (a.min_samples || 0) >= 5 ? 'Partial' : 'Learning';
+            const color = status === 'Trained' ? 'var(--accent)' : status === 'Partial' ? 'var(--accent3)' : 'var(--accent2)';
+            const pct = Math.min(100, Math.round(((a.avg_samples || 0) / 50) * 100));
+            return \`<div class="bar-h" style="margin-bottom:4px;">
+              <div class="bar-h-label" style="min-width:100px;font-size:12px;">\${esc(a.mode)}</div>
+              <div class="bar-h-track" style="height:12px;"><div class="bar-h-fill" style="width:\${pct}%;background:\${color};height:12px;"></div></div>
+              <div style="font-size:11px;color:\${color};min-width:70px;text-align:right;">\${status} (\${a.avg_samples || 0})</div>
+            </div>\`;
+          }).join('');
+        }
+        if (context.length > 0) {
+          maturityHtml += '<div style="font-size:12px;color:var(--ink3);margin:12px 0 8px;">CONTEXT DIMENSIONS</div>';
+          maturityHtml += context.map(c => {
+            const trained = c.trained_buckets || 0;
+            const total = c.total_buckets || 1;
+            const pct = Math.round((trained / total) * 100);
+            const color = pct >= 70 ? 'var(--accent)' : pct >= 40 ? 'var(--accent3)' : 'var(--accent2)';
+            const label = esc(c.dimension).replace(/_/g, ' ');
+            let html = \`<div class="bar-h" style="margin-bottom:4px;">
+              <div class="bar-h-label" style="min-width:100px;font-size:12px;">\${label}</div>
+              <div class="bar-h-track" style="height:12px;"><div class="bar-h-fill" style="width:\${pct}%;background:\${color};height:12px;"></div></div>
+              <div style="font-size:11px;color:\${color};min-width:90px;text-align:right;">\${trained}/\${total} buckets (\${pct}%)</div>
+            </div>\`;
+            if (c.buckets && c.buckets.length > 0) {
+              html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 8px 104px;">';
+              html += c.buckets.map(b => {
+                return \`<span style="font-size:11px;background:var(--surface);padding:2px 8px;border-radius:8px;color:var(--ink2);">\${esc(b.bucket)} <b style="color:var(--accent)">\${(b.plays || 0).toLocaleString()}</b></span>\`;
+              }).join('');
+              html += '</div>';
+            }
+            return html;
+          }).join('');
+        }
+        document.getElementById('intel-maturity').innerHTML = maturityHtml || '<div class="status-msg">No model data yet.</div>';
+
+      } catch (e) {
+        document.getElementById('intel-health').innerHTML = \`<div class="status-msg error" style="grid-column:1/-1;">\${e.message}</div>\`;
+      }
+    }
+
+    // ── Discover Tab ──
+    // Store discover source track lists for queue-remaining-on-play
+    let _discoverSources = [];
+
+    function discoverTrackLink(name, artist, trackId, sourceIdx, trackIdx) {
+      const safeName = esc(name).replace(/'/g, "\\\\'");
+      const safeId = esc(trackId).replace(/'/g, "\\\\'");
+      return \`<a ontouchstart="discoverPressStart(event,'\${safeId}','\${safeName}',\${sourceIdx},\${trackIdx})"
+        ontouchend="discoverPressEnd(event)" ontouchcancel="discoverPressCancel()"
+        onmousedown="discoverPressStart(event,'\${safeId}','\${safeName}',\${sourceIdx},\${trackIdx})"
+        onmouseup="discoverPressEnd(event)" onmouseleave="discoverPressCancel()"
+        oncontextmenu="return false">\${esc(name)}</a>\`;
+    }
+
+    let _discPressTimer = null;
+    let _discPressData = null;
+    let _discPressTriggered = false;
+    let _discUsedTouch = false;
+
+    function discoverPressStart(e, trackId, name, sourceIdx, trackIdx) {
+      if (e.type === 'touchstart') { _discUsedTouch = true; }
+      if (e.type === 'mousedown' && _discUsedTouch) { _discUsedTouch = false; return; }
+      e.preventDefault();
+      if (_discPressData) return;
+      _discPressTriggered = false;
+      _discPressData = { trackId, name, sourceIdx, trackIdx };
+      _discPressTimer = setTimeout(() => {
+        _discPressTriggered = true;
+        // Long press: queue just this one track
+        doTrackIdQueue(trackId, name);
+        _discPressData = null;
+      }, LONG_PRESS_MS);
+    }
+
+    function discoverPressEnd(e) {
+      if (e.type === 'mouseup' && _discUsedTouch) return;
+      e.preventDefault();
+      clearTimeout(_discPressTimer);
+      if (!_discPressTriggered && _discPressData) {
+        const d = _discPressData;
+        _discPressData = null;
+        playDiscoverTrack(d.trackId, d.name, d.sourceIdx, d.trackIdx);
+      } else {
+        _discPressData = null;
+      }
+    }
+
+    function discoverPressCancel() {
+      clearTimeout(_discPressTimer);
+      _discPressData = null;
+      _discPressTriggered = false;
+    }
+
+    async function playDiscoverTrack(trackId, name, sourceIdx, trackIdx) {
+      if (_playInFlight) return;
+      _playInFlight = true;
+      showToast('Playing...');
+      try {
+        await apiPost('/api/play-track', { track_id: trackId });
+        showToast('\\u25B6 ' + name);
+        // Queue remaining tracks from this source
+        const source = _discoverSources[sourceIdx];
+        if (source && source.tracks) {
+          const remaining = source.tracks.slice(trackIdx + 1);
+          if (remaining.length > 0) {
+            showToast(\`\\u25B6 \${name} + queuing \${remaining.length} more\`);
+            for (const t of remaining) {
+              try {
+                await apiPost('/api/queue-track', { track_id: t.trackId });
+              } catch { /* skip failed queues */ }
+            }
+          }
+        }
+      } catch (e) { showToast('Error: ' + e.message); }
+      setTimeout(() => { _playInFlight = false; }, 1000);
+    }
+
+    async function loadDiscover() {
+      discoverLoaded = true;
+      try {
+        const data = await api('/api/listening/discover');
+
+        // Stats bar
+        const statsEl = document.getElementById('discover-stats');
+        if (data.stats) {
+          const s = data.stats;
+          statsEl.innerHTML = \`
+            <div class="detail-stats" style="grid-template-columns:repeat(5,1fr);">
+              <div class="km"><div class="v">\${s.total || 0}</div><div class="l">Total</div></div>
+              <div class="km"><div class="v" style="color:var(--accent)">\${s.fresh || 0}</div><div class="l">Fresh</div></div>
+              <div class="km"><div class="v">\${s.played || 0}</div><div class="l">Played</div></div>
+              <div class="km"><div class="v" style="color:var(--accent3)">\${s.liked || 0}</div><div class="l">Liked</div></div>
+              <div class="km"><div class="v" style="color:var(--accent2)">\${s.skipped || 0}</div><div class="l">Skipped</div></div>
+            </div>\`;
+        }
+
+        // Source groups
+        const sourcesEl = document.getElementById('discover-sources');
+        if (!data.sources || data.sources.length === 0) {
+          sourcesEl.innerHTML = '<div class="status-msg">No discoveries yet. The agent runs daily at 6am ET.</div>';
+          return;
+        }
+
+        // Sort: editorial sources first, then artist-based
+        const editorial = ['Editorial RSS', 'Hype Machine', 'Gorilla vs Bear', 'Aquarium Drunkard', 'Last.fm Similar'];
+        data.sources.sort((a, b) => {
+          const aEd = editorial.includes(a.label) ? 0 : 1;
+          const bEd = editorial.includes(b.label) ? 0 : 1;
+          if (aEd !== bEd) return aEd - bEd;
+          return b.tracks.length - a.tracks.length;
+        });
+
+        // Store sources for queue-remaining-on-play
+        _discoverSources = data.sources;
+
+        sourcesEl.innerHTML = data.sources.map((group, sourceIdx) => {
+          const freshTracks = group.tracks.filter(t => t.status === 'fresh');
+          const playedTracks = group.tracks.filter(t => t.status !== 'fresh');
+          const isEditorial = editorial.includes(group.label);
+          const icon = isEditorial ? '📡' : '🎵';
+
+          let html = \`<div class="card" style="border-left:3px solid \${group.color};">\`;
+          html += \`<div class="card-header">
+            <h2 style="font-size:14px;">\${icon} \${esc(group.label)}</h2>
+            <span class="source-tag">\${group.tracks.length} tracks</span>
+          </div>\`;
+
+          if (group.tracks.length === 0) {
+            html += '<div class="status-msg">No tracks from this source yet.</div>';
+          } else {
+            // Show fresh tracks first, then played/liked
+            const allTracks = [...freshTracks, ...playedTracks];
+            // Map allTracks indices back to group.tracks indices for queue-remaining
+            const groupTrackIds = group.tracks.map(t => t.trackId);
+            html += allTracks.map((t, i) => {
+              const groupIdx = groupTrackIds.indexOf(t.trackId);
+              const statusBadge = t.status === 'liked'
+                ? '<span class="badge" style="background:var(--accent3);color:#000;margin-left:6px;">liked</span>'
+                : t.status === 'played'
+                ? '<span class="badge badge-completed" style="margin-left:6px;">played</span>'
+                : '';
+              const detail = t.sourceDetail && t.sourceDetail !== group.label
+                ? \`<span style="color:var(--ink3);font-size:11px;margin-left:6px;">via \${esc(t.sourceDetail)}</span>\`
+                : '';
+              const scoreColor = t.tasteScore >= 5 ? 'var(--accent)' : t.tasteScore >= 2 ? 'var(--ink2)' : 'var(--ink3)';
+              return \`<div class="row">
+                <div class="rank" style="color:var(--ink3)">\${i + 1}</div>
+                <div class="title">
+                  \${discoverTrackLink(t.track, t.artist, t.trackId, sourceIdx, groupIdx >= 0 ? groupIdx : i)}\${statusBadge}
+                  <div class="sub">\${esc(t.artist)}\${detail}</div>
+                </div>
+                <div class="val" style="color:\${scoreColor}">\${t.tasteScore}</div>
+              </div>\`;
+            }).join('');
+          }
+
+          html += '</div>';
+          return html;
+        }).join('');
+
+      } catch (e) {
+        document.getElementById('discover-sources').innerHTML = \`<div class="status-msg error">\${e.message}</div>\`;
+      }
+    }
+
+    async function loadTrends() {
+      trendsLoaded = true;
+      try {
+        const data = await api('/api/listening/trends');
+
+        // Skip Rate by Quarter (line chart)
+        if (data.skipRateByQuarter && data.skipRateByQuarter.length > 0) {
+          renderLineChart('chart-skip', data.skipRateByQuarter, 'quarter', 'rate',
+            v => v.toFixed(1) + '%', (item) => \`<b>\${item.quarter}</b>: \${item.rate.toFixed(1)}%\`,
+            'var(--accent)', 200);
+        }
+
+        // Discovery by Year (bar chart)
+        if (data.discoveryByYear && data.discoveryByYear.length > 0) {
+          renderBarChart('chart-discovery', data.discoveryByYear, 'year', 'newTracks',
+            (item) => \`<b>\${item.year}</b>: \${(item.newTracks || 0).toLocaleString()} new tracks\`,
+            'var(--accent5)', 200);
+        }
+
+        // Concentration by Year (line chart)
+        if (data.concentrationByYear && data.concentrationByYear.length > 0) {
+          renderLineChart('chart-concentration', data.concentrationByYear, 'year', 'top100Share',
+            v => v.toFixed(1) + '%', (item) => \`<b>\${item.year}</b>: \${item.top100Share.toFixed(1)}% in top 100\`,
+            'var(--accent4)', 200);
+        }
+
+        // Hour of Day (polar chart)
+        if (data.hourlyDistribution && data.hourlyDistribution.length > 0) {
+          renderPolarChart('chart-hourly', data.hourlyDistribution);
+        }
+
+      } catch (e) {
+        ['chart-skip', 'chart-discovery', 'chart-concentration', 'chart-hourly'].forEach(id => {
+          document.getElementById(id).innerHTML = \`<div class="status-msg error">\${e.message}</div>\`;
+        });
+      }
+    }
+
+    function renderLineChart(containerId, points, xKey, yKey, yFmt, tipFn, color, height) {
+      const el = document.getElementById(containerId);
+      const w = 400, h = height, pad = 30;
+      const n = points.length;
+      if (n < 2) { el.innerHTML = '<div class="status-msg">Insufficient data</div>'; return; }
+      const vals = points.map(p => p[yKey]);
+      const min = Math.min(...vals);
+      const max = Math.max(...vals);
+      const range = max - min || 1;
+
+      const scaleX = i => pad + (i / (n - 1)) * (w - pad * 2);
+      const scaleY = v => h - pad - ((v - min) / range) * (h - pad * 2);
+
+      const pathD = points.map((p, i) => \`\${i === 0 ? 'M' : 'L'}\${scaleX(i).toFixed(1)},\${scaleY(p[yKey]).toFixed(1)}\`).join(' ');
+
+      let svg = \`<svg viewBox="0 0 \${w} \${h}" style="height:\${h}px;">\`;
+      svg += \`<polyline points="\${points.map((p, i) => \`\${scaleX(i).toFixed(1)},\${scaleY(p[yKey]).toFixed(1)}\`).join(' ')}" fill="none" stroke="\${color}" stroke-width="2"/>\`;
+      points.forEach((p, i) => {
+        svg += \`<circle cx="\${scaleX(i).toFixed(1)}" cy="\${scaleY(p[yKey]).toFixed(1)}" r="3" fill="\${color}"
+          onmouseover="showTip(event, '\${tipFn(p)}')" onmouseout="hideTip()"/>\`;
+      });
+      svg += '</svg>';
+      el.innerHTML = svg;
+    }
+
+    function renderBarChart(containerId, items, xKey, yKey, tipFn, color, height) {
+      const el = document.getElementById(containerId);
+      const w = 400, h = height, pad = 30;
+      const n = items.length;
+      if (n === 0) { el.innerHTML = '<div class="status-msg">No data</div>'; return; }
+      const max = Math.max(...items.map(d => d[yKey]));
+      if (max === 0) { el.innerHTML = '<div class="status-msg">No data</div>'; return; }
+      const barW = Math.max(6, (w - pad * 2) / n - 3);
+      const gap = 3;
+
+      let svg = \`<svg viewBox="0 0 \${w} \${h + 16}" style="height:\${h + 16}px;">\`;
+      items.forEach((d, i) => {
+        const barH = (d[yKey] / max) * (h - pad);
+        const x = pad + i * (barW + gap);
+        const y = h - barH;
+        const fill = d[yKey] === max ? '#84e9a8' : color;
+        svg += \`<rect x="\${x}" y="\${y}" width="\${barW}" height="\${barH}" fill="\${fill}" rx="2"
+          onmouseover="showTip(event, '\${tipFn(d)}')" onmouseout="hideTip()"/>\`;
+        const label = String(d[xKey]).slice(-2);
+        svg += \`<text x="\${x + barW / 2}" y="\${h + 12}" text-anchor="middle" fill="#777" font-size="9">\${label}</text>\`;
+      });
+      svg += '</svg>';
+      el.innerHTML = svg;
+    }
+
+    function renderPolarChart(containerId, hourly) {
+      const el = document.getElementById(containerId);
+      const size = 280, cx = size / 2, cy = size / 2, maxR = size / 2 - 30;
+      const max = Math.max(...hourly.map(h => h.plays));
+      if (max === 0) { el.innerHTML = '<div class="status-msg">No data</div>'; return; }
+
+      let svg = \`<svg viewBox="0 0 \${size} \${size}" style="height:\${size}px;">\`;
+      // Background circles
+      [0.25, 0.5, 0.75, 1].forEach(f => {
+        svg += \`<circle cx="\${cx}" cy="\${cy}" r="\${maxR * f}" fill="none" stroke="#1a1a1a" stroke-width="1"/>\`;
+      });
+
+      hourly.forEach(h => {
+        const angle = (h.hour / 24) * Math.PI * 2 - Math.PI / 2;
+        const r = (h.plays / max) * maxR;
+        const barAngle = Math.PI / 13; // bar width
+        const x1 = cx + Math.cos(angle - barAngle) * 12;
+        const y1 = cy + Math.sin(angle - barAngle) * 12;
+        const x2 = cx + Math.cos(angle - barAngle) * r;
+        const y2 = cy + Math.sin(angle - barAngle) * r;
+        const x3 = cx + Math.cos(angle + barAngle) * r;
+        const y3 = cy + Math.sin(angle + barAngle) * r;
+        const x4 = cx + Math.cos(angle + barAngle) * 12;
+        const y4 = cy + Math.sin(angle + barAngle) * 12;
+
+        let fill;
+        if (h.hour >= 0 && h.hour <= 5) fill = '#282828';
+        else if (h.hour >= 6 && h.hour <= 10) fill = 'var(--accent3)';
+        else if (h.hour >= 11 && h.hour <= 17) fill = 'var(--accent)';
+        else fill = 'var(--accent4)';
+
+        svg += \`<path d="M\${x1},\${y1} L\${x2},\${y2} L\${x3},\${y3} L\${x4},\${y4} Z" fill="\${fill}" opacity="0.8"
+          onmouseover="showTip(event, '<b>\${h.hour > 12 ? (h.hour - 12) + ' PM' : h.hour === 0 ? '12 AM' : h.hour === 12 ? '12 PM' : h.hour + ' AM'} ET</b>: \${h.plays.toLocaleString()} plays')"
+          onmouseout="hideTip()"/>\`;
+
+        // Hour labels
+        const labelR = maxR + 14;
+        const lx = cx + Math.cos(angle) * labelR;
+        const ly = cy + Math.sin(angle) * labelR;
+        if (h.hour % 3 === 0) {
+          const label = h.hour === 0 ? '12a' : h.hour === 12 ? '12p' : h.hour > 12 ? (h.hour - 12) + 'p' : h.hour + 'a';
+          svg += \`<text x="\${lx}" y="\${ly}" text-anchor="middle" dominant-baseline="middle" fill="#555" font-size="9">\${label}</text>\`;
+        }
+      });
+      svg += '</svg>';
+      el.innerHTML = svg;
+    }
+
+    // ── Phased initial load ──
+    // Phase 1: critical above-the-fold (immediate)
+    loadNowPlaying();
+    loadHero();
+
+    // Phase 2: pulse data (after 100ms — gives phase 1 time to render)
+    setTimeout(() => {
+      loadPulse();
+    }, 100);
+
+    // Phase 3: secondary live sections (after 500ms)
+    setTimeout(() => {
+      loadContext();
+      loadStats();
+    }, 500);
+
+    // Phase 4: below-the-fold sections (after 1s)
+    setTimeout(() => {
+      loadExplanation();
+      loadHistory();
+      loadAffinities();
+      loadFreshPool();
+    }, 1000);
+
+    // Background: sync recent plays, then refresh hero
+    setTimeout(() => {
+      apiPost('/api/listening/sync', {}).then(() => loadHero()).catch(() => {});
+    }, 2000);
+
+    setInterval(loadNowPlaying, 5000);
+    setInterval(loadHero, 60000);
+  </script>
+</body>
+</html>
+`;
