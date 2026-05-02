@@ -237,8 +237,10 @@ export async function getArtistDetail(
   const topTracks = await db.prepare(topTracksSQL).bind(artistName)
     .all<{ track_name: string; plays: number; last_ts: number }>();
 
-  // Companions from embedded JSON
-  const companionMap = companionsData as Record<string, [string, number][]>;
+  // Companions from embedded JSON. The static companions.json type widens
+  // to (string|number)[][] under the JSON resolver; cast through unknown
+  // to match the structural shape we know it has.
+  const companionMap = companionsData as unknown as Record<string, [string, number][]>;
   const companions: { artist: string; count: number }[] = [];
   // Check case-insensitive
   for (const [key, value] of Object.entries(companionMap)) {

@@ -1427,7 +1427,7 @@ export default `<!DOCTYPE html>
           const queueList = document.getElementById('np-queue-list');
           if (data.up_next && data.up_next.length > 0) {
             queueList.innerHTML = data.up_next.map(t =>
-              \`<div style="font-size:13px;padding:2px 0;"><span style="color:var(--ink);">\${t.track_name}</span> <span style="color:var(--ink3);">— \${t.artist_name}</span></div>\`
+              \`<div style="font-size:13px;padding:2px 0;">\${trackLinkWithId(t.track_name, t.artist_name, t.track_id)}</div>\`
             ).join('');
             queueEl.style.display = '';
           } else {
@@ -1515,7 +1515,7 @@ export default `<!DOCTYPE html>
             fitTag = \`<span class="\${fitCls}">\\u266B \${t.acousticFitNote} (\${t.acousticFit.toFixed(2)}x)</span>\`;
           }
           const outcomeStr = t.outcome ? \` <span class="badge badge-\${t.outcome}">\${t.outcome}</span>\` : '';
-          return \`<tr><td style="color:var(--ink2);">\${t.position}</td><td>\${t.trackName}\${outcomeStr}</td><td>\${tags}\${fitTag}</td></tr>\`;
+          return \`<tr><td style="color:var(--ink2);">\${t.position}</td><td>\${trackLinkWithId(t.trackName, '', t.trackId)}\${outcomeStr}</td><td>\${tags}\${fitTag}</td></tr>\`;
         }).join('');
         html += '</table>';
         document.getElementById('explain-content').innerHTML = html;
@@ -1595,7 +1595,7 @@ export default `<!DOCTYPE html>
           html += \`<div style="font-weight:600;margin-bottom:4px;"><span class="reason-tag context">\${b.bucket}</span> <span style="color:var(--ink2);font-size:12px;">\${b.dimension.replace(/_/g, ' ')}</span></div>\`;
           html += '<table><tr><th>Track</th><th>Affinity</th><th>Plays</th></tr>';
           html += b.tracks.map(t =>
-            \`<tr><td>\${t.trackName}</td><td class="score">\${t.affinity.toFixed(2)}x</td><td style="color:var(--ink2);">\${t.sampleSize}</td></tr>\`
+            \`<tr><td>\${trackLinkWithId(t.trackName, '', t.trackId)}</td><td class="score">\${t.affinity.toFixed(2)}x</td><td style="color:var(--ink2);">\${t.sampleSize}</td></tr>\`
           ).join('');
           html += '</table></div>';
         }
@@ -1635,7 +1635,7 @@ export default `<!DOCTYPE html>
               else if (t.source.startsWith('rss:')) srcLabel = t.source.replace('rss:', '').replace(/_/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase());
               else srcLabel = t.source;
             }
-            return \`<tr><td>\${t.track_name}\${artistLine}</td><td><span class="source-tag">\${srcLabel}</span></td><td class="score">\${t.taste_score.toFixed(1)}</td><td><button class="queue-btn" onclick="queueTrack(this, '\${t.track_id}')">+ Queue</button></td></tr>\`;
+            return \`<tr><td>\${trackLinkWithId(t.track_name, artist, t.track_id)}</td><td><span class="source-tag">\${srcLabel}</span></td><td class="score">\${t.taste_score.toFixed(1)}</td><td><button class="queue-btn" onclick="queueTrack(this, '\${t.track_id}')">+ Queue</button></td></tr>\`;
           }).join('');
           html += '</table>';
         }
@@ -1739,12 +1739,12 @@ export default `<!DOCTYPE html>
         html += events.map(e => {
           const time = new Date(e.started_at * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
           const name = e.track_name || e.track_id;
-          const artist = e.primary_artist_name ? \`<span class="track-artist">\${e.primary_artist_name}</span>\` : '';
+          const artist = e.primary_artist_name || '';
           const score = e.taste_score != null ? e.taste_score.toFixed(1) : '\\u2014';
           const src = getPlaySource(e);
           return \`<tr>
             <td class="history-time">\${time}</td>
-            <td>\${name}\${artist ? '<br>' + artist : ''}</td>
+            <td>\${trackLinkWithId(name, artist, e.track_id)}</td>
             <td><span class="source-tag \${src.cls}">\${src.label}</span></td>
             <td><span class="badge \${badgeClass(e.classification)}">\${e.classification}</span></td>
             <td class="score">\${score}</td>
@@ -1790,7 +1790,7 @@ export default `<!DOCTYPE html>
               result.tracks.map((t, i) => {
                 const isFresh = t.source.includes('fresh');
                 const tag = isFresh ? '<span class="source-tag" style="background:var(--accent);color:#000;">Fresh</span>' : '<span class="source-tag">Familiar</span>';
-                return \`<tr><td style="color:var(--ink2);width:30px;">\${i + 1}</td><td>\${t.name}</td><td>\${tag}</td></tr>\`;
+                return \`<tr><td style="color:var(--ink2);width:30px;">\${i + 1}</td><td>\${trackLinkWithId(t.name, '', t.id)}</td><td>\${tag}</td></tr>\`;
               }).join('') + '</table>';
           } else {
             queueDiv.style.display = 'none';

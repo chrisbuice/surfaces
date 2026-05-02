@@ -141,6 +141,24 @@ CREATE TABLE IF NOT EXISTS seasonal_playlists (
 CREATE INDEX IF NOT EXISTS idx_seasonal_year ON seasonal_playlists(year DESC);
 
 -- =========================================================
+-- PLAYLIST TRACKS (M21 — persisted track membership per playlist)
+-- =========================================================
+-- Populated from every owned playlist via embed-scrape; used by the
+-- constellation cron to compute pair-level playlist co-occurrence.
+-- See src/db/migrations/005_playlist_tracks.sql for the full rationale.
+CREATE TABLE IF NOT EXISTS playlist_tracks (
+  playlist_id TEXT NOT NULL,
+  track_id TEXT NOT NULL,
+  track_name TEXT NOT NULL,
+  artist_name TEXT NOT NULL,
+  position INTEGER,
+  synced_at INTEGER NOT NULL,
+  PRIMARY KEY (playlist_id, track_id)
+);
+CREATE INDEX IF NOT EXISTS idx_playlist_tracks_track ON playlist_tracks(track_id);
+CREATE INDEX IF NOT EXISTS idx_playlist_tracks_artist ON playlist_tracks(artist_name);
+
+-- =========================================================
 -- PHYSICAL CONTEXT
 -- =========================================================
 CREATE TABLE IF NOT EXISTS context_snapshots (
@@ -300,3 +318,20 @@ CREATE TABLE IF NOT EXISTS acoustic_profile (
   refreshed_at INTEGER NOT NULL,
   PRIMARY KEY (mode, dimension)
 );
+
+-- =========================================================
+-- SUBMISSIONS (M22 — visitor track recommendations)
+-- =========================================================
+-- Insert-only log. Written by POST /api/submit-track; read by the
+-- nightly summary cron, which marks rows 'notified' after the digest
+-- email goes out. See src/db/migrations/006_submissions.sql.
+CREATE TABLE IF NOT EXISTS submissions (
+  id INTEGER PRIMARY KEY,
+  track_id TEXT NOT NULL,
+  submitter_name TEXT,
+  note TEXT,
+  submitted_at INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'new'
+);
+CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions(status);
+CREATE INDEX IF NOT EXISTS idx_submissions_submitted_at ON submissions(submitted_at);

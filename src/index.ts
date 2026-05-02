@@ -20,6 +20,11 @@ export interface Env {
   SHORTCUT_TOKEN: string;
   RESEND_API_KEY: string;
   LASTFM_API_KEY?: string;
+  // Shared secret for POST /api/submit-track. chrisbuice.com's Pages
+  // Function adds it as the X-Surfaces-Secret header; this worker
+  // verifies it before accepting a submission. Optional in dev — when
+  // unset, the endpoint refuses submissions outright.
+  SURFACES_SECRET?: string;
 }
 
 export default {
@@ -198,6 +203,103 @@ export default {
           }
         }
 
+        case "/api/constellation": {
+          // Public, CORS-permissive (handled by addCors below). Reads the
+          // nightly-rebuilt JSON blob from KV — the cron is the only writer.
+          // Spec §7.2: 1h browser cache, 26h KV TTL on the underlying value.
+          // Renderer-side contract (spec §8.5): a 404 or malformed JSON
+          // means the renderer hides the constellation section gracefully.
+          if (request.method !== "GET") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          const { KV_KEY } = await import("./constellation/cron");
+          const cached = await env.KV.get(KV_KEY);
+          if (!cached) {
+            return new Response(
+              JSON.stringify({ error: "constellation not yet generated" }),
+              {
+                status: 404,
+                headers: {
+                  "Content-Type": "application/json; charset=utf-8",
+                  "Cache-Control": "no-store",
+                },
+              },
+            );
+          }
+          return new Response(cached, {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "public, max-age=3600",
+            },
+          });
+        }
+
+        case "/api/submit-track": {
+          // Spec §7.3. Public endpoint, but auth-gated via X-Surfaces-Secret
+          // (chrisbuice.com's Pages Function attaches it). Insert-only.
+          // Behavior: never show an error to the submitter — even on D1
+          // failure we return a friendly 200 with a "queued" body so the
+          // chrisbuice.com page can always show success.
+          if (request.method !== "POST") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          if (!env.SURFACES_SECRET) {
+            // Refuse outright when unconfigured rather than accepting
+            // unauthenticated traffic. Avoids accidentally-public POSTs.
+            return new Response("Endpoint not configured", { status: 503 });
+          }
+          const headerSecret = request.headers.get("X-Surfaces-Secret");
+          if (headerSecret !== env.SURFACES_SECRET) {
+            return new Response("Unauthorized", { status: 401 });
+          }
+
+          let parsed: { track_id?: unknown; from?: unknown; note?: unknown };
+          try {
+            parsed = await request.json();
+          } catch {
+            return new Response("Invalid JSON", { status: 400 });
+          }
+
+          const rawTrack = typeof parsed.track_id === "string" ? parsed.track_id : "";
+          const { canonicalizeTrackId, insertSubmission } = await import("./submissions/queries");
+          const trackId = canonicalizeTrackId(rawTrack);
+          if (!trackId) {
+            return new Response("Invalid track_id", { status: 400 });
+          }
+
+          // Optional fields are trimmed, capped at sane lengths, and
+          // collapsed to null when empty so the digest renders cleanly.
+          const trimmedFrom = typeof parsed.from === "string"
+            ? parsed.from.trim().slice(0, 80) : "";
+          const trimmedNote = typeof parsed.note === "string"
+            ? parsed.note.trim().slice(0, 300) : "";
+
+          try {
+            const id = await insertSubmission(env.DB, {
+              track_id: trackId,
+              submitter_name: trimmedFrom || null,
+              note: trimmedNote || null,
+            });
+            return Response.json({
+              ok: true,
+              id,
+              message: "Added to the discovery pool — I'll see it next time I run a session.",
+            });
+          } catch (err) {
+            // Per spec §7.3 failure mode: never show an error to a
+            // submitter. Log the underlying error for our own visibility,
+            // return a friendly 200 so the chrisbuice.com page always
+            // shows success.
+            console.error(`submissions: insert failed: ${err}`);
+            return Response.json({
+              ok: true,
+              queued: true,
+              message: "Got it — queued, try again later if you don't see it surface.",
+            });
+          }
+        }
+
         case "/debug/recent-observations": {
           const obs = await getRecentPollObservations(env.DB, 20);
           return Response.json(obs);
@@ -217,6 +319,18 @@ export default {
           const spotify = new SpotifyClient(env);
           const result = await rebuildTasteModel(env.DB, spotify);
           return Response.json(result);
+        }
+
+        case "/debug/rebuild-constellation": {
+          // One-shot trigger for the nightly constellation cron. Same code
+          // path as the 6am ET scheduled run — runs the playlist sync, the
+          // three SQL phases, layout, labeled-8, and writes to KV. Use this
+          // to seed /api/constellation outside the cron window (e.g. right
+          // after deploy so the endpoint doesn't 404 until tomorrow).
+          const spotify = new SpotifyClient(env);
+          const { runConstellationCron } = await import("./constellation/cron");
+          const summary = await runConstellationCron(env.DB, spotify, env.KV);
+          return Response.json(summary);
         }
 
         case "/debug/top-tracks-by-score": {
@@ -516,6 +630,7 @@ export default {
 
             explanations.push({
               position: st.position + 1,
+              trackId: st.track_id,
               trackName,
               source: st.source,
               outcome: st.outcome,
@@ -1746,13 +1861,42 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
       const { rebuildAcousticProfile } = await import("./audio/profile");
       await rebuildAcousticProfile(env.DB);
 
+      // Promote yesterday's submitted tracks (status='notified', already
+      // surfaced in the digest email) into fresh_pool. Runs after the
+      // taste/audio rebuild so the curation engine sees them on the very
+      // next session. Failures are logged but never raise — submissions
+      // are non-critical to the rest of the nightly chain.
+      try {
+        const { syncSubmissionsToFreshPool } = await import("./submissions/fresh_pool_sync");
+        const subResult = await syncSubmissionsToFreshPool(env.DB, spotify);
+        if (subResult.candidates > 0) {
+          console.log(
+            `submissions: synced ${subResult.added} added, ` +
+            `${subResult.already_present} already present, ${subResult.rejected} rejected`,
+          );
+        }
+      } catch (err) {
+        console.error(`submissions: fresh_pool sync failed: ${err}`);
+      }
+
       await pruneOldObservations(env.DB, 30 * 24 * 60 * 60);
     }
 
     if (cron === "0 10 * * *") {
-      // Daily at 10am UTC (6am ET): run discovery agent
+      // Daily at 10am UTC (6am ET): discovery agent, then constellation rebuild.
+      // Both run after the 1am ET taste rebuild + audio backfill so they see
+      // the freshest artist_taste data. The constellation runs after discovery
+      // so a future change that has discovery write artist rows still flows in.
       const spotify = new SpotifyClient(env);
       await runDiscoveryAgent(env.DB, spotify, undefined, env.LASTFM_API_KEY);
+
+      const { runConstellationCron } = await import("./constellation/cron");
+      try {
+        const summary = await runConstellationCron(env.DB, spotify, env.KV);
+        console.log(`constellation: rebuilt — ${summary.nodes} nodes, ${summary.edges} edges`);
+      } catch (err) {
+        console.error(`constellation: rebuild failed: ${err}`);
+      }
     }
 
     if (cron === "*/2 * * * *") {

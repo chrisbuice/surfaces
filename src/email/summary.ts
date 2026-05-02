@@ -29,6 +29,7 @@ interface DailySummary {
   };
   modesSessions: Array<{ mode: string; count: number }>;
   newInPool: number;
+  submissions: Array<{ id: number; track_id: string; submitter_name: string | null; note: string | null }>;
 }
 
 export async function generateAndSendSummary(
@@ -37,13 +38,20 @@ export async function generateAndSendSummary(
 ): Promise<{ sent: boolean; error?: string }> {
   const summary = await buildSummary(db);
 
-  if (summary.totalTracks === 0) {
-    // Don't send if nothing was played today
+  if (summary.totalTracks === 0 && summary.submissions.length === 0) {
+    // Don't send if nothing was played today AND nobody submitted anything.
     return { sent: false, error: "No listening activity today" };
   }
 
   const html = renderEmail(summary);
-  const subject = `🎵 ${summary.totalTracks} tracks, ${summary.totalMinutes} min — ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "America/New_York" })}`;
+  const subjectParts: string[] = [];
+  if (summary.totalTracks > 0) {
+    subjectParts.push(`${summary.totalTracks} tracks, ${summary.totalMinutes} min`);
+  }
+  if (summary.submissions.length > 0) {
+    subjectParts.push(`${summary.submissions.length} new ${summary.submissions.length === 1 ? "submission" : "submissions"}`);
+  }
+  const subject = `🎵 ${subjectParts.join(" · ")} — ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "America/New_York" })}`;
 
   try {
     const resp = await fetch(RESEND_API, {
@@ -63,6 +71,12 @@ export async function generateAndSendSummary(
     if (!resp.ok) {
       const text = await resp.text();
       return { sent: false, error: `Resend API error: ${resp.status} ${text}` };
+    }
+
+    // Mark today's submissions as notified now that the digest landed.
+    if (summary.submissions.length > 0) {
+      const { markNotified } = await import("../submissions/queries");
+      await markNotified(db, summary.submissions.map(s => s.id));
     }
 
     return { sent: true };
@@ -181,7 +195,24 @@ async function buildSummary(db: D1Database): Promise<DailySummary> {
     contextBreakdown,
     modesSessions: sessions.results,
     newInPool: newPool?.count ?? 0,
+    submissions: await loadNewSubmissions(db),
   };
+}
+
+async function loadNewSubmissions(db: D1Database): Promise<DailySummary["submissions"]> {
+  try {
+    const { listNewSubmissions } = await import("../submissions/queries");
+    const rows = await listNewSubmissions(db);
+    return rows.map(r => ({
+      id: r.id,
+      track_id: r.track_id,
+      submitter_name: r.submitter_name,
+      note: r.note,
+    }));
+  } catch {
+    // Submissions table may not exist yet on fresh installs.
+    return [];
+  }
 }
 
 function renderEmail(s: DailySummary): string {
@@ -249,6 +280,19 @@ function renderEmail(s: DailySummary): string {
     ${s.modesSessions.map(m => `${m.mode} (${m.count})`).join(" &middot; ")}
   </div>` : ""}
 
+  ${s.submissions.length > 0 ? `
+  <div style="font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;border-bottom:2px solid #f0f0f0;padding-bottom:6px;">Submissions</div>
+  <table style="width:100%;margin-bottom:24px;">
+    ${s.submissions.map(sub => `
+    <tr>
+      <td style="padding:6px 0;font-size:14px;color:#333;">
+        <a href="https://open.spotify.com/track/${escapeAttr(sub.track_id.replace(/^spotify:track:/, ""))}" style="color:#1db954;text-decoration:none;">${escapeHtml(sub.track_id)}</a>
+        ${sub.submitter_name ? `<span style="color:#666;"> &middot; from ${escapeHtml(sub.submitter_name)}</span>` : ""}
+        ${sub.note ? `<div style="font-size:13px;color:#666;margin-top:2px;font-style:italic;">"${escapeHtml(sub.note)}"</div>` : ""}
+      </td>
+    </tr>`).join("")}
+  </table>` : ""}
+
   ${Object.values(s.contextBreakdown).some(d => Object.keys(d).length > 0) ? `
   <div style="font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;border-bottom:2px solid #f0f0f0;padding-bottom:6px;">Context</div>
   <table style="width:100%;margin-bottom:24px;">
@@ -262,4 +306,20 @@ function renderEmail(s: DailySummary): string {
     Surfaces &middot; <a href="https://spotify-agent-dashboard.pages.dev" style="color:#1db954;text-decoration:none;font-weight:500;">Open Dashboard</a>
   </div>
 </div>`;
+}
+
+// Minimal HTML/attribute escaping for user-supplied strings (submitter
+// name + note). The track_id is alphanumeric by canonicalization so it
+// doesn't strictly need this, but escaping it costs nothing.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/[^A-Za-z0-9]/g, "");
 }

@@ -3,3 +3,6 @@
 SPOTIFY_CLIENT_ID=your_client_id_here
 SPOTIFY_CLIENT_SECRET=your_client_secret_here
 SHORTCUT_TOKEN=your_random_token_here
+# Shared secret for /api/submit-track — chrisbuice.com sends this in
+# X-Surfaces-Secret. Generate with: openssl rand -hex 32
+SURFACES_SECRET=your_random_secret_here

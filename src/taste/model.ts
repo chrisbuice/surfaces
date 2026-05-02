@@ -41,6 +41,7 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient):
   tracksScored: number;
   artistsScored: number;
   seasonalPlaylists: number;
+  acousticFitComputed: number;
 }> {
   const now = Math.floor(Date.now() / 1000);
 
