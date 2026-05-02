@@ -47,38 +47,28 @@ CF_ACCESS_CLIENT_SECRET=your_access_client_secret
 From the repo root on your laptop:
 
 ```bash
-# Copy the entire repo (the Dockerfile uses repo root as build context)
-rsync -av --exclude node_modules --exclude .wrangler --exclude data \
-  . grimmauldplace:~/stack/lyrics-backfill-repo/
-```
-
-Or if rsync isn't available, scp the needed files:
-
-```bash
-scp -r stack/lyrics-backfill/ grimmauldplace:~/stack/lyrics-backfill-repo/stack/lyrics-backfill/
-scp -r src/lyrics/ grimmauldplace:~/stack/lyrics-backfill-repo/src/lyrics/
-scp -r src/credits/ grimmauldplace:~/stack/lyrics-backfill-repo/src/credits/
+rsync -av --exclude node_modules stack/lyrics-backfill/ grimmauldplace:~/stack/lyrics-backfill/
 ```
 
 ## Step 4: Build the Container
 
 ```bash
 ssh grimmauldplace
-cd ~/stack/lyrics-backfill-repo
-docker compose -f stack/lyrics-backfill/docker-compose.yml build
+cd ~/stack/lyrics-backfill
+docker compose build
 ```
 
 ## Step 5: Smoke Test (5 items each)
 
 ```bash
 # Test ISRC phase (needs Spotify — pause the Worker poll first if running full)
-docker compose -f stack/lyrics-backfill/docker-compose.yml run --rm lyrics-backfill isrc --limit 5
+docker compose run --rm lyrics-backfill isrc --limit 5
 
 # Test lyrics phase (no Spotify needed)
-docker compose -f stack/lyrics-backfill/docker-compose.yml run --rm lyrics-backfill lyrics --limit 5
+docker compose run --rm lyrics-backfill lyrics --limit 5
 
 # Test credits phase (no Spotify needed)
-docker compose -f stack/lyrics-backfill/docker-compose.yml run --rm lyrics-backfill credits --limit 5
+docker compose run --rm lyrics-backfill credits --limit 5
 ```
 
 ## Step 6: Run the Full Backfill
@@ -98,7 +88,7 @@ Deploy: `wrangler deploy`
 
 Then on grimmauldplace:
 ```bash
-docker compose -f stack/lyrics-backfill/docker-compose.yml run --rm lyrics-backfill isrc
+docker compose run --rm lyrics-backfill isrc
 ```
 
 After ISRC completes, **re-enable the crons** in `wrangler.toml` and `wrangler deploy`.
@@ -107,7 +97,7 @@ After ISRC completes, **re-enable the crons** in `wrangler.toml` and `wrangler d
 
 No poll conflict — run with crons enabled:
 ```bash
-docker compose -f stack/lyrics-backfill/docker-compose.yml run --rm lyrics-backfill lyrics
+docker compose run --rm lyrics-backfill lyrics
 ```
 
 ### Phase 3: Credits (~28 hours)
@@ -115,7 +105,7 @@ docker compose -f stack/lyrics-backfill/docker-compose.yml run --rm lyrics-backf
 No poll conflict — run with crons enabled. Survives disconnection if run under `tmux`/`screen`:
 ```bash
 tmux new -s credits
-docker compose -f stack/lyrics-backfill/docker-compose.yml run --rm lyrics-backfill credits
+docker compose run --rm lyrics-backfill credits
 # Ctrl+B, D to detach; tmux attach -t credits to reconnect
 ```
 

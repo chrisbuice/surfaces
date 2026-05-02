@@ -8,7 +8,7 @@
  */
 
 import { queryD1, writeD1 } from "./lib/d1.js";
-import { MusicBrainzClient } from "../../src/credits/musicbrainz.js";
+import { MusicBrainzClient } from "./lib/musicbrainz.js";
 
 const PROGRESS_INTERVAL = 50;
 const MAX_RETRIES = 5;

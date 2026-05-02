@@ -7,7 +7,7 @@
  */
 
 import { queryD1, writeD1 } from "./lib/d1.js";
-import { LrclibClient } from "../../src/lyrics/lrclib.js";
+import { LrclibClient } from "./lib/lrclib.js";
 
 const PROGRESS_INTERVAL = 100;
 const BATCH_WRITE_SIZE = 25;
