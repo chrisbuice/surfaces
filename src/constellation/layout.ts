@@ -39,7 +39,7 @@ export const SIZE_MIN_PX = 3;
 export const SIZE_MAX_PX = 24;
 export const OPACITY_MIN = 0.4;
 export const OPACITY_MAX = 1.0;
-export const FORCE_TICKS = 300;
+export const FORCE_TICKS = 500;
 
 export interface LayoutNode {
   artist_name: string;
@@ -79,12 +79,36 @@ export function runForceLayout(
 
     const simNodes: SimNode[] = nodes.map((n, i) => ({ id: n.artist_name, index: i }));
 
-    // Filter edges to those whose endpoints are in the node list. Edge
-    // weights are normalized into a 0..1 strength for the link force.
+    // Filter edges to those whose endpoints are in the node list. To
+    // keep the simulation from collapsing into a dense ball, only feed
+    // the top 3 edges per node into the force layout (strongest
+    // connections). All edges are still available for rendering — this
+    // only affects how d3-force positions nodes.
     const maxWeight = edges.reduce((m, e) => Math.max(m, e.weight), 0) || 1;
+    const validEdges = edges.filter(e => idIndex.has(e.artist_a) && idIndex.has(e.artist_b));
+
+    // Select top 3 per node (by weight)
+    const topPerNode = new Map<string, Array<typeof validEdges[0]>>();
+    for (const e of validEdges) {
+      for (const name of [e.artist_a, e.artist_b]) {
+        const list = topPerNode.get(name) ?? [];
+        list.push(e);
+        topPerNode.set(name, list);
+      }
+    }
+    const layoutEdgeSet = new Set<string>();
+    for (const [, list] of topPerNode) {
+      list.sort((a, b) => b.weight - a.weight);
+      for (const e of list.slice(0, 3)) {
+        const key = e.artist_a < e.artist_b ? `${e.artist_a}::${e.artist_b}` : `${e.artist_b}::${e.artist_a}`;
+        layoutEdgeSet.add(key);
+      }
+    }
+
     const simEdges: SimLink[] = [];
-    for (const e of edges) {
-      if (!idIndex.has(e.artist_a) || !idIndex.has(e.artist_b)) continue;
+    for (const e of validEdges) {
+      const key = e.artist_a < e.artist_b ? `${e.artist_a}::${e.artist_b}` : `${e.artist_b}::${e.artist_a}`;
+      if (!layoutEdgeSet.has(key)) continue;
       simEdges.push({
         source: e.artist_a,
         target: e.artist_b,
@@ -100,12 +124,12 @@ export function runForceLayout(
         "link",
         forceLink<SimNode, SimLink>(simEdges)
           .id(d => d.id)
-          .strength(d => d.strength)
-          .distance(40),
+          .strength(d => d.strength * 0.15)
+          .distance(120),
       )
-      .force("charge", forceManyBody<SimNode>().strength(-30))
+      .force("charge", forceManyBody<SimNode>().strength(-800))
       .force("center", forceCenter<SimNode>(0, 0))
-      .force("collide", forceCollide<SimNode>(d => (radii[d.index ?? 0] ?? SIZE_MIN_PX) + 1))
+      .force("collide", forceCollide<SimNode>(d => (radii[d.index ?? 0] ?? SIZE_MIN_PX) + 3))
       .stop();
 
     for (let i = 0; i < ticks; i++) sim.tick();
@@ -120,11 +144,13 @@ export function runForceLayout(
     const maxY = Math.max(...ys);
     const spanX = Math.max(1e-6, maxX - minX);
     const spanY = Math.max(1e-6, maxY - minY);
-    // Use the larger span so we keep the constellation's aspect ratio
-    // rather than stretching it into a square.
-    const span = Math.max(spanX, spanY);
+    // Stretch each axis independently to fill the viewbox. The
+    // constellation is a visual composition, not a geographic map —
+    // filling the square produces a better result than preserving
+    // the simulation's (often lopsided) aspect ratio.
     const targetSize = VIEWBOX_SIZE - 2 * VIEWBOX_INSET;
-    const scale = targetSize / span;
+    const scaleX = targetSize / spanX;
+    const scaleY = targetSize / spanY;
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     const center = VIEWBOX_SIZE / 2;
@@ -140,8 +166,8 @@ export function runForceLayout(
       total_plays: n.total_plays,
       peak_year: n.peak_year,
       years_active: n.years_active,
-      x: round(center + (xs[i] - cx) * scale),
-      y: round(center + (ys[i] - cy) * scale),
+      x: round(center + (xs[i] - cx) * scaleX),
+      y: round(center + (ys[i] - cy) * scaleY),
       r: round(radii[i]),
       opacity: round(opacityFor(n.years_active, totalYears)),
     }));

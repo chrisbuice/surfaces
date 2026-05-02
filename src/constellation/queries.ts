@@ -24,7 +24,7 @@ import type { NodeRow, EdgeRow, ArtistIdResolution } from "./types";
 
 // Tunables — see spec §5.3 / §5.2. Bump SESSION_THRESHOLD if the graph
 // reads as noisy; drop to 2 if it reads as too sparse. Start at 3.
-export const MIN_PLAYS = 10;
+export const MIN_PLAYS = 300;
 export const SESSION_WINDOW_SECONDS = 30 * 60;
 export const SESSION_THRESHOLD = 3;
 export const SEASONAL_PLAYLIST_BONUS = 1.5;

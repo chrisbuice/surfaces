@@ -3,7 +3,7 @@ import { env } from "cloudflare:test";
 import {
   buildNodes, buildEdges, computeEraBuckets, eraIndexFor, eraLabel,
   computeEdgeWeights, pairKey,
-  SESSION_THRESHOLD, SEASONAL_PLAYLIST_BONUS, PLAYLIST_WEIGHT,
+  MIN_PLAYS, SESSION_THRESHOLD, SEASONAL_PLAYLIST_BONUS, PLAYLIST_WEIGHT,
 } from "../../src/constellation/queries";
 
 const PLAYS_DDL =
@@ -82,32 +82,36 @@ describe("constellation queries — node phase", () => {
     await resetTables(env.DB);
   });
 
-  it("filters artists below the 10-play floor", async () => {
+  it(`filters artists below the ${MIN_PLAYS}-play floor`, async () => {
     await resetTables(env.DB);
-    // 12 plays — passes
-    for (let i = 0; i < 12; i++) {
+    const above = MIN_PLAYS + 2;
+    const below = MIN_PLAYS - 1;
+    // above threshold — passes
+    for (let i = 0; i < above; i++) {
       await insertPlay(env.DB, "Heavy", 1_700_000_000 + i * 60);
     }
-    // 9 plays — drops
-    for (let i = 0; i < 9; i++) {
+    // below threshold — drops
+    for (let i = 0; i < below; i++) {
       await insertPlay(env.DB, "Light", 1_700_000_000 + i * 60);
     }
 
     const nodes = await buildNodes(env.DB);
     const names = nodes.map(n => n.artist_name).sort();
     expect(names).toEqual(["Heavy"]);
-    expect(nodes[0].total_plays).toBe(12);
+    expect(nodes[0].total_plays).toBe(above);
   });
 
   it("computes peak_year as the year with the most plays for that artist", async () => {
     await resetTables(env.DB);
-    // 11 plays in 2018, 5 in 2019 — peak should be 2018
+    // More plays in 2018 than 2019 — peak should be 2018
     const ts18 = Math.floor(new Date("2018-06-15T12:00:00Z").getTime() / 1000);
     const ts19 = Math.floor(new Date("2019-06-15T12:00:00Z").getTime() / 1000);
-    for (let i = 0; i < 11; i++) {
+    const majorYear = MIN_PLAYS;
+    const minorYear = 10;
+    for (let i = 0; i < majorYear; i++) {
       await insertPlay(env.DB, "Peaks", ts18 + i * 60, "u" + i, 2018);
     }
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < minorYear; i++) {
       await insertPlay(env.DB, "Peaks", ts19 + i * 60, "v" + i, 2019);
     }
 
@@ -119,8 +123,10 @@ describe("constellation queries — node phase", () => {
 
   it("years_active counts only years with ≥5 plays", async () => {
     await resetTables(env.DB);
-    // 5 plays in 2017, 5 plays in 2019, 4 plays in 2020 — years_active = 2
-    const years: Array<[number, number]> = [[2017, 5], [2019, 5], [2020, 4]];
+    // Spread plays across 3 years, with enough total to pass MIN_PLAYS.
+    // Half+5 in 2017, half+5 in 2019 (both ≥5 → active), 4 in 2020 (<5 → not active)
+    const half = Math.ceil(MIN_PLAYS / 2) + 5;
+    const years: Array<[number, number]> = [[2017, half], [2019, half], [2020, 4]];
     let uri = 0;
     for (const [y, n] of years) {
       const ts = Math.floor(new Date(`${y}-06-15T12:00:00Z`).getTime() / 1000);
@@ -133,7 +139,7 @@ describe("constellation queries — node phase", () => {
     const long = nodes.find(n => n.artist_name === "Long");
     expect(long).toBeDefined();
     expect(long!.years_active).toBe(2);
-    expect(long!.total_plays).toBe(14);
+    expect(long!.total_plays).toBe(half * 2 + 4);
   });
 });
 
@@ -172,21 +178,22 @@ describe("constellation queries — edges + weights", () => {
 
   it("end-to-end: builds edges from synthetic plays + playlists", async () => {
     await resetTables(env.DB);
-    // A and B co-occur in 5 windows; C is a noise drop-in (1 co-occurrence).
+    // A and B co-occur in enough windows to pass MIN_PLAYS; C is a noise drop-in.
     const baseTs = Math.floor(new Date("2020-01-01T12:00:00Z").getTime() / 1000);
     let uri = 0;
-    for (let s = 0; s < 5; s++) {
+    const sessions = Math.ceil(MIN_PLAYS / 4) + 5;
+    for (let s = 0; s < sessions; s++) {
       const t0 = baseTs + s * 86400;
-      // Pad each artist past the 10-play floor.
-      for (let i = 0; i < 3; i++) {
+      // Pad each artist past the MIN_PLAYS floor.
+      for (let i = 0; i < 5; i++) {
         await insertPlay(env.DB, "ArtistA", t0 + i * 120, "u" + uri++, 2020);
       }
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 5; i++) {
         await insertPlay(env.DB, "ArtistB", t0 + 60 + i * 120, "u" + uri++, 2020);
       }
     }
-    // ArtistC: 10 plays well outside any A/B window → no co-occurrence.
-    for (let i = 0; i < 10; i++) {
+    // ArtistC: MIN_PLAYS plays well outside any A/B window → no co-occurrence.
+    for (let i = 0; i < MIN_PLAYS; i++) {
       await insertPlay(env.DB, "ArtistC", baseTs + i * 86400 * 30 + 100000, "u" + uri++, 2020);
     }
 
@@ -261,11 +268,12 @@ describe("constellation queries — era buckets", () => {
 describe("constellation queries — artist-id resolution", () => {
   it("marks resolved / ambiguous / unresolved artists distinctly", async () => {
     await resetTables(env.DB);
-    // 12 plays each across three artists, all in 2020.
+    // MIN_PLAYS + 2 plays each across three artists, all in 2020.
     const ts = Math.floor(new Date("2020-06-15T12:00:00Z").getTime() / 1000);
     let uri = 0;
+    const playCount = MIN_PLAYS + 2;
     for (const name of ["Resolved", "Ambiguous", "Unresolved"]) {
-      for (let i = 0; i < 12; i++) {
+      for (let i = 0; i < playCount; i++) {
         await insertPlay(env.DB, name, ts + i * 60, "u" + uri++, 2020);
       }
     }
@@ -301,9 +309,9 @@ describe("constellation queries — playlist co-occurrence", () => {
     await insertPlaylistTrack(env.DB, "pl_seasonal", "t2", "B", 1);
     await insertPlaylistTrack(env.DB, "pl_other", "t3", "A", 0);
     await insertPlaylistTrack(env.DB, "pl_other", "t4", "B", 1);
-    // Pad A and B past the 10-play floor so they're nodes.
+    // Pad A and B past the MIN_PLAYS floor so they're nodes.
     const ts = Math.floor(new Date("2020-01-01T12:00:00Z").getTime() / 1000);
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < MIN_PLAYS + 2; i++) {
       await insertPlay(env.DB, "A", ts + i * 60, "uA" + i, 2020);
       await insertPlay(env.DB, "B", ts + i * 60 + 30, "uB" + i, 2020);
     }
