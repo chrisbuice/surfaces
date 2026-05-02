@@ -187,44 +187,52 @@ export async function listPlayYears(db: D1Database): Promise<number[]> {
  * Compute session co-occurrence counts for a single calendar year.
  *
  * Two plays "co-occur" when they happen within 30 minutes of each
- * other (spec §5.3). The self-join is restricted to plays within the
- * given year and to pairs of node-eligible artists; pairs are
- * canonicalized so artist_a < artist_b (alphabetical) which removes
- * duplicates and halves the join cost.
+ * other (spec §5.3). The pair enumeration is done in JS via a
+ * sliding window over plays sorted by ts.
  *
- * Designed to fit comfortably inside D1's per-query budget for any
- * single year (max ~25K plays in any one year of the dataset).
+ * Why: the previous version did a SQL self-join which tripped D1's
+ * per-statement CPU limit even when restricted to one year. Pulling
+ * (artist_name, ts) for the year and walking it in JS is cheaper for
+ * D1 (sequential index scan, no join product) and trivially fast in
+ * Workers' JS runtime — typical year has ~25K plays, average 1-2
+ * within-window neighbors per row, so ~50K JS ops per year.
  */
 export async function buildSessionCoForYear(
   db: D1Database,
   year: number,
   nodeArtists: Set<string>,
 ): Promise<SessionPairCount[]> {
-  // We cannot bind a Set to SQL; a temp table is over-engineered for a
-  // 1500-element list and bind-array isn't supported. Instead, we filter
-  // candidate pairs in JS after fetching counts for every co-occurring
-  // pair in the year. The HAVING ≥1 already prunes obviously-noisy pairs
-  // here; the global ≥3 threshold is applied after summing across years.
-  const sql = `
-    SELECT
-      CASE WHEN p1.artist_name < p2.artist_name THEN p1.artist_name ELSE p2.artist_name END AS artist_a,
-      CASE WHEN p1.artist_name < p2.artist_name THEN p2.artist_name ELSE p1.artist_name END AS artist_b,
-      COUNT(*) AS session_co
-    FROM plays p1
-    JOIN plays p2 ON
-      p2.ts BETWEEN p1.ts - ? AND p1.ts + ?
-      AND p1.id < p2.id
-      AND p1.artist_name <> p2.artist_name
-    WHERE p1.year = ? AND p2.year = ?
-    GROUP BY artist_a, artist_b
-  `;
-  const r = await db.prepare(sql)
-    .bind(SESSION_WINDOW_SECONDS, SESSION_WINDOW_SECONDS, year, year)
-    .all<{ artist_a: string; artist_b: string; session_co: number }>();
-
+  const sql = `SELECT artist_name, ts FROM plays WHERE year = ? ORDER BY ts ASC`;
+  const r = await db.prepare(sql).bind(year)
+    .all<{ artist_name: string; ts: number }>();
   const rows = r.results ?? [];
-  // Drop pairs touching artists outside the node list.
-  return rows.filter(p => nodeArtists.has(p.artist_a) && nodeArtists.has(p.artist_b));
+
+  const pairCounts = new Map<string, number>();
+  let windowStart = 0;
+  for (let j = 0; j < rows.length; j++) {
+    const rj = rows[j];
+    // Slide the window: drop rows older than rj.ts - SESSION_WINDOW_SECONDS.
+    while (windowStart < j && rows[windowStart].ts < rj.ts - SESSION_WINDOW_SECONDS) {
+      windowStart++;
+    }
+    // Pair rj with every row in [windowStart, j) that has a different
+    // artist and that we care about (both endpoints in the node list).
+    if (!nodeArtists.has(rj.artist_name)) continue;
+    for (let k = windowStart; k < j; k++) {
+      const rk = rows[k];
+      if (rk.artist_name === rj.artist_name) continue;
+      if (!nodeArtists.has(rk.artist_name)) continue;
+      const key = pairKey(rk.artist_name, rj.artist_name);
+      pairCounts.set(key, (pairCounts.get(key) ?? 0) + 1);
+    }
+  }
+
+  const out: SessionPairCount[] = [];
+  for (const [key, count] of pairCounts) {
+    const [artist_a, artist_b] = key.split("||");
+    out.push({ artist_a, artist_b, session_co: count });
+  }
+  return out;
 }
 
 /**
