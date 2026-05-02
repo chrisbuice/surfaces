@@ -1,5 +1,8 @@
 #!/usr/bin/env npx tsx
 /**
+ * @deprecated Laptop version — use stack/lyrics-backfill/ on grimmauldplace instead.
+ * This version shells out to wrangler and races with the Worker on token refresh.
+ *
  * fetch-isrcs.ts — Populate track_isrc_cache from Spotify's single-track endpoint.
  *
  * Usage:

@@ -1,4 +1,5 @@
-import { handleLogin, handleCallback } from "./auth/spotify-oauth";
+import { handleLogin, handleCallback, refreshAccessToken } from "./auth/spotify-oauth";
+import { getTokens, saveTokens } from "./auth/tokens";
 import { SpotifyClient } from "./spotify/client";
 import { handlePoll } from "./tracker/poll";
 import { derivePlayEvents } from "./tracker/derive";
@@ -81,6 +82,25 @@ export default {
 
         case "/auth/callback":
           return await handleCallback(request, env);
+
+        // ── Token broker for grimmauldplace containers ──
+        // Protected by Cloudflare Access service token on /admin/*
+        case "/admin/spotify-token": {
+          if (request.method !== "POST") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          const tokens = await getTokens(env.KV);
+          if (!tokens) {
+            return Response.json({ error: "No Spotify tokens. Run /auth/login first." }, { status: 500 });
+          }
+          const now = Math.floor(Date.now() / 1000);
+          if (now >= tokens.expiresAt - 300) {
+            const refreshed = await refreshAccessToken(env, tokens.refreshToken);
+            await saveTokens(env.KV, refreshed);
+            return Response.json({ access_token: refreshed.accessToken, expires_at: refreshed.expiresAt });
+          }
+          return Response.json({ access_token: tokens.accessToken, expires_at: tokens.expiresAt });
+        }
 
         case "/me": {
           const spotify = new SpotifyClient(env);

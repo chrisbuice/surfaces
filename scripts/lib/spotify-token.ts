@@ -1,4 +1,9 @@
 /**
+ * @deprecated Use the Worker's token broker instead (POST /admin/spotify-token).
+ * The grimmauldplace container version lives at stack/lyrics-backfill/lib/spotify.ts.
+ * This file races with the Worker on KV-stored refresh tokens — the broker avoids that.
+ * Kept as reference only; do not use for new scripts.
+ *
  * spotify-token.ts — Read Spotify access token from Cloudflare KV for local scripts.
  *
  * Reads the token stored by the Worker's auth flow. If the token is within

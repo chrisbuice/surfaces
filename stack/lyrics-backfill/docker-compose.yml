@@ -1,0 +1,6 @@
+services:
+  lyrics-backfill:
+    build:
+      context: ../..
+      dockerfile: stack/lyrics-backfill/Dockerfile
+    env_file: .env

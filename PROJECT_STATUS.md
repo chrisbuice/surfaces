@@ -1,10 +1,20 @@
 # Surfaces — Project Status
 
-**Last updated:** April 29, 2026 (end of session 5)
-**Codebase:** 37 TypeScript files + 1 HTML dashboard, ~10,380 lines
-**Commits:** 74 on main branch
+**Last updated:** May 2, 2026 (session 6 — offload work)
+**Codebase:** 37 TypeScript files + 1 HTML dashboard, ~10,380 lines + grimmauldplace containers
+**Commits:** 74+ on main branch
 **All planned milestones (M0–M20) are complete** (M12 skipped by choice)
-**Infrastructure:** Cloudflare Workers paid tier ($5/month)
+**Infrastructure:** Cloudflare Workers paid tier ($5/month) + grimmauldplace home server (Docker)
+
+### Offload progress (grimmauldplace)
+
+| Step | Status | Date |
+|------|--------|------|
+| Step 0: D1 HTTP API hello-world | Complete | 2026-05-02 |
+| Lyrics-backfill container + token broker | Complete (container built, bulk run pending) | 2026-05-02 |
+| Step 1: D1 backups | Not started | — |
+| Step 2: ETL container | Not started | — |
+| Step 3: Constellation rebuild migration | Not started | — |
 
 This document is intended to bring a new conversation up to speed on the full state of the application — what exists, how it works, what files do what, and what's left to explore.
 

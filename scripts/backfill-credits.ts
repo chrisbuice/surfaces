@@ -1,5 +1,8 @@
 #!/usr/bin/env npx tsx
 /**
+ * @deprecated Laptop version — use stack/lyrics-backfill/ on grimmauldplace instead.
+ * This version shells out to wrangler for D1 access.
+ *
  * backfill-credits.ts — Populate track_credits + track_credits_status from MusicBrainz.
  *
  * Usage:

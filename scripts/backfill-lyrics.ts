@@ -1,5 +1,8 @@
 #!/usr/bin/env npx tsx
 /**
+ * @deprecated Laptop version — use stack/lyrics-backfill/ on grimmauldplace instead.
+ * This version shells out to wrangler for D1 access.
+ *
  * backfill-lyrics.ts — Populate track_lyrics from LRCLIB.
  *
  * Usage:

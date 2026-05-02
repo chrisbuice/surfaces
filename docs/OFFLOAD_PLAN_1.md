@@ -29,7 +29,7 @@ Each row is a candidate. The "Why offload" / "Why keep" columns are the actual t
 | 5 | **D1 backup / weekly export** | Not implemented (mentioned as TODO in original plan) | — | N/A | grimmauldplace has actual disk; an offsite SQLite snapshot is what backups are for | Could also run as a Worker → R2 dump | **MOVE** as part of #1 (§2.5) — almost free given grimmauldplace exists |
 | 6 | **Nightly summary email** | Workers, `0 0 * * *` | Cron | None. Resend call + 1 D1 query. Fits trivially. | No reason. | Works. | **KEEP** — moving is pure churn |
 | 7 | **In-session feedback** (`*/2 * * * *`) | Workers | Cron | None. Fits trivially. Latency-sensitive (feedback should fire while session is live). | No reason; would increase tail latency. | Works. Latency matters. | **KEEP** |
-| 8 | **Future: ML model training** (e.g. learned-affinity refits, embedding-based similarity) | Doesn't exist yet | TBD | Will not fit on Workers at all | Only place it can live | — | **MOVE** when it's built (§2.6) |
+| 8 | **Future: ML model training** (e.g. learned-affinity refits, embedding-based similarity) | Doesn't exist yet | TBD | Will not fit on Workers at all | Only place it can live | — | **MOVE** when it's built (§2.8) |
 
 ---
 
@@ -142,7 +142,26 @@ This is currently the single longest cron the Worker runs. It hasn't timed out (
 
 ---
 
-### 2.6 Future: ML model training (recommended: move when it exists)
+### 2.7 Lyrics + credits backfill (implemented: 2026-05-02)
+
+**Status:** Container built and deployed as `stack/lyrics-backfill/`. This was the first workload actually migrated to grimmauldplace, built on top of Step 0's D1 HTTP API validation.
+
+**Architecture on grimmauldplace:**
+
+- Container: `lyrics-backfill` — Node 22 + tsx@4. Three phases invoked via subcommand: `isrc`, `lyrics`, `credits`.
+- D1 access: via HTTP API (shared `lib/d1.ts` with retry/backoff), same pattern as `stack/hello/`.
+- Spotify access (ISRC phase only): via Worker-side token broker (`POST /admin/spotify-token`), protected by Cloudflare Access service token. Refresh logic stays on Workers; grimmauldplace never sees the refresh token.
+- Trigger: manual one-shot (`docker compose run lyrics-backfill <phase>`). Optional catch-up cron deferred to a follow-up.
+- Coverage at start: 570/47,593 ISRCs cached (1%), 9 tracks with lyrics/credits (~0%). Full bulk job needed.
+- Time estimates: ISRC ~30 min, lyrics ~3 hours, credits ~28 hours.
+
+**Worker-side change:** `POST /admin/spotify-token` added to `src/index.ts`. Returns `{ access_token, expires_at }`. No refresh token in response. Protected by Cloudflare Access `/admin/*` application with service-token auth.
+
+**What this proved:** the Spotify token broker pattern from §3.1 option 1 works. The D1 HTTP API pattern from §3.2 scales beyond hello-world to real workloads. Both are reusable for subsequent container migrations.
+
+---
+
+### 2.8 Future: ML model training (recommended: move when it exists)
 
 Out of scope for this plan; mentioned for completeness because the user listed "future ML" under #1 in their prompt. The infrastructure that supports the ETL container also supports a "training" container with no extra design. Mentioning so we don't forget that the home server is the natural place for it.
 
