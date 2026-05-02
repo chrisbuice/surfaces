@@ -5,3 +5,6 @@ dist/
 *.log
 .DS_Store
 data/
+
+# Stack container secrets (live only on grimmauldplace)
+stack/**/.env
