@@ -1,0 +1,452 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base
+  title="Surfaces — Chris Buice"
+  description="A music tool I built for myself, and what it noticed."
+>
+  <article class="surfaces" data-page="surfaces">
+
+    <header class="surfaces-head">
+      <p class="eyebrow">A project · 2026</p>
+      <h1 class="surfaces-title">Surfaces</h1>
+    </header>
+
+    <section class="lede" aria-label="Introduction">
+      <p>
+        Surfaces is a music tool I built for myself. It watches what I'm
+        listening to, learns what I've loved before, and surfaces tracks for
+        the surfaces of my day &mdash; working music in the morning, something
+        quieter at night, something else entirely on a long drive. It talks
+        to Spotify, talks to Claude, and talks back to me through Siri when I
+        ask it to.
+      </p>
+
+      <p>
+        I listen. Spotify keeps a record. Surfaces reads it like a book
+        &mdash; fifteen years, around 260,000 plays, every one of them logged
+        in passing and never really looked at until now. There are patterns
+        in there I'd never have spotted on my own. Some are about music.
+        Some are about me. The surface, it turns out, is also a mirror.
+      </p>
+    </section>
+
+    <hr />
+
+    <section class="constellation-section" aria-label="Listening constellation">
+      <div class="constellation-frame">
+        <!--
+          Constellation island lives here.
+          Renders ~1,500-node SVG on desktop, 200-node static still on mobile.
+          Fetches /api/constellation from the Surfaces worker.
+        -->
+        <div
+          id="constellation-mount"
+          class="constellation-mount"
+          data-endpoint="https://surfaces.chrisbuice.workers.dev/api/constellation"
+          aria-label="A field of dots representing every artist Chris has played more than ten times since 2011."
+          role="img"
+        >
+          <p class="constellation-loading">Generating constellation&hellip;</p>
+        </div>
+      </div>
+
+      <figcaption class="constellation-caption">
+        <p class="caption-line">
+          Every artist I've played more than ten times since 2011, positioned
+          by what I've listened to alongside what.
+        </p>
+        <p class="caption-meta tnum">
+          <span data-meta-generated>Generated nightly</span>
+          <span aria-hidden="true">·</span>
+          <span data-meta-artists>&mdash;&nbsp;artists</span>
+          <span aria-hidden="true">·</span>
+          <span data-meta-edges>&mdash;&nbsp;connections</span>
+        </p>
+        <p class="caption-mobile-hint">
+          On a wider screen this becomes something you can touch &mdash;
+          every dot a story.
+        </p>
+        <p class="caption-meaning">
+          Some artists glow steady &mdash; the ones I've returned to year
+          after year, the company I keep. Others fade to ghost &mdash; loved
+          hard for a season and then never quite again, the way some music
+          is meant to belong to a particular stretch of months and nothing
+          after.
+        </p>
+      </figcaption>
+    </section>
+
+    <hr />
+
+    <section class="numbers" aria-label="Surfaces in numbers">
+      <dl class="numbers-grid">
+        <div class="number">
+          <dt class="number-label">Plays since 2011</dt>
+          <dd class="number-value tnum" data-stat-plays>261,000</dd>
+        </div>
+        <div class="number">
+          <dt class="number-label">Unique artists</dt>
+          <dd class="number-value tnum" data-stat-artists>1,600</dd>
+        </div>
+        <div class="number">
+          <dt class="number-label">Seasonal playlists since 2016</dt>
+          <dd class="number-value tnum" data-stat-seasons>39</dd>
+        </div>
+      </dl>
+    </section>
+
+    <hr />
+
+    <section class="how" aria-label="How it works">
+      <h2 class="how-heading">How it works</h2>
+      <p>
+        The system watches what I play and learns from it. Every night, while
+        I sleep, it rebuilds a profile of my taste &mdash; what I'm leaning
+        into, what I'm cooling on, what time of day I tend to want what. A
+        second program reads music blogs and indie radio feeds, looking for
+        new tracks that might fit, and adds the strongest candidates to a
+        pool of fresh discoveries. When I want to listen, it draws from both
+        sides &mdash; the familiar and the new &mdash; and tunes the mix to
+        where I am, what the weather is doing, and what kind of attention I
+        have to spare. The whole thing runs on Cloudflare's edge, the same
+        network that powers a large fraction of the web, in small bursts
+        that wake up when I need them and disappear when I don't. About ten
+        thousand lines of TypeScript. Built solo in three days using Claude
+        Code.
+      </p>
+    </section>
+
+    <hr />
+
+    <section class="submit" aria-label="Send me a song">
+      <h2 class="submit-heading">Send me a song</h2>
+      <p class="submit-blurb">
+        If a track has been living in your head and you think it'd live in
+        mine too, send it over. It joins the same pool of fresh candidates
+        Surfaces pulls from when it builds a session.
+      </p>
+
+      <!--
+        Submission form island lives here.
+        Real Spotify search picker (Pages Function proxies the search API),
+        optional 'from' and 'note' fields, posts to /api/submit-track.
+      -->
+      <div id="submit-mount" class="submit-mount">
+        <p class="submit-placeholder">
+          The submission tool is coming with the next update.
+          For now, email me the track at
+          <a href="mailto:chris@chrisbuice.com">chris@chrisbuice.com</a>
+          and I'll add it by hand.
+        </p>
+      </div>
+    </section>
+
+    <footer class="surfaces-foot">
+      <p class="foot-links">
+        <a href="https://github.com/chrisbuice/surfaces" rel="noopener">
+          Source on GitHub
+        </a>
+        <span aria-hidden="true">·</span>
+        <a href="/">Back to chrisbuice.com</a>
+      </p>
+    </footer>
+
+  </article>
+</Base>
+
+<style>
+  /* ------------------------------------------------------------------ */
+  /* Page-level register                                                 */
+  /* The Base layout caps content at 640px via .content-column, which    */
+  /* is right for prose but wrong for the constellation. Override the    */
+  /* column for this page so prose stays at reading width but the        */
+  /* constellation can breathe.                                          */
+  /* ------------------------------------------------------------------ */
+
+  .surfaces {
+    /* Wider than the default 640px — the constellation needs room.
+       Prose sections re-narrow themselves below. */
+    max-width: 960px;
+    margin-inline: auto;
+    padding-block: var(--space-xl) var(--space-l);
+  }
+
+  /* Body-class font swap — /surfaces leans more editorial.
+     Targets the article so the change is scoped and additive,
+     not destructive of the rest of the site. */
+  .surfaces[data-page="surfaces"] p {
+    font-family: var(--font-heading);
+    font-weight: 380;
+    font-size: 1.18rem;
+    line-height: 1.55;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Header                                                              */
+  /* ------------------------------------------------------------------ */
+
+  .surfaces-head {
+    max-width: 640px;
+    margin-inline: auto;
+    margin-bottom: var(--space-l);
+  }
+
+  .eyebrow {
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--text-muted);
+    margin-bottom: var(--space-s);
+  }
+
+  .surfaces-title {
+    font-family: var(--font-heading);
+    font-size: clamp(3rem, 8vw, 5.25rem);
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+    font-weight: 400;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Lede                                                                */
+  /* ------------------------------------------------------------------ */
+
+  .lede {
+    max-width: 640px;
+    margin-inline: auto;
+    margin-bottom: var(--space-l);
+  }
+
+  /* The first letter of the first paragraph as a quiet drop cap.
+     Felton-register editorial signal. Not a giant decorative cap;
+     a small typographic flourish that matches Fraunces. */
+  .lede > p:first-of-type::first-letter {
+    font-size: 3.6em;
+    line-height: 0.85;
+    float: left;
+    padding-right: 0.08em;
+    padding-top: 0.05em;
+    font-weight: 400;
+    color: var(--accent);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Constellation                                                       */
+  /* ------------------------------------------------------------------ */
+
+  .constellation-section {
+    margin-block: var(--space-l);
+  }
+
+  .constellation-frame {
+    /* No border, no background, no chart-junk. The constellation floats
+       on the page background. Aspect ratio reserved so the page doesn't
+       reflow when the SVG arrives. */
+    aspect-ratio: 1 / 1;
+    width: 100%;
+    max-width: 880px;
+    margin-inline: auto;
+    position: relative;
+  }
+
+  .constellation-mount {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .constellation-loading {
+    font-family: var(--font-body) !important;
+    font-size: 0.75rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--text-muted) !important;
+  }
+
+  /* Caption stack, narrow, asymmetric to the left at wide widths.
+     Below the visual on mobile, beside-and-below on desktop. */
+  .constellation-caption {
+    max-width: 560px;
+    margin-inline: auto;
+    margin-top: var(--space-m);
+    text-align: center;
+  }
+
+  .caption-line {
+    font-family: var(--font-heading) !important;
+    font-style: italic;
+    font-size: 1.05rem !important;
+    line-height: 1.5 !important;
+    color: var(--text);
+    margin-bottom: var(--space-s);
+  }
+
+  .caption-meta {
+    font-family: var(--font-body) !important;
+    font-size: 0.7rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-muted) !important;
+    line-height: 1.4 !important;
+    margin-bottom: var(--space-m);
+  }
+
+  .caption-meta > span {
+    display: inline-block;
+    margin-inline: 0.25em;
+  }
+
+  .caption-mobile-hint {
+    font-family: var(--font-heading) !important;
+    font-style: italic;
+    font-size: 0.95rem !important;
+    color: var(--text-muted) !important;
+    line-height: 1.5 !important;
+    margin-bottom: var(--space-m);
+  }
+
+  /* Hide the mobile hint on screens wide enough for the full experience. */
+  @media (min-width: 768px) {
+    .caption-mobile-hint {
+      display: none;
+    }
+  }
+
+  .caption-meaning {
+    font-family: var(--font-heading) !important;
+    font-size: 1rem !important;
+    line-height: 1.55 !important;
+    color: var(--text);
+    text-align: left;
+    /* Intentionally left-aligned while the lines above are centered.
+       Mandy-Brown-style asymmetry inside the caption stack — the
+       meaning sentence reads like prose, not a label. */
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Numbers                                                             */
+  /* ------------------------------------------------------------------ */
+
+  .numbers {
+    max-width: 720px;
+    margin-inline: auto;
+    margin-block: var(--space-l);
+  }
+
+  .numbers-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-m);
+    text-align: center;
+  }
+
+  @media (max-width: 600px) {
+    .numbers-grid {
+      grid-template-columns: 1fr;
+      gap: var(--space-s);
+    }
+  }
+
+  .number {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .number-label {
+    font-family: var(--font-body);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-muted);
+    order: 2;
+  }
+
+  .number-value {
+    font-family: var(--font-heading);
+    font-size: clamp(2.25rem, 5vw, 3.25rem);
+    line-height: 1;
+    color: var(--text);
+    font-weight: 400;
+    order: 1;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* How it works                                                        */
+  /* ------------------------------------------------------------------ */
+
+  .how {
+    max-width: 640px;
+    margin-inline: auto;
+    margin-block: var(--space-l);
+  }
+
+  .how-heading,
+  .submit-heading {
+    font-family: var(--font-heading);
+    font-size: var(--font-size-h2);
+    color: var(--accent);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    margin-bottom: var(--space-s);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Submit                                                              */
+  /* ------------------------------------------------------------------ */
+
+  .submit {
+    max-width: 640px;
+    margin-inline: auto;
+    margin-block: var(--space-l);
+  }
+
+  .submit-blurb {
+    margin-bottom: var(--space-m);
+  }
+
+  .submit-mount {
+    /* Will be replaced by the real form island.
+       For launch, contains the email fallback below. */
+  }
+
+  .submit-placeholder {
+    font-family: var(--font-body) !important;
+    font-size: 0.95rem !important;
+    color: var(--text-muted) !important;
+    padding: var(--space-m);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Footer                                                              */
+  /* ------------------------------------------------------------------ */
+
+  .surfaces-foot {
+    max-width: 640px;
+    margin-inline: auto;
+    margin-top: var(--space-xl);
+    padding-top: var(--space-m);
+    border-top: 1px solid var(--rule);
+  }
+
+  .foot-links {
+    font-family: var(--font-body) !important;
+    font-size: 0.8rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-muted) !important;
+    text-align: center;
+  }
+
+  .foot-links > span {
+    margin-inline: 0.5em;
+  }
+</style>
