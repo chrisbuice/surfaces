@@ -47,7 +47,29 @@ export default {
     try {
       switch (url.pathname) {
         case "/":
-          return new Response("spotify-agent is running", { status: 200 });
+          return new Response("surfaces is running", { status: 200 });
+
+        case "/app":
+        case "/app/": {
+          const dashboardHtml = (await import("./dashboard-html")).default;
+          return new Response(dashboardHtml, {
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          });
+        }
+
+        case "/manifest.json": {
+          return Response.json({
+            name: "Surfaces",
+            short_name: "Sonic Life",
+            start_url: "/app",
+            display: "standalone",
+            background_color: "#121212",
+            theme_color: "#1db954",
+            icons: [
+              { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%231db954'/><text x='50' y='62' text-anchor='middle' font-size='40' fill='%23121212'>♫</text></svg>", sizes: "any", type: "image/svg+xml" }
+            ],
+          });
+        }
 
         case "/auth/login":
           return handleLogin(request, env);
@@ -114,17 +136,49 @@ export default {
               }
             }
 
+            // If not in an active session, check if the track is a discovery from fresh_pool
+            if (!playContext.inSession) {
+              const fpCheck = await env.DB.prepare(
+                "SELECT source, source_detail FROM fresh_pool WHERE track_id = ?"
+              ).bind(playing.item.id).first<{ source: string; source_detail: string | null }>();
+              if (fpCheck) {
+                const sourceLabels: Record<string, string> = {
+                  'editorial_rss': 'Editorial RSS',
+                  'hype_machine': 'Hype Machine',
+                  'rss:gorilla_vs_bear': 'Gorilla vs Bear',
+                  'rss:aquarium_drunkard': 'Aquarium Drunkard',
+                  'lastfm:artist_similar': 'Last.fm Similar',
+                  'followed_artist_search': 'Followed Artists',
+                  'top_artist_search': 'Top Artist Releases',
+                };
+                const label = sourceLabels[fpCheck.source] || fpCheck.source;
+                const detail = fpCheck.source_detail && fpCheck.source_detail !== label ? ` (${fpCheck.source_detail})` : '';
+                playContext = {
+                  inSession: false,
+                  source: "discovery",
+                  sourceDetail: fpCheck.source,
+                  reasons: [`Discovery: ${label}${detail}`],
+                };
+              }
+            }
+
             // Fetch upcoming queue (next 3 tracks)
             let upNext: Array<{ track_id: string; track_name: string; artist_name: string }> = [];
             try {
               const queue = await spotify.get<{
                 queue: Array<{ id: string; name: string; artists: Array<{ name: string }> }>;
               }>("/v1/me/player/queue");
-              upNext = (queue.queue ?? []).slice(0, 3).map(t => ({
-                track_id: t.id,
-                track_name: t.name,
-                artist_name: t.artists.map(a => a.name).join(", "),
-              }));
+              // Filter out the currently playing track — Spotify's queue API
+              // repeats it when playback was started with uris:[single_track]
+              const currentId = playing.item?.id;
+              upNext = (queue.queue ?? [])
+                .filter(t => t.id !== currentId)
+                .slice(0, 3)
+                .map(t => ({
+                  track_id: t.id,
+                  track_name: t.name,
+                  artist_name: t.artists.map(a => a.name).join(", "),
+                }));
             } catch { /* queue endpoint may fail in Dev Mode */ }
 
             return Response.json({
@@ -341,19 +395,26 @@ export default {
 
           // Load acoustic centroid for the session's mode (for fit explanation)
           const { computeAcousticFit: explainFit, dominantDimension } = await import("./audio/fit");
+          const { getOverrideCentroid } = await import("./audio/overrides");
           let explainCentroid = new Map<string, { mean: number; stddev: number }>();
           try {
-            const explainMinSamples = 10;
-            let cRows = await env.DB.prepare(
-              "SELECT dimension, mean, stddev, sample_size FROM acoustic_profile WHERE mode = ?"
-            ).bind(lastSess.mode).all<{ dimension: string; mean: number; stddev: number; sample_size: number }>();
-            if (cRows.results.length === 0 || cRows.results[0].sample_size < explainMinSamples) {
-              cRows = await env.DB.prepare(
-                "SELECT dimension, mean, stddev, sample_size FROM acoustic_profile WHERE mode = 'overall'"
-              ).all<{ dimension: string; mean: number; stddev: number; sample_size: number }>();
-            }
-            if (cRows.results.length > 0 && cRows.results[0].sample_size >= explainMinSamples) {
-              explainCentroid = new Map(cRows.results.map(r => [r.dimension, { mean: r.mean, stddev: r.stddev }]));
+            // Check for curated override first
+            const override = getOverrideCentroid(lastSess.mode);
+            if (override) {
+              explainCentroid = override;
+            } else {
+              const explainMinSamples = 10;
+              let cRows = await env.DB.prepare(
+                "SELECT dimension, mean, stddev, sample_size FROM acoustic_profile WHERE mode = ?"
+              ).bind(lastSess.mode).all<{ dimension: string; mean: number; stddev: number; sample_size: number }>();
+              if (cRows.results.length === 0 || cRows.results[0].sample_size < explainMinSamples) {
+                cRows = await env.DB.prepare(
+                  "SELECT dimension, mean, stddev, sample_size FROM acoustic_profile WHERE mode = 'overall'"
+                ).all<{ dimension: string; mean: number; stddev: number; sample_size: number }>();
+              }
+              if (cRows.results.length > 0 && cRows.results[0].sample_size >= explainMinSamples) {
+                explainCentroid = new Map(cRows.results.map(r => [r.dimension, { mean: r.mean, stddev: r.stddev }]));
+              }
             }
           } catch { /* no profile */ }
 
@@ -911,6 +972,12 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
             await spotify.post(`/v1/playlists/${playlistId}/items`, {
               uris: [`spotify:track:${actionTrackId}`],
             });
+            // Update fresh_pool status if this is a discovery track
+            const fpNow = Math.floor(Date.now() / 1000);
+            const fpStatus = isBlock ? "skipped" : "liked";
+            await env.DB.prepare(
+              "UPDATE fresh_pool SET status = ?, status_changed_at = ? WHERE track_id = ? AND status IN ('fresh', 'queued', 'played')"
+            ).bind(fpStatus, fpNow, actionTrackId).run();
             return Response.json({ ok: true, playlist: playlistName });
           } catch (e) {
             return Response.json({ ok: false, error: String(e) });
@@ -928,7 +995,78 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
             uri: `spotify:track:${track_id}`,
             ...(device?.id ? { device_id: device.id } : {}),
           });
+          // Update fresh_pool status if this is a discovery track
+          const qNow = Math.floor(Date.now() / 1000);
+          await env.DB.prepare(
+            "UPDATE fresh_pool SET status = 'queued', status_changed_at = ? WHERE track_id = ? AND status = 'fresh'"
+          ).bind(qNow, track_id).run();
           return Response.json({ ok: true });
+        }
+
+        case "/api/player/skip": {
+          if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const spotify = new SpotifyClient(env);
+          await spotify.post("/v1/me/player/next");
+          return Response.json({ ok: true });
+        }
+
+        case "/api/player/previous": {
+          if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const spotify = new SpotifyClient(env);
+          await spotify.post("/v1/me/player/previous");
+          return Response.json({ ok: true });
+        }
+
+        case "/api/player/repeat": {
+          if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const spotify = new SpotifyClient(env);
+          // Cycle: off → context → track → off
+          const { state } = await request.json() as { state?: string };
+          const nextState = state || "track";
+          await spotify.put("/v1/me/player/repeat", undefined, { state: nextState });
+          return Response.json({ ok: true, state: nextState });
+        }
+
+        case "/api/play-track": {
+          if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const spotify = new SpotifyClient(env);
+          const { track_id: playTrackId } = await request.json() as { track_id: string };
+          if (!playTrackId) return Response.json({ ok: false, error: "track_id required" });
+          const { getActiveDevice: getDevice } = await import("./spotify/playback");
+          const playDevice = await getDevice(spotify);
+          await spotify.put("/v1/me/player/play", {
+            uris: [`spotify:track:${playTrackId}`],
+          }, playDevice?.id ? { device_id: playDevice.id } : undefined);
+          // Update fresh_pool status if this track is a discovery
+          const now = Math.floor(Date.now() / 1000);
+          await env.DB.prepare(
+            "UPDATE fresh_pool SET status = 'played', status_changed_at = ? WHERE track_id = ? AND status IN ('fresh', 'queued')"
+          ).bind(now, playTrackId).run();
+          return Response.json({ ok: true });
+        }
+
+        case "/api/listening/sync": {
+          if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const spotify = new SpotifyClient(env);
+          const { syncRecentPlays } = await import("./listening/sync");
+          const syncResult = await syncRecentPlays(env.DB, spotify, env.KV);
+          // Invalidate pulse cache so new plays show up
+          if (syncResult.inserted > 0) {
+            await env.KV.delete("dashboard:pulse");
+          }
+          return Response.json({ source: "local_history", ...syncResult });
+        }
+
+        case "/api/listening/queue": {
+          if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const queueBody = await request.json() as { mode?: string; length_min?: number; seed?: string };
+          const { generateQueue } = await import("./listening/queue");
+          const queueResult = await generateQueue(env.DB, {
+            mode: (queueBody.mode as "rediscover" | "era" | "morning" | "default") ?? "default",
+            seed: queueBody.seed,
+            lengthMin: queueBody.length_min ?? 60,
+          });
+          return Response.json(queueResult);
         }
 
         case "/api/dashboard-stats": {
@@ -1070,6 +1208,479 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
           return await handleMcp(request, env);
         }
 
+        // ── Listening History API ──
+        case "/api/listening/heatmap": {
+          const yearParam = url.searchParams.get("year");
+          const year = yearParam ? parseInt(yearParam) : new Date().getUTCFullYear();
+          const rows = await env.DB.prepare(
+            `SELECT
+               CAST(((ts / 86400) * 86400) AS INTEGER) as day_ts,
+               COUNT(*) as plays
+             FROM plays WHERE year = ?
+             GROUP BY day_ts ORDER BY day_ts`
+          ).bind(year).all<{ day_ts: number; plays: number }>();
+          const heatmap = rows.results.map(r => ({
+            date: new Date(r.day_ts * 1000).toISOString().split("T")[0],
+            plays: r.plays,
+          }));
+          return Response.json({ source: "local_history", year, days: heatmap });
+        }
+
+        case "/api/listening/eras": {
+          const erasJson = await import("./listening/data/eras.json");
+          const eras = Array.isArray(erasJson.default) ? erasJson.default : erasJson;
+          const enriched = [];
+          for (const era of eras as Array<{ name: string; years: number[]; artists: string[]; summary: string }>) {
+            const yearPlaceholders = era.years.map(() => "?").join(",");
+            const stats = await env.DB.prepare(
+              `SELECT COUNT(*) as plays,
+                      ROUND(SUM(minutes) / 60.0, 1) as hours,
+                      COUNT(DISTINCT spotify_track_uri) as tracks,
+                      (SELECT COUNT(*) FROM (SELECT 1 FROM plays WHERE year IN (${yearPlaceholders}) GROUP BY artist_name COLLATE NOCASE)) as artists,
+                      ROUND(100.0 * SUM(CASE WHEN reason_end = 'fwdbtn' THEN 1 ELSE 0 END) / COUNT(*), 1) as skip_rate
+               FROM plays WHERE year IN (${yearPlaceholders})`
+            ).bind(...era.years, ...era.years).first<{ plays: number; hours: number; tracks: number; artists: number; skip_rate: number }>();
+            const topArtists = await env.DB.prepare(
+              `SELECT artist_name, COUNT(*) as plays, ROUND(SUM(minutes)/60.0, 1) as hours
+               FROM plays WHERE year IN (${yearPlaceholders})
+               GROUP BY artist_name COLLATE NOCASE ORDER BY plays DESC LIMIT 8`
+            ).bind(...era.years).all<{ artist_name: string; plays: number; hours: number }>();
+            const topTrack = await env.DB.prepare(
+              `SELECT track_name, artist_name, COUNT(*) as plays
+               FROM plays WHERE year IN (${yearPlaceholders})
+               GROUP BY track_name COLLATE NOCASE, artist_name COLLATE NOCASE
+               ORDER BY plays DESC LIMIT 1`
+            ).bind(...era.years).first<{ track_name: string; artist_name: string; plays: number }>();
+            // Per-year play counts for mini sparkline
+            const yearlySQL = `SELECT year, COUNT(*) as plays FROM plays WHERE year IN (${yearPlaceholders}) GROUP BY year ORDER BY year`;
+            const yearly = await env.DB.prepare(yearlySQL).bind(...era.years)
+              .all<{ year: number; plays: number }>();
+            enriched.push({
+              ...era,
+              totalPlays: stats?.plays ?? 0,
+              totalHours: stats?.hours ?? 0,
+              uniqueTracks: stats?.tracks ?? 0,
+              uniqueArtists: stats?.artists ?? 0,
+              skipRate: stats?.skip_rate ?? 0,
+              topTrack: topTrack ? { track: topTrack.track_name, artist: topTrack.artist_name, plays: topTrack.plays } : null,
+              topArtistsByPlays: topArtists.results.map(a => ({ artist: a.artist_name, plays: a.plays, hours: a.hours })),
+              yearlyPlays: yearly.results,
+            });
+          }
+          return Response.json({ source: "local_history", eras: enriched });
+        }
+
+        case "/api/listening/month": {
+          const y = parseInt(url.searchParams.get("year") ?? "");
+          const m = parseInt(url.searchParams.get("month") ?? "");
+          if (!y || !m) return Response.json({ error: "year and month required" }, { status: 400 });
+          const { getTimeMachine } = await import("./listening/queries");
+          const result = await getTimeMachine(env.DB, y, m, 15);
+          return Response.json({ source: "local_history", ...result });
+        }
+
+        case "/api/listening/intelligence": {
+          // Agent performance and taste model health
+          const intl = await (async () => {
+            // 1. Session performance (last 30 sessions)
+            const sessionsSQL = `
+              SELECT s.session_id, s.mode, s.invoked_at,
+                COUNT(st.id) as tracks,
+                SUM(CASE WHEN st.outcome = 'completed' THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN st.outcome = 'skipped' THEN 1 ELSE 0 END) as skipped,
+                SUM(CASE WHEN st.outcome = 'replayed' THEN 1 ELSE 0 END) as replayed,
+                SUM(CASE WHEN st.source LIKE 'fresh:%' THEN 1 ELSE 0 END) as fresh,
+                SUM(CASE WHEN st.source LIKE 'fresh:%' AND st.outcome = 'completed' THEN 1 ELSE 0 END) as fresh_completed,
+                SUM(CASE WHEN st.source LIKE 'fresh:%' AND st.outcome = 'skipped' THEN 1 ELSE 0 END) as fresh_skipped
+              FROM sessions s
+              JOIN session_tracks st ON st.session_id = s.session_id
+              WHERE s.ended_at IS NOT NULL
+              GROUP BY s.session_id
+              ORDER BY s.invoked_at DESC LIMIT 30
+            `;
+            const sessions = await env.DB.prepare(sessionsSQL).all();
+
+            // 2. Taste score calibration: skip rate by score tier
+            const calibrationSQL = `
+              SELECT
+                CASE
+                  WHEN tt.taste_score >= 25 THEN 'Loved (25+)'
+                  WHEN tt.taste_score >= 15 THEN 'Strong (15-25)'
+                  WHEN tt.taste_score >= 5 THEN 'Moderate (5-15)'
+                  ELSE 'Low (<5)'
+                END as tier,
+                COUNT(pe.id) as plays,
+                SUM(CASE WHEN pe.classification IN ('completed','replayed') THEN 1 ELSE 0 END) as satisfied,
+                SUM(CASE WHEN pe.classification = 'skipped' THEN 1 ELSE 0 END) as skipped
+              FROM play_events pe
+              JOIN track_taste tt ON tt.track_id = pe.track_id
+              WHERE pe.session_id IS NOT NULL
+              GROUP BY tier
+              ORDER BY MIN(tt.taste_score) DESC
+            `;
+            const calibration = await env.DB.prepare(calibrationSQL).all();
+
+            // 3. Agent wins: completed/replayed tracks from sessions with reasons
+            const winsSQL = `
+              SELECT st.track_id, st.source, st.outcome,
+                COALESCE(tt.track_name, fp.track_name) as track_name,
+                COALESCE(at2.artist_name, '') as artist_name,
+                tt.taste_score, tt.in_liked_songs, tt.in_top_tracks_short,
+                tt.in_top_tracks_medium, tt.play_count, tt.complete_count,
+                s.mode, s.invoked_at
+              FROM session_tracks st
+              JOIN sessions s ON s.session_id = st.session_id
+              LEFT JOIN track_taste tt ON tt.track_id = st.track_id
+              LEFT JOIN artist_taste at2 ON at2.artist_id = tt.primary_artist_id
+              LEFT JOIN fresh_pool fp ON fp.track_id = st.track_id
+              WHERE st.outcome IN ('completed', 'replayed')
+              ORDER BY s.invoked_at DESC
+              LIMIT 25
+            `;
+            const wins = await env.DB.prepare(winsSQL).all();
+
+            // 4. Discovery source effectiveness
+            const discoverySQL = `
+              SELECT
+                CASE
+                  WHEN fp.source LIKE 'lastfm:%' THEN 'Last.fm Similar'
+                  WHEN fp.source = 'editorial_rss' THEN COALESCE(fp.source_detail, 'Editorial RSS')
+                  WHEN fp.source LIKE 'rss:%' THEN REPLACE(REPLACE(fp.source, 'rss:', ''), '_', ' ')
+                  WHEN fp.source = 'hype_machine' THEN 'Hype Machine'
+                  WHEN fp.source = 'followed_artist_search' THEN 'Followed Artists'
+                  WHEN fp.source = 'top_artist_search' THEN 'Top Artist Releases'
+                  ELSE fp.source
+                END as source_label,
+                COUNT(*) as total,
+                SUM(CASE WHEN fp.status = 'fresh' THEN 1 ELSE 0 END) as fresh,
+                SUM(CASE WHEN fp.status = 'liked' THEN 1 ELSE 0 END) as liked,
+                SUM(CASE WHEN fp.status = 'skipped' THEN 1 ELSE 0 END) as skipped,
+                SUM(CASE WHEN fp.status IN ('played','liked') THEN 1 ELSE 0 END) as engaged,
+                ROUND(AVG(fp.taste_score), 1) as avg_score
+              FROM fresh_pool fp
+              GROUP BY source_label
+              ORDER BY total DESC
+            `;
+            const discovery = await env.DB.prepare(discoverySQL).all();
+
+            // 5. Acoustic profile maturity per mode
+            const acousticSQL = `
+              SELECT mode, COUNT(*) as dimensions,
+                MIN(sample_size) as min_samples, ROUND(AVG(sample_size)) as avg_samples,
+                MAX(sample_size) as max_samples
+              FROM acoustic_profile
+              GROUP BY mode ORDER BY avg_samples DESC
+            `;
+            const acoustic = await env.DB.prepare(acousticSQL).all();
+
+            // 6. Context maturity — show distinct trained BUCKETS per dimension,
+            //    not raw track×bucket pair counts (which are always mostly undertrained)
+            const contextSQL = `
+              SELECT dimension,
+                COUNT(DISTINCT bucket) as total_buckets,
+                COUNT(DISTINCT CASE WHEN sample_size >= 5 THEN bucket END) as trained_buckets,
+                COUNT(*) as total_affinities,
+                SUM(CASE WHEN sample_size >= 5 THEN 1 ELSE 0 END) as trained_affinities,
+                ROUND(AVG(sample_size), 1) as avg_samples
+              FROM track_context_affinity
+              GROUP BY dimension ORDER BY avg_samples DESC
+            `;
+            let context = await env.DB.prepare(contextSQL).all();
+
+            // If live context table is empty, derive daylight + day_of_week from plays
+            if (context.results.length === 0) {
+              const daylightBucketsSQL = `
+                SELECT
+                  CASE
+                    WHEN local_hour < 5 THEN 'night' WHEN local_hour < 7 THEN 'dawn'
+                    WHEN local_hour < 10 THEN 'morning' WHEN local_hour < 17 THEN 'day'
+                    WHEN local_hour < 20 THEN 'evening' ELSE 'dusk'
+                  END as bucket, COUNT(*) as plays
+                FROM plays GROUP BY bucket ORDER BY plays DESC
+              `;
+              const daylightBuckets = await env.DB.prepare(daylightBucketsSQL)
+                .all<{ bucket: string; plays: number }>();
+              const dowBucketsSQL = `
+                SELECT CASE CAST(strftime('%w', ts, 'unixepoch') AS INTEGER)
+                  WHEN 0 THEN 'Sun' WHEN 1 THEN 'Mon' WHEN 2 THEN 'Tue'
+                  WHEN 3 THEN 'Wed' WHEN 4 THEN 'Thu' WHEN 5 THEN 'Fri' WHEN 6 THEN 'Sat'
+                END as bucket, COUNT(*) as plays
+                FROM plays GROUP BY bucket ORDER BY plays DESC
+              `;
+              const dowBuckets = await env.DB.prepare(dowBucketsSQL)
+                .all<{ bucket: string; plays: number }>();
+
+              context = {
+                results: [
+                  { dimension: "daylight_phase", total_buckets: 6, trained_buckets: daylightBuckets.results.length,
+                    avg_samples: Math.round(260331 / 6), buckets: daylightBuckets.results, fromPlays: true },
+                  { dimension: "day_of_week", total_buckets: 7, trained_buckets: dowBuckets.results.length,
+                    avg_samples: Math.round(260331 / 7), buckets: dowBuckets.results, fromPlays: true },
+                ],
+                success: true, meta: { duration: 0 },
+              } as any;
+            } else {
+              // Enrich live context with bucket-level detail
+              for (const row of context.results as any[]) {
+                const bucketsSQL = `
+                  SELECT bucket, SUM(sample_size) as plays
+                  FROM track_context_affinity WHERE dimension = ?
+                  GROUP BY bucket ORDER BY plays DESC
+                `;
+                const buckets = await env.DB.prepare(bucketsSQL).bind(row.dimension)
+                  .all<{ bucket: string; plays: number }>();
+                row.buckets = buckets.results;
+              }
+            }
+
+            // 7. Signal effectiveness: which signals predict completion in sessions
+            // Single-pass signal effectiveness (avoids SQLite compound SELECT limit)
+            const signalBaseSQL = `
+              SELECT
+                SUM(CASE WHEN tt.in_liked_songs = 1 THEN 1 ELSE 0 END) as liked_total,
+                SUM(CASE WHEN tt.in_liked_songs = 1 AND pe.classification IN ('completed','replayed') THEN 1 ELSE 0 END) as liked_sat,
+                SUM(CASE WHEN tt.in_top_tracks_short = 1 THEN 1 ELSE 0 END) as top_short_total,
+                SUM(CASE WHEN tt.in_top_tracks_short = 1 AND pe.classification IN ('completed','replayed') THEN 1 ELSE 0 END) as top_short_sat,
+                SUM(CASE WHEN tt.in_top_tracks_medium = 1 THEN 1 ELSE 0 END) as top_med_total,
+                SUM(CASE WHEN tt.in_top_tracks_medium = 1 AND pe.classification IN ('completed','replayed') THEN 1 ELSE 0 END) as top_med_sat,
+                SUM(CASE WHEN tt.seasonal_playlist_count > 0 THEN 1 ELSE 0 END) as seasonal_total,
+                SUM(CASE WHEN tt.seasonal_playlist_count > 0 AND pe.classification IN ('completed','replayed') THEN 1 ELSE 0 END) as seasonal_sat,
+                SUM(CASE WHEN tt.play_count >= 10 THEN 1 ELSE 0 END) as highplay_total,
+                SUM(CASE WHEN tt.play_count >= 10 AND pe.classification IN ('completed','replayed') THEN 1 ELSE 0 END) as highplay_sat
+              FROM play_events pe
+              JOIN track_taste tt ON tt.track_id = pe.track_id
+              WHERE pe.session_id IS NOT NULL AND pe.classification IN ('completed','skipped','replayed','abandoned')
+            `;
+            const sigRow = await env.DB.prepare(signalBaseSQL).first<Record<string, number>>();
+            // Fresh discovery needs a separate query (joins session_tracks)
+            const freshSigSQL = `
+              SELECT COUNT(*) as total,
+                SUM(CASE WHEN pe.classification IN ('completed','replayed') THEN 1 ELSE 0 END) as sat
+              FROM play_events pe
+              JOIN session_tracks st ON st.session_id = pe.session_id AND st.track_id = pe.track_id
+              WHERE st.source LIKE 'fresh:%' AND pe.session_id IS NOT NULL
+                AND pe.classification IN ('completed','skipped','replayed','abandoned')
+            `;
+            const freshSig = await env.DB.prepare(freshSigSQL).first<{ total: number; sat: number }>();
+            const sr = sigRow || {} as Record<string, number>;
+            const signals = { results: [
+              { signal: 'Liked Songs', has_signal: sr.liked_total || 0, satisfied_with: sr.liked_sat || 0 },
+              { signal: 'Top Tracks (Short)', has_signal: sr.top_short_total || 0, satisfied_with: sr.top_short_sat || 0 },
+              { signal: 'Top Tracks (Medium)', has_signal: sr.top_med_total || 0, satisfied_with: sr.top_med_sat || 0 },
+              { signal: 'Seasonal Playlist', has_signal: sr.seasonal_total || 0, satisfied_with: sr.seasonal_sat || 0 },
+              { signal: 'High Play Count (10+)', has_signal: sr.highplay_total || 0, satisfied_with: sr.highplay_sat || 0 },
+              { signal: 'Fresh Discovery', has_signal: freshSig?.total || 0, satisfied_with: freshSig?.sat || 0 },
+            ] };
+
+            // 8. Overall health scores
+            const totalSessionTracks = sessions.results.reduce((sum: number, s: any) => sum + (s.tracks || 0), 0);
+            const totalCompleted = sessions.results.reduce((sum: number, s: any) => sum + (s.completed || 0), 0);
+            const totalReplayed = sessions.results.reduce((sum: number, s: any) => sum + (s.replayed || 0), 0);
+            const totalSkipped = sessions.results.reduce((sum: number, s: any) => sum + (s.skipped || 0), 0);
+            const totalFresh = sessions.results.reduce((sum: number, s: any) => sum + (s.fresh || 0), 0);
+            const totalFreshCompleted = sessions.results.reduce((sum: number, s: any) => sum + (s.fresh_completed || 0), 0);
+
+            const satisfactionRate = totalSessionTracks > 0
+              ? Math.round(((totalCompleted + totalReplayed) / totalSessionTracks) * 100) : 0;
+            const discoveryHitRate = totalFresh > 0
+              ? Math.round((totalFreshCompleted / totalFresh) * 100) : 0;
+            const totalTrainedBuckets = context.results.reduce((s: number, c: any) => s + (c.trained_buckets || 0), 0);
+            const totalBuckets = context.results.reduce((s: number, c: any) => s + (c.total_buckets || 0), 0);
+            const trainedContextPct = totalBuckets > 0
+              ? Math.round(totalTrainedBuckets / totalBuckets * 100) : 0;
+            const acousticCoverage = acoustic.results.length > 0
+              ? Math.round((acoustic.results.filter((a: any) => (a.min_samples || 0) >= 10).length / Math.max(1, acoustic.results.length)) * 100) : 0;
+
+            return {
+              source: "mixed",
+              health: {
+                satisfaction: satisfactionRate,
+                discoveryHitRate,
+                contextMaturity: trainedContextPct,
+                acousticCoverage,
+                totalSessions: sessions.results.length,
+                totalTracksServed: totalSessionTracks,
+              },
+              sessions: sessions.results.map((s: any) => ({
+                mode: s.mode,
+                date: new Date((s.invoked_at || 0) * 1000).toISOString().split("T")[0],
+                tracks: s.tracks,
+                completed: s.completed,
+                skipped: s.skipped,
+                replayed: s.replayed,
+                fresh: s.fresh,
+                freshCompleted: s.fresh_completed,
+                completionRate: s.tracks > 0 ? Math.round(((s.completed + s.replayed) / s.tracks) * 100) : 0,
+              })),
+              calibration: calibration.results,
+              wins: wins.results.map((w: any) => ({
+                track: w.track_name || w.track_id,
+                artist: w.artist_name,
+                trackId: w.track_id,
+                outcome: w.outcome,
+                source: w.source,
+                tasteScore: w.taste_score != null ? Math.round(w.taste_score * 10) / 10 : null,
+                mode: w.mode,
+                date: new Date((w.invoked_at || 0) * 1000).toISOString().split("T")[0],
+                signals: [
+                  w.in_liked_songs ? "Liked" : null,
+                  w.in_top_tracks_short ? "Top (4wk)" : null,
+                  w.in_top_tracks_medium ? "Top (6mo)" : null,
+                  w.play_count >= 10 ? `${w.play_count} plays` : null,
+                  (w.source || "").startsWith("fresh:") ? "Discovery" : null,
+                ].filter(Boolean),
+              })),
+              discovery: discovery.results,
+              acoustic: acoustic.results,
+              context: context.results,
+              signals: signals.results.map((s: any) => ({
+                signal: s.signal,
+                tracks: s.has_signal || 0,
+                satisfied: s.satisfied_with || 0,
+                hitRate: (s.has_signal || 0) > 0 ? Math.round(((s.satisfied_with || 0) / s.has_signal) * 100) : 0,
+              })),
+            };
+          })();
+          return Response.json(intl);
+        }
+
+        case "/api/listening/discover": {
+          // All fresh_pool entries grouped by source, with artist names
+          const discoverFilter = url.searchParams.get("status") ?? "fresh";
+          const discoverRows = await env.DB.prepare(`
+            SELECT fp.track_id, fp.track_name, fp.source, fp.source_detail,
+                   fp.taste_score, fp.status, fp.found_at,
+                   at2.artist_name as primary_artist_name
+            FROM fresh_pool fp
+            LEFT JOIN artist_taste at2 ON at2.artist_id = fp.primary_artist_id
+            WHERE fp.status IN ('fresh', 'queued', 'played', 'liked')
+            ORDER BY fp.found_at DESC
+          `).all<{
+            track_id: string; track_name: string; source: string; source_detail: string | null;
+            taste_score: number; status: string; found_at: number; primary_artist_name: string | null;
+          }>();
+
+          // Group by source for the UI
+          const sourceGroups: Record<string, { label: string; color: string; tracks: unknown[] }> = {};
+          const sourceLabels: Record<string, { label: string; color: string }> = {
+            'editorial_rss': { label: 'Editorial RSS', color: 'var(--accent4)' },
+            'hype_machine': { label: 'Hype Machine', color: 'var(--accent2)' },
+            'rss:gorilla_vs_bear': { label: 'Gorilla vs Bear', color: 'var(--accent5)' },
+            'rss:aquarium_drunkard': { label: 'Aquarium Drunkard', color: 'var(--accent3)' },
+            'lastfm:artist_similar': { label: 'Last.fm Similar', color: 'var(--accent)' },
+            'followed_artist_search': { label: 'Followed Artists', color: 'var(--accent)' },
+            'top_artist_search': { label: 'Top Artist Releases', color: 'var(--accent)' },
+          };
+
+          for (const row of discoverRows.results) {
+            const key = row.source;
+            if (!sourceGroups[key]) {
+              const info = sourceLabels[key] || { label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), color: 'var(--accent)' };
+              sourceGroups[key] = { label: info.label, color: info.color, tracks: [] };
+            }
+            sourceGroups[key].tracks.push({
+              trackId: row.track_id,
+              track: row.track_name,
+              artist: row.primary_artist_name || row.source_detail || '',
+              sourceDetail: row.source_detail,
+              tasteScore: Math.round(row.taste_score * 10) / 10,
+              status: row.status,
+              foundAt: new Date(row.found_at * 1000).toISOString().split('T')[0],
+            });
+          }
+
+          // Stats
+          const discoverStats = await env.DB.prepare(`
+            SELECT COUNT(*) as total,
+                   SUM(CASE WHEN status = 'fresh' THEN 1 ELSE 0 END) as fresh,
+                   SUM(CASE WHEN status = 'played' THEN 1 ELSE 0 END) as played,
+                   SUM(CASE WHEN status = 'liked' THEN 1 ELSE 0 END) as liked,
+                   SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) as skipped
+            FROM fresh_pool
+          `).first<{ total: number; fresh: number; played: number; liked: number; skipped: number }>();
+
+          return Response.json({
+            source: "mixed",
+            stats: discoverStats,
+            sources: Object.values(sourceGroups),
+          });
+        }
+
+        case "/api/listening/search": {
+          const q = url.searchParams.get("q") ?? "";
+          if (q.length < 2) return Response.json({ source: "local_history", results: [] });
+          const { search } = await import("./listening/dashboard-queries");
+          const results = await search(env.DB, q, 10);
+          return Response.json({ source: "local_history", results });
+        }
+
+        case "/api/listening/track": {
+          const name = url.searchParams.get("name") ?? "";
+          const artist = url.searchParams.get("artist") ?? "";
+          if (!name || !artist) return Response.json({ error: "name and artist required" }, { status: 400 });
+          const { getTrackDetail } = await import("./listening/dashboard-queries");
+          const detail = await getTrackDetail(env.DB, name, artist);
+          if (!detail) return Response.json({ error: "Track not found" }, { status: 404 });
+          return Response.json({ source: "local_history", ...detail });
+        }
+
+        case "/api/listening/artist": {
+          const artistName = url.searchParams.get("name") ?? "";
+          if (!artistName) return Response.json({ error: "name required" }, { status: 400 });
+          const { getArtistDetail } = await import("./listening/dashboard-queries");
+          const detail = await getArtistDetail(env.DB, artistName);
+          if (!detail) return Response.json({ error: "Artist not found" }, { status: 404 });
+          return Response.json({ source: "local_history", ...detail });
+        }
+
+        case "/api/listening/pulse": {
+          // Check KV cache (5 min TTL)
+          const cachedPulse = await env.KV.get("dashboard:pulse", "json");
+          if (cachedPulse) return Response.json(cachedPulse);
+          const { getPulseData } = await import("./listening/dashboard-queries");
+          const pulse = await getPulseData(env.DB);
+          const pulsePayload = { source: "local_history", ...pulse };
+          await env.KV.put("dashboard:pulse", JSON.stringify(pulsePayload), { expirationTtl: 300 });
+          return Response.json(pulsePayload);
+        }
+
+        case "/api/listening/trends": {
+          // Check KV cache (1 hour TTL)
+          const cached = await env.KV.get("dashboard:trends", "json");
+          if (cached) return Response.json(cached);
+          const { getTrendsData } = await import("./listening/dashboard-queries");
+          const trends = await getTrendsData(env.DB);
+          const payload = { source: "local_history", ...trends };
+          await env.KV.put("dashboard:trends", JSON.stringify(payload), { expirationTtl: 3600 });
+          return Response.json(payload);
+        }
+
+        case "/api/listening/hero": {
+          // Fast hero: simple counts + rolling windows, no COLLATE NOCASE
+          const heroNow = Math.floor(Date.now() / 1000);
+          const heroSQL = `
+            SELECT COUNT(*) as plays, ROUND(SUM(minutes)/60.0,1) as hours,
+                   COUNT(DISTINCT spotify_track_uri) as tracks,
+                   COUNT(DISTINCT artist_name) as artists
+            FROM plays
+          `;
+          const heroStats = await env.DB.prepare(heroSQL)
+            .first<{ plays: number; hours: number; tracks: number; artists: number }>();
+          const { getRollingWindows } = await import("./listening/dashboard-queries");
+          const windows = await getRollingWindows(env.DB);
+          return Response.json({
+            source: "local_history",
+            totalPlays: heroStats?.plays ?? 0,
+            totalHours: heroStats?.hours ?? 0,
+            totalTracks: heroStats?.tracks ?? 0,
+            totalArtists: heroStats?.artists ?? 0,
+            last7days: windows.week.plays,
+            last7daysDelta: windows.week.deltaPct,
+            last30days: windows.month.plays,
+            last30daysDelta: windows.month.deltaPct,
+          });
+        }
+
         default:
           return new Response("Not found", { status: 404 });
       }
@@ -1093,10 +1704,25 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
     }
 
     if (cron === "0 5 * * *") {
-      // Daily at 5am UTC (1am ET): derive, rebuild taste + affinities, audio backfill, prune
+      // One-time migration: reclassify old "skipped" and "partial" play_events as "abandoned"
+      // (old heuristic couldn't distinguish pauses from skips; conservative reclassification)
+      const migrated = await env.KV.get("migration:abandon_reclassify");
+      if (!migrated) {
+        await env.DB.prepare(
+          "UPDATE play_events SET classification = 'abandoned' WHERE classification IN ('skipped', 'partial')"
+        ).run();
+        await env.KV.put("migration:abandon_reclassify", new Date().toISOString());
+      }
+
+      // Daily at 5am UTC (1am ET): sync recent plays, derive, rebuild taste + affinities, audio backfill, prune
+      const spotify = new SpotifyClient(env);
+
+      // Sync recent plays from Spotify into the plays table (before taste rebuild)
+      const { syncRecentPlays } = await import("./listening/sync");
+      await syncRecentPlays(env.DB, spotify, env.KV);
+
       const snapshotId = await getLatestSnapshotId(env.DB);
       await derivePlayEvents(env.DB, snapshotId);
-      const spotify = new SpotifyClient(env);
       await rebuildTasteModel(env.DB, spotify);
       await rebuildAffinities(env.DB);
 
@@ -1121,6 +1747,15 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
     if (cron === "*/2 * * * *") {
       // Every 2 minutes: check for active session and process feedback
       await processFeedback(env.DB);
+
+      // Check if a sync follow-up is needed (50-play cap hit)
+      const needsFollowup = await env.KV.get("sync:needs_followup");
+      if (needsFollowup) {
+        await env.KV.delete("sync:needs_followup");
+        const spotify = new SpotifyClient(env);
+        const { syncRecentPlays } = await import("./listening/sync");
+        await syncRecentPlays(env.DB, spotify, env.KV);
+      }
 
       // On the hour (minute 0): capture an ambient context snapshot
       const currentMinute = new Date().getUTCMinutes();

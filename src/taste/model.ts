@@ -205,6 +205,7 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient):
       COUNT(*) as play_count,
       SUM(CASE WHEN classification = 'skipped' THEN 1 ELSE 0 END) as skip_count,
       SUM(CASE WHEN classification IN ('completed', 'replayed') THEN 1 ELSE 0 END) as complete_count,
+      -- Note: 'abandoned' events are excluded from both skip and complete counts (neutral)
       SUM(CASE WHEN classification = 'replayed' THEN 1 ELSE 0 END) as replay_count,
       MAX(started_at) as last_played_at
     FROM play_events

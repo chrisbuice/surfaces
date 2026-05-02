@@ -47,7 +47,7 @@ export class LastFmClient {
     });
 
     const resp = await fetch(`${LASTFM_BASE}?${params}`, {
-      headers: { "User-Agent": "SpotifyAgent/1.0 (personal project)" },
+      headers: { "User-Agent": "Surfaces/1.0 (personal project)" },
     });
 
     if (!resp.ok) {

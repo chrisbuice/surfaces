@@ -7,14 +7,14 @@
 
 const RESEND_API = "https://api.resend.com/emails";
 const TO_EMAIL = "chrisbuice@gmail.com";
-const FROM_EMAIL = "Spotify Agent <spotify-agent@amberglow.ai>";
+const FROM_EMAIL = "Surfaces <spotify-agent@amberglow.ai>";
 
 interface DailySummary {
   totalTracks: number;
   totalMinutes: number;
   completed: number;
   skipped: number;
-  partial: number;
+  abandoned: number;
   skipRate: number;
   topTracks: Array<{ name: string; count: number }>;
   topArtists: Array<{ name: string; count: number }>;
@@ -95,8 +95,10 @@ async function buildSummary(db: D1Database): Promise<DailySummary> {
   const totalMinutes = Math.round(rows.reduce((s, r) => s + r.duration_listened_ms, 0) / 60000);
   const completed = rows.filter(r => r.classification === "completed").length;
   const skipped = rows.filter(r => r.classification === "skipped").length;
-  const partial = rows.filter(r => r.classification === "partial").length;
-  const skipRate = totalTracks > 0 ? Math.round(skipped / totalTracks * 100) : 0;
+  const abandoned = rows.filter(r => r.classification === "abandoned").length;
+  // Skip rate excludes abandoned from both numerator and denominator
+  const ratedTracks = totalTracks - abandoned;
+  const skipRate = ratedTracks > 0 ? Math.round(skipped / ratedTracks * 100) : 0;
 
   // Top tracks by play count
   const trackCounts = new Map<string, { name: string; count: number }>();
@@ -173,7 +175,7 @@ async function buildSummary(db: D1Database): Promise<DailySummary> {
   ).bind(since).first<{ count: number }>();
 
   return {
-    totalTracks, totalMinutes, completed, skipped, partial, skipRate,
+    totalTracks, totalMinutes, completed, skipped, abandoned, skipRate,
     topTracks, topArtists,
     freshTracksPlayed, freshTracksSkipped, freshTracksCompleted,
     contextBreakdown,
@@ -214,9 +216,9 @@ function renderEmail(s: DailySummary): string {
     </tr>
   </table>
 
-  ${s.completed + s.skipped + s.partial > 0 ? `
+  ${s.completed + s.skipped + s.abandoned > 0 ? `
   <div style="margin-bottom:24px;font-size:14px;color:#666;">
-    ${s.completed} completed &middot; ${s.skipped} skipped &middot; ${s.partial} partial
+    ${s.completed} completed &middot; ${s.skipped} skipped &middot; ${s.abandoned} abandoned
   </div>` : ""}
 
   ${s.topTracks.length > 0 ? `
@@ -257,7 +259,7 @@ function renderEmail(s: DailySummary): string {
   </table>` : ""}
 
   <div style="font-size:12px;color:#999;margin-top:20px;border-top:1px solid #eee;padding-top:16px;">
-    Spotify Agent &middot; <a href="https://spotify-agent-dashboard.pages.dev" style="color:#1db954;text-decoration:none;font-weight:500;">Open Dashboard</a>
+    Surfaces &middot; <a href="https://spotify-agent-dashboard.pages.dev" style="color:#1db954;text-decoration:none;font-weight:500;">Open Dashboard</a>
   </div>
 </div>`;
 }

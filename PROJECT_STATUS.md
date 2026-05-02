@@ -1,4 +1,4 @@
-# Spotify Curation Agent — Project Status
+# Surfaces — Project Status
 
 **Last updated:** April 29, 2026 (end of session 5)
 **Codebase:** 37 TypeScript files + 1 HTML dashboard, ~10,380 lines
@@ -12,7 +12,7 @@ This document is intended to bring a new conversation up to speed on the full st
 
 ## 1. What the application does
 
-This is a personal Spotify music curation agent. It runs 24/7 on Cloudflare Workers, watches my listening behavior, builds a taste profile, discovers new music from editorial sources, and curates sessions that blend familiar favorites with fresh discoveries — all tuned to time of day, weather, location, acoustic profile, and what I'm doing.
+Surfaces is a personal Spotify music curation tool. It runs 24/7 on Cloudflare Workers, watches my listening behavior, builds a taste profile, discovers new music from editorial sources, and curates sessions that blend familiar favorites with fresh discoveries — all tuned to time of day, weather, location, acoustic profile, and what I'm doing.
 
 **Three interfaces:**
 - **Siri voice commands** — "Hey Siri, Working Music" triggers an iOS Shortcut that starts a curated session with GPS context
@@ -483,7 +483,67 @@ cdde6e8 Prefer phone over soundbar when no device is actively playing
 
 ---
 
-## 15. Future ideas (not planned, just bookmarked)
+## 15. Pending data exports (action items)
+
+Two Spotify personal data exports requested April 29, 2026. Pre-design — no backfill code until file contents are inspected.
+
+### 15.1 Account data export
+
+- **Requested:** April 29, 2026
+- **Spotify ETA:** up to 5 days
+- **Reminder:** if not received and shared with Claude by **May 6, 2026**, prompt user to check status at https://www.spotify.com/account/privacy/
+- **Contents:** Playlists, 1 year streaming history, saved library, search queries, follower/following lists, payment data, customer service history, family plan data, inferences, voice input, podcast interactivity, Spotify for Artists data, AI Playlist, Wrapped data, message data
+- **Highest-value targets for the agent:**
+  - Saved library export with `added_at` per track (recency dimension on track_taste not currently modeled)
+  - Playlists export with track-level `added_at` (fixes seasonal playlist year inference, currently best-effort under embed scraping)
+  - Search queries (potential intent signal — artists searched but not played as discovery candidates)
+  - Inferences (Spotify's own taste model output — review for cluster/tag insights, do NOT import as-is)
+- **Skip:** payment, customer service, family plan, voice input, podcast interactivity, Spotify for Artists, AI Playlist, Wrapped, message data
+
+### 15.2 Extended streaming history export
+
+- **Requested:** April 29, 2026
+- **Spotify ETA:** up to 30 days (typical: 5–14 days based on community reports)
+- **Reminder:** if not received and shared with Claude by **May 29, 2026**, prompt user to check status at https://www.spotify.com/account/privacy/
+- **Format:** `my_spotify_data.zip` containing `Streaming_History_Audio_YYYY-YYYY_N.json` files (~10K plays each), plus `Streaming_History_Video_*.json` (skip) and a multi-language ReadMeFirst PDF
+- **Per-play schema (confirm on arrival, schema as of early 2026):**
+  - Identity: `spotify_track_uri` (joinable key), `master_metadata_track_name`, `master_metadata_album_artist_name`, `master_metadata_album_album_name`
+  - Time: `ts` (verify whether end-of-play or start-of-play), `ms_played`
+  - Behavior: `reason_start`, `reason_end`, `shuffle`, `skipped`, `offline`, `incognito_mode`
+  - Context: `platform` (OS/device string, richer than current device_type), `conn_country` (2-letter)
+  - Strip on ingest: `ip_addr_decrypted`, `user_agent_decrypted` (PII)
+  - Skip entirely: episode_* fields (podcasts), Streaming_History_Video files
+- **Volume estimate:** for a multi-year active account, expect 50K–200K plays in a 5–50 MB zip
+
+**Highest-value targets for the agent:**
+- **Acoustic profile (M17) becomes fully trained.** Every mode time-window populates with hundreds-to-thousands of events. `reason_end='trackdone'` is a cleaner completion filter than the current ≥80% heuristic. The 'overall' fallback stops being load-bearing.
+- **Skip/replay classification upgrade.** `reason_end='fwdbtn'` = explicit skip; `reason_start='backbtn'` = explicit replay. Add nullable `reason_start`/`reason_end` columns to `play_events`; prefer them over heuristic when present. Going forward, also capture from currently-playing API where available.
+- **Lifetime discovery dedup.** Discovery currently dedups against `track_taste` + `play_events` back only to April 2026. Backfill makes "have I ever played this track" a real lifetime check.
+- **Mode profile rebuild.** `mode_profiles.top_tracks`/`top_artists`/`hour_distribution` populate with multi-year data instead of weeks.
+- **Long-term taste decay.** Tracks heavily played in 2019 but dormant since 2023 should weight differently from current favorites. Year-scale data enables a half-life-style decay on track_taste.
+- **Travel context.** `conn_country` enables a "travel" affinity dimension that doesn't exist today.
+- **Privacy-respecting filters.** Drop `incognito_mode=true` plays from taste training; consider dropping `offline=true` from context affinity training.
+
+**Highest-value targets for the dashboard:**
+- Listening Lifetime section: total plays, total hours, account age, top tracks/artists across multiple time ranges
+- Per-track history on hover/click in Now Playing and Last 24 Hours ("played 47 times since 2019")
+- Replay leaderboard (tracks with most `reason_start='backbtn'` events)
+- Discovery decade chart (when each artist first entered listening history)
+- Skip-rate split by reason (`fwdbtn` = true rejection vs. `endplay` = ambient stop)
+- Country/travel timeline (free feature once data loaded)
+- "Why These Tracks" enrichment with personal history facts
+- "Forgotten Favorites" widget — high lifetime play count, no plays in 6+ months, click to queue
+
+**Backfill design notes (for implementation after review):**
+- One-time script `scripts/backfill-export.ts`; reads each JSON file, dedups against existing `play_events` on `(spotify_track_uri, ts ± duration tolerance)` to handle overlap with agent-captured plays since April 28
+- Insert in batches (500–1000 rows per transaction) with progress tracking so a CPU timeout doesn't lose work
+- Sentinel `device_type='unknown_export'` for export-derived rows (or populate from `platform` if mappable)
+- After backfill: full taste rebuild + acoustic profile rebuild — both pick up new data automatically
+- Historical plays cannot link to `play_event_context` (no weather snapshots pre-April 2026) — they enhance base taste model, mode profiles, and time/day-of-week affinities only
+
+---
+
+## 16. Future ideas (not planned, just bookmarked)
 
 From plan documents and session conversations:
 - Tune acoustic_fit clamp [0.7, 1.4] after 2+ weeks of M20 sessions

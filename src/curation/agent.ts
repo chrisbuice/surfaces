@@ -10,7 +10,7 @@ import { MODES, AVG_TRACK_DURATION_MIN, RECENCY_AVOID_COUNT, ACOUSTIC_PROFILE_MI
 import { resolveMode } from "./modes";
 import { shouldBeFresh } from "./arc";
 import { SpotifyClient } from "../spotify/client";
-import { playTracks, queueTracks, createPlaylist, getActiveDevice } from "../spotify/playback";
+import { playTracks, queueTracks, createPlaylist, getActiveDevice, transferPlayback } from "../spotify/playback";
 import { getTopFresh, markFreshUsed } from "../discovery/pool";
 import { captureContext, type ContextInput, type ContextSnapshot } from "../context/capture";
 import { computeContextMultiplier, summarizeBiases, type ScoredContext } from "./context_score";
@@ -90,24 +90,29 @@ export async function startSession(
   }
 
   // ── Load acoustic profile centroid for this mode ──
-  // Try mode-specific centroid first; fall back to 'overall' if undertrained
+  // Check for curated override first; then try learned profile; fall back to 'overall'
   let modeCentroid = new Map<string, { mean: number; stddev: number }>();
   try {
-    let centroidMode = mode;
-    const modeRows = await db.prepare(
-      "SELECT dimension, mean, stddev, sample_size FROM acoustic_profile WHERE mode = ?"
-    ).bind(mode).all<{ dimension: string; mean: number; stddev: number; sample_size: number }>();
-
-    if (modeRows.results.length > 0 && modeRows.results[0].sample_size >= ACOUSTIC_PROFILE_MIN_SAMPLES) {
-      modeCentroid = new Map(modeRows.results.map(r => [r.dimension, { mean: r.mean, stddev: r.stddev }]));
+    const { getOverrideCentroid } = await import("../audio/overrides");
+    const override = getOverrideCentroid(mode);
+    if (override) {
+      modeCentroid = override;
     } else {
-      // Fall back to 'overall' centroid
-      centroidMode = "overall";
-      const overallRows = await db.prepare(
-        "SELECT dimension, mean, stddev, sample_size FROM acoustic_profile WHERE mode = 'overall'"
-      ).all<{ dimension: string; mean: number; stddev: number; sample_size: number }>();
-      if (overallRows.results.length > 0 && overallRows.results[0].sample_size >= ACOUSTIC_PROFILE_MIN_SAMPLES) {
-        modeCentroid = new Map(overallRows.results.map(r => [r.dimension, { mean: r.mean, stddev: r.stddev }]));
+      // No override — use learned profile
+      const modeRows = await db.prepare(
+        "SELECT dimension, mean, stddev, sample_size FROM acoustic_profile WHERE mode = ?"
+      ).bind(mode).all<{ dimension: string; mean: number; stddev: number; sample_size: number }>();
+
+      if (modeRows.results.length > 0 && modeRows.results[0].sample_size >= ACOUSTIC_PROFILE_MIN_SAMPLES) {
+        modeCentroid = new Map(modeRows.results.map(r => [r.dimension, { mean: r.mean, stddev: r.stddev }]));
+      } else {
+        // Fall back to 'overall' centroid
+        const overallRows = await db.prepare(
+          "SELECT dimension, mean, stddev, sample_size FROM acoustic_profile WHERE mode = 'overall'"
+        ).all<{ dimension: string; mean: number; stddev: number; sample_size: number }>();
+        if (overallRows.results.length > 0 && overallRows.results[0].sample_size >= ACOUSTIC_PROFILE_MIN_SAMPLES) {
+          modeCentroid = new Map(overallRows.results.map(r => [r.dimension, { mean: r.mean, stddev: r.stddev }]));
+        }
       }
     }
   } catch { /* no acoustic profile yet — all tracks get fit=1.0 */ }
@@ -292,9 +297,16 @@ export async function startSession(
     if (!deviceId) {
       throw new Error("No active Spotify device found. Open Spotify and start playing something first.");
     }
+    // If the target device isn't currently active, transfer playback to wake it up
+    if (device && !device.is_active) {
+      await transferPlayback(spotify, device.id);
+    }
     await playTracks(spotify, trackIds, deviceId);
   } else if (output === "queue") {
     const device = await getActiveDevice(spotify);
+    if (device && !device.is_active) {
+      await transferPlayback(spotify, device.id);
+    }
     await queueTracks(spotify, trackIds, device?.id);
   } else if (output === "playlist") {
     const profile = await spotify.get<{ id: string }>("/v1/me");

@@ -6,6 +6,9 @@ import type { Env } from "../index";
 import { SpotifyClient } from "../spotify/client";
 import { startSession } from "../curation/agent";
 import { getTopFresh } from "../discovery/pool";
+import { getTimeMachine, getLostFavorites, getLostFavoritesCount, getSkipPenalizedTracks, getArtistAffinity } from "../listening/queries";
+import { generateQueue } from "../listening/queue";
+import { isSkip } from "../listening/helpers";
 
 export interface McpToolDefinition {
   name: string;
@@ -94,6 +97,57 @@ export function getToolDefinitions(): McpToolDefinition[] {
       name: "current_context",
       description: "Get the latest context snapshot: weather, temperature, daylight phase, location, device type. This is what the curation agent uses to bias track selection.",
       inputSchema: { type: "object", properties: {} },
+    },
+    {
+      name: "time_machine",
+      description: "What were you listening to in a given month or year? Returns top tracks, artists, total plays, and hours listened from your 15-year listening history.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          year: { type: "number", description: "Year (2011-2026). Required." },
+          month: { type: "number", description: "Month (1-12). If omitted, returns the full year." },
+          limit: { type: "number", description: "Number of top tracks/artists to return. Default 15." },
+        },
+        required: ["year"],
+      },
+    },
+    {
+      name: "lost_favorites",
+      description: "Tracks you played 20+ times but haven't listened to in over 2 years. A rediscovery pool of forgotten favorites from your history.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          min_plays: { type: "number", description: "Minimum lifetime plays. Default 20." },
+          min_years_gone: { type: "number", description: "Minimum years since last play. Default 2." },
+          limit: { type: "number", description: "How many to return. Default 25." },
+          artist: { type: "string", description: "Filter to a specific artist." },
+        },
+      },
+    },
+    {
+      name: "skip_report",
+      description: "Analyze skip patterns from your listening history. Shows most-skipped tracks, skip rate trends, and tracks that are never skipped (completion champions).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["month", "quarter", "year", "all"], description: "Time window. Default 'quarter'." },
+          artist: { type: "string", description: "Filter to a specific artist." },
+          min_plays: { type: "number", description: "Minimum plays to include in analysis. Default 5." },
+        },
+      },
+    },
+    {
+      name: "generate_queue",
+      description: "Generate a smart queue of tracks based on your 15-year listening history. Applies recency-weighted affinity, skip penalties, never-stale-core artist boosts, and optional lost-favorites mixing. Returns candidate URIs with per-track provenance — does NOT create a playlist.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          mode: { type: "string", enum: ["rediscover", "era", "morning", "default"], description: "Queue flavor. 'rediscover' mixes ~30% lost favorites. 'era' seeds from a named era. 'morning' weights by 6am-10am listening patterns. 'default' uses global affinity." },
+          seed: { type: "string", description: "Optional seed: an artist name or spotify:track:URI." },
+          length_min: { type: "number", description: "Target queue length in minutes. Default 60." },
+          era_name: { type: "string", description: "Era to seed from when mode='era'. E.g. 'Pop maximalism', 'Texas country + emotional indie'." },
+        },
+      },
     },
   ];
 }
@@ -305,9 +359,10 @@ export async function callTool(
           COUNT(*) as total,
           SUM(CASE WHEN classification = 'completed' THEN 1 ELSE 0 END) as completed,
           SUM(CASE WHEN classification = 'skipped' THEN 1 ELSE 0 END) as skipped,
-          SUM(CASE WHEN classification = 'replayed' THEN 1 ELSE 0 END) as replayed
+          SUM(CASE WHEN classification = 'replayed' THEN 1 ELSE 0 END) as replayed,
+          SUM(CASE WHEN classification = 'abandoned' THEN 1 ELSE 0 END) as abandoned
         FROM play_events WHERE started_at >= ?
-      `).bind(since).first<{ total: number; completed: number; skipped: number; replayed: number }>();
+      `).bind(since).first<{ total: number; completed: number; skipped: number; replayed: number; abandoned: number }>();
 
       const total = totals?.total ?? 0;
       const completed = totals?.completed ?? 0;
@@ -330,13 +385,17 @@ export async function callTool(
         WHERE pe.started_at >= ? AND st.source LIKE 'fresh:%'
       `).bind(since).first<{ count: number }>();
 
+      const abandoned = totals?.abandoned ?? 0;
+      // Skip rate excludes abandoned from both numerator and denominator
+      const ratedPlays = total - abandoned;
       return {
         period,
         totalPlays: total,
         completed,
         skipped,
+        abandoned,
         replayed: totals?.replayed ?? 0,
-        skipRate: total > 0 ? Math.round(skipped / total * 100) + "%" : "0%",
+        skipRate: ratedPlays > 0 ? Math.round(skipped / ratedPlays * 100) + "%" : "0%",
         freshPlays: freshPlays?.count ?? 0,
         freshRatio: total > 0 ? Math.round((freshPlays?.count ?? 0) / total * 100) + "%" : "0%",
         topPlayed: topPlayed.results.map(t => ({
@@ -374,6 +433,144 @@ export async function callTool(
         device: snap.device_type,
         userNote: snap.user_note,
       };
+    }
+
+    case "time_machine": {
+      const year = args.year as number;
+      if (!year) return { error: "year is required." };
+      const month = args.month as number | undefined;
+      const limit = (args.limit as number) ?? 15;
+      const result = await getTimeMachine(env.DB, year, month, limit);
+      return { source: "local_history", ...result };
+    }
+
+    case "lost_favorites": {
+      const minPlays = (args.min_plays as number) ?? 20;
+      const minYearsGone = (args.min_years_gone as number) ?? 2;
+      const limit = (args.limit as number) ?? 25;
+      const artist = args.artist as string | undefined;
+      const tracks = await getLostFavorites(env.DB, minPlays, minYearsGone, limit, artist);
+      const totalCount = await getLostFavoritesCount(env.DB, minPlays, minYearsGone);
+      return {
+        source: "local_history",
+        totalLostFavorites: totalCount,
+        showing: tracks.length,
+        tracks,
+      };
+    }
+
+    case "skip_report": {
+      const period = (args.period as string) ?? "quarter";
+      const artist = args.artist as string | undefined;
+      const minPlays = (args.min_plays as number) ?? 5;
+
+      // Calculate time window
+      const now = Math.floor(Date.now() / 1000);
+      const windowSeconds = period === "all" ? now
+        : period === "year" ? 365 * 86400
+        : period === "quarter" ? 90 * 86400
+        : 30 * 86400;
+      const since = now - windowSeconds;
+
+      let artistClause = "";
+      const binds: (string | number)[] = [since];
+      if (artist) {
+        artistClause = "AND artist_name = ?";
+        binds.push(artist);
+      }
+
+      // Overall stats
+      const overallSQL = `
+        SELECT COUNT(*) as total,
+               SUM(CASE WHEN reason_end = 'fwdbtn' THEN 1 ELSE 0 END) as skips
+        FROM plays WHERE ts >= ? ${artistClause}
+      `;
+      const overall = await env.DB.prepare(overallSQL).bind(...binds)
+        .first<{ total: number; skips: number }>();
+      const totalPlays = overall?.total ?? 0;
+      const totalSkips = overall?.skips ?? 0;
+
+      // Most skipped tracks — song-level, case-insensitive
+      const mostSkippedSQL = `
+        SELECT track_name, artist_name, COUNT(*) as plays,
+               SUM(CASE WHEN reason_end = 'fwdbtn' THEN 1 ELSE 0 END) as skips
+        FROM plays WHERE ts >= ? ${artistClause}
+        GROUP BY track_name COLLATE NOCASE, artist_name COLLATE NOCASE
+        HAVING plays >= ? AND skips > 0
+        ORDER BY CAST(skips AS REAL) / plays DESC
+        LIMIT 15
+      `;
+      const mostSkipped = await env.DB.prepare(mostSkippedSQL).bind(...binds, minPlays)
+        .all<{ track_name: string; artist_name: string; plays: number; skips: number }>();
+
+      // Completion champions (most plays, zero skips) — song-level, case-insensitive
+      const championsSQL = `
+        SELECT track_name, artist_name, COUNT(*) as plays,
+               SUM(CASE WHEN reason_end = 'fwdbtn' THEN 1 ELSE 0 END) as skips
+        FROM plays WHERE ts >= ? ${artistClause}
+        GROUP BY track_name COLLATE NOCASE, artist_name COLLATE NOCASE
+        HAVING plays >= ? AND skips = 0
+        ORDER BY plays DESC
+        LIMIT 10
+      `;
+      const champions = await env.DB.prepare(championsSQL).bind(...binds, minPlays)
+        .all<{ track_name: string; artist_name: string; plays: number; skips: number }>();
+
+      // Recent skip penalties (≥3 quick skips in last 30 days)
+      const penalized = await getSkipPenalizedTracks(env.DB, 3, 30);
+      const penalizedDetails: { track: string; artist: string; skipsLast30Days: number; status: string }[] = [];
+      for (const uri of penalized) {
+        const info = await env.DB.prepare(
+          "SELECT track_name, artist_name FROM plays WHERE spotify_track_uri = ? LIMIT 1"
+        ).bind(uri).first<{ track_name: string; artist_name: string }>();
+        const skipCount = await env.DB.prepare(
+          "SELECT COUNT(*) as cnt FROM plays WHERE spotify_track_uri = ? AND reason_end = 'fwdbtn' AND ms_played < 30000 AND ts >= ?"
+        ).bind(uri, now - 30 * 86400).first<{ cnt: number }>();
+        if (info) {
+          penalizedDetails.push({
+            track: info.track_name,
+            artist: info.artist_name,
+            skipsLast30Days: skipCount?.cnt ?? 0,
+            status: "excluded_from_queues",
+          });
+        }
+      }
+
+      const periodLabel = period === "all" ? "all time"
+        : period === "year" ? new Date(since * 1000).toISOString().split("T")[0] + " to now"
+        : period === "quarter" ? "last 90 days"
+        : "last 30 days";
+
+      return {
+        source: "local_history",
+        period: periodLabel,
+        overallSkipRate: totalPlays > 0 ? Math.round(totalSkips / totalPlays * 100 * 10) / 10 + "%" : "0%",
+        totalPlays,
+        totalSkips,
+        mostSkipped: mostSkipped.results.map((t) => ({
+          track: t.track_name,
+          artist: t.artist_name,
+          plays: t.plays,
+          skips: t.skips,
+          skipRate: Math.round(t.skips / t.plays * 100) + "%",
+        })),
+        completionChampions: champions.results.map((t) => ({
+          track: t.track_name,
+          artist: t.artist_name,
+          plays: t.plays,
+          skips: 0,
+          skipRate: "0%",
+        })),
+        recentSkipPenalties: penalizedDetails,
+      };
+    }
+
+    case "generate_queue": {
+      const mode = (args.mode as "rediscover" | "era" | "morning" | "default") ?? "default";
+      const seed = args.seed as string | undefined;
+      const lengthMin = (args.length_min as number) ?? 60;
+      const eraName = args.era_name as string | undefined;
+      return await generateQueue(env.DB, { mode, seed, lengthMin, eraName });
     }
 
     default:

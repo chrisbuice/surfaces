@@ -6,9 +6,17 @@
  * - Same track, progress advanced → still listening
  * - Different track (or nothing playing) → previous track ended
  *   - If previous track was >80% through → "completed"
- *   - If previous track was <30% through → "skipped"
- *   - Otherwise → "partial"
+ *   - If previous track was <80% through → "abandoned"
+ *     (We can't distinguish pauses from skips via the live API —
+ *      Spotify doesn't expose reason_end. The historical plays table
+ *      uses reason_end='fwdbtn' for true skips; this derived path
+ *      conservatively defaults to "abandoned" to avoid over-counting.)
  * - Same track, progress jumped backward → "replayed"
+ *
+ * Reconciliation:
+ * When a track resumes after being abandoned (same track_id appears
+ * in the next play event), we delete the previous "abandoned" event
+ * so the pause is never counted against the track.
  *
  * We use America/New_York for hour_of_day and day_of_week since that's
  * the user's timezone (confirmed in pre-flight).
@@ -49,6 +57,10 @@ export async function derivePlayEvents(db: D1Database, contextSnapshotId?: numbe
       // The previous track ended — classify it
       const event = classifyTrack(trackStartObs!, currentTrack, obs);
       if (event) {
+        // Reconciliation: if the previous play_event was "abandoned" and
+        // this is the same track resuming, delete the abandoned event
+        await reconcileAbandoned(db, event.track_id);
+
         const eventId = await insertPlayEvent(db, event);
         eventsCreated++;
 
@@ -89,6 +101,23 @@ export async function derivePlayEvents(db: D1Database, contextSnapshotId?: numbe
   return eventsCreated;
 }
 
+/**
+ * If the most recent play_event for this track was "abandoned",
+ * delete it — the track is resuming, so the pause shouldn't count.
+ */
+async function reconcileAbandoned(db: D1Database, trackId: string): Promise<void> {
+  // Look at the single most recent play_event
+  const last = await db.prepare(
+    "SELECT id, track_id, classification FROM play_events ORDER BY ended_at DESC LIMIT 1"
+  ).first<{ id: number; track_id: string; classification: string }>();
+
+  if (last && last.track_id === trackId && last.classification === "abandoned") {
+    // Also clean up any context link
+    await db.prepare("DELETE FROM play_event_context WHERE play_event_id = ?").bind(last.id).run();
+    await db.prepare("DELETE FROM play_events WHERE id = ?").bind(last.id).run();
+  }
+}
+
 function classifyTrack(
   startObs: PollObservation,
   lastObs: PollObservation,
@@ -103,20 +132,14 @@ function classifyTrack(
   // Don't create events for very short observations (< 5 seconds)
   if (listenedMs < 5000) return null;
 
-  let classification: "completed" | "skipped" | "partial" | "replayed";
+  let classification: "completed" | "abandoned" | "replayed";
 
   if (durationMs > 0) {
     const fractionPlayed = progressAtEnd / durationMs;
-    if (fractionPlayed >= 0.8) {
-      classification = "completed";
-    } else if (fractionPlayed < 0.5) {
-      classification = "skipped";
-    } else {
-      classification = "partial";
-    }
+    classification = fractionPlayed >= 0.8 ? "completed" : "abandoned";
   } else {
     // No duration info — use time-based heuristic
-    classification = listenedMs > 60000 ? "completed" : "partial";
+    classification = listenedMs > 60000 ? "completed" : "abandoned";
   }
 
   // Check if this was a replay (progress went backward in the endObs)
@@ -143,3 +166,6 @@ function classifyTrack(
     session_id: null,
   };
 }
+
+// Export for testing
+export { classifyTrack as _classifyTrack, reconcileAbandoned as _reconcileAbandoned };

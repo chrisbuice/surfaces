@@ -1,4 +1,4 @@
-# Project Progress — Spotify Curation Agent
+# Project Progress — Surfaces
 
 **Session date:** April 28, 2026
 **Milestones completed:** M0 through M9 (plus editorial playlist investigation)

@@ -71,7 +71,7 @@ export async function rebuildAffinities(db: D1Database): Promise<{
       JOIN play_events pe ON pe.id = pec.play_event_id
       JOIN context_snapshots cs ON cs.id = pec.context_snapshot_id
       WHERE cs.${snapshotField} IS NOT NULL
-        AND pe.classification IN ('completed', 'partial')
+        AND pe.classification IN ('completed', 'replayed')
       GROUP BY pe.track_id, cs.${snapshotField}
     `).all<{ track_id: string; bucket: string; count: number }>();
 
@@ -80,7 +80,7 @@ export async function rebuildAffinities(db: D1Database): Promise<{
       SELECT pe.track_id, COUNT(*) as total
       FROM play_event_context pec
       JOIN play_events pe ON pe.id = pec.play_event_id
-      WHERE pe.classification IN ('completed', 'partial')
+      WHERE pe.classification IN ('completed', 'replayed')
       GROUP BY pe.track_id
     `).all<{ track_id: string; total: number }>();
 

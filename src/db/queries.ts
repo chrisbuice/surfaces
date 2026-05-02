@@ -26,7 +26,7 @@ export interface PlayEvent {
   ended_at: number;
   duration_listened_ms: number;
   track_duration_ms: number | null;
-  classification: "completed" | "skipped" | "partial" | "replayed";
+  classification: "completed" | "skipped" | "abandoned" | "replayed";
   context_uri: string | null;
   context_type: string | null;
   device_type: string | null;

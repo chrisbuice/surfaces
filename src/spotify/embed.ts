@@ -35,7 +35,7 @@ export async function getPlaylistTracksViaEmbed(
 ): Promise<EmbedPlaylistResult> {
   const resp = await fetch(
     `https://open.spotify.com/embed/playlist/${playlistId}`,
-    { headers: { "User-Agent": "Mozilla/5.0 (compatible; SpotifyAgent/1.0)" } }
+    { headers: { "User-Agent": "Mozilla/5.0 (compatible; Surfaces/1.0)" } }
   );
   if (!resp.ok) {
     throw new Error(`Embed fetch failed (${resp.status})`);

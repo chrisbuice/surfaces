@@ -19,13 +19,19 @@ export async function getDevices(spotify: SpotifyClient): Promise<SpotifyDevice[
   return resp.devices;
 }
 
-// When no device is active, prefer the phone over speakers/TVs/etc.
+// Always prefer the phone so sessions don't hijack speakers/TVs.
 // Spotify device types: "Smartphone", "Computer", "Speaker", "TV", "CastAudio", etc.
 const DEVICE_TYPE_PRIORITY = ["Smartphone", "Computer", "Tablet"];
 
-/** Get the active device, or prefer the phone if nothing is playing */
+/** Get the best device for starting a session — always prefer Smartphone. */
 export async function getActiveDevice(spotify: SpotifyClient): Promise<SpotifyDevice | null> {
   const devices = await getDevices(spotify);
+
+  // Always prefer smartphone, even if something else is currently active
+  const phone = devices.find(d => d.type === "Smartphone");
+  if (phone) return phone;
+
+  // No phone available — fall back to active device, then type priority
   const active = devices.find(d => d.is_active);
   if (active) return active;
 
@@ -34,6 +40,21 @@ export async function getActiveDevice(spotify: SpotifyClient): Promise<SpotifyDe
     if (match) return match;
   }
   return devices[0] ?? null;
+}
+
+/**
+ * Transfer playback to a specific device.
+ * Wakes up inactive devices so they're ready to receive playback commands.
+ */
+export async function transferPlayback(
+  spotify: SpotifyClient,
+  deviceId: string,
+  startPlaying = false
+): Promise<void> {
+  await spotify.put("/v1/me/player", {
+    device_ids: [deviceId],
+    play: startPlaying,
+  });
 }
 
 /**

@@ -1,4 +1,34 @@
 -- =========================================================
+-- LISTENING HISTORY (local export + live-sync)
+-- =========================================================
+CREATE TABLE IF NOT EXISTS plays (
+  id INTEGER PRIMARY KEY,
+  ts INTEGER NOT NULL,                          -- unix seconds (UTC)
+  platform TEXT NOT NULL,                       -- normalized: iOS, macOS, Android, Windows, Cast
+  ms_played INTEGER NOT NULL,
+  conn_country TEXT NOT NULL,
+  track_name TEXT NOT NULL,
+  artist_name TEXT NOT NULL,
+  album_name TEXT NOT NULL,
+  spotify_track_uri TEXT NOT NULL,
+  reason_start TEXT NOT NULL DEFAULT '',
+  reason_end TEXT NOT NULL DEFAULT '',
+  shuffle INTEGER NOT NULL DEFAULT 0,
+  offline INTEGER NOT NULL DEFAULT 0,
+  year INTEGER NOT NULL,
+  month INTEGER NOT NULL,
+  hour INTEGER NOT NULL,                        -- UTC hour
+  local_hour INTEGER NOT NULL,                  -- US Eastern hour
+  minutes REAL NOT NULL                         -- ms_played / 60000
+);
+CREATE INDEX IF NOT EXISTS idx_plays_ts ON plays(ts);
+CREATE INDEX IF NOT EXISTS idx_plays_year_month ON plays(year, month);
+CREATE INDEX IF NOT EXISTS idx_plays_artist ON plays(artist_name);
+CREATE INDEX IF NOT EXISTS idx_plays_artist_year ON plays(artist_name, year);
+CREATE INDEX IF NOT EXISTS idx_plays_uri ON plays(spotify_track_uri);
+CREATE INDEX IF NOT EXISTS idx_plays_reason_end ON plays(reason_end);
+
+-- =========================================================
 -- USER & AUTH
 -- =========================================================
 CREATE TABLE IF NOT EXISTS users (

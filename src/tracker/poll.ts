@@ -159,16 +159,22 @@ async function backfillFromRecentlyPlayed(
 
       if (existing) continue; // Already captured by regular polling
 
-      // Classify based on fraction played
-      const fractionPlayed = estimatedListenedMs / item.track.duration_ms;
-      let classification: "completed" | "skipped" | "partial";
-      if (fractionPlayed >= 0.8) {
-        classification = "completed";
-      } else if (fractionPlayed < 0.5) {
-        classification = "skipped";
-      } else {
-        classification = "partial";
+      // Reconciliation: if the most recent play_event was "abandoned" and
+      // this is the same track, delete the abandoned event (track resumed)
+      const lastEvent = await db.prepare(
+        "SELECT id, track_id, classification FROM play_events ORDER BY ended_at DESC LIMIT 1"
+      ).first<{ id: number; track_id: string; classification: string }>();
+      if (lastEvent && lastEvent.track_id === item.track.id && lastEvent.classification === "abandoned") {
+        await db.prepare("DELETE FROM play_event_context WHERE play_event_id = ?").bind(lastEvent.id).run();
+        await db.prepare("DELETE FROM play_events WHERE id = ?").bind(lastEvent.id).run();
       }
+
+      // Classify based on fraction played.
+      // No reason_end available from the API — default incomplete plays
+      // to "abandoned" rather than guessing skip from timing.
+      const fractionPlayed = estimatedListenedMs / item.track.duration_ms;
+      let classification: "completed" | "abandoned";
+      classification = fractionPlayed >= 0.8 ? "completed" : "abandoned";
 
       // Insert a poll observation so track metadata is available for history joins
       await insertPollObservation(db, {

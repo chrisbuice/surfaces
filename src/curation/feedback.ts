@@ -168,7 +168,7 @@ export async function processFeedback(db: D1Database): Promise<FeedbackResult | 
         result.freshLiked.push(event.track_id);
       }
     } else {
-      // partial
+      // abandoned — neutral, doesn't count as skip or completion
       consecutiveSkips = 0;
       if (sessionTrack.position < 5) eventsInFirst5++;
     }

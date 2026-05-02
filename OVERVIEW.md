@@ -1,6 +1,6 @@
-# Spotify Curation Agent
+# Surfaces
 
-A personal music curation system that learns from my listening habits and serves up the right music for the moment. Built entirely through conversations with Claude.
+Surfacing tracks for the surfaces of your day. A personal music curation system that learns from listening habits and serves up the right music for the moment. Built entirely through conversations with Claude.
 
 ## What it does
 
