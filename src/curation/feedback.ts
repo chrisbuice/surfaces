@@ -157,6 +157,11 @@ export async function processFeedback(db: D1Database): Promise<FeedbackResult | 
       result.completionsDetected++;
       consecutiveSkips = 0;
 
+      // Mark completed fresh tracks as played so they leave the pool
+      if (sessionTrack.source.startsWith("fresh:")) {
+        await markFreshUsed(db, event.track_id, "played");
+      }
+
       if (sessionTrack.position < 5) eventsInFirst5++;
     } else if (event.classification === "replayed") {
       result.replaysDetected++;

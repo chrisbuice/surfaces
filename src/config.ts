@@ -92,8 +92,8 @@ export const ACOUSTIC_PROFILE_MIN_SAMPLES = 10;
 export const ACOUSTIC_FIT_MIN = 0.7;
 export const ACOUSTIC_FIT_MAX = 1.4;
 
-/** Discovery: fraction of fresh_pool reserved for editorial sources */
-export const EDITORIAL_RESERVED_RATIO = 0.3;
+/** Discovery: fraction of fresh_pool reserved for editorial sources (the primary discovery path) */
+export const EDITORIAL_RESERVED_RATIO = 0.7;
 
 /** Audio features backfill (M16) */
 export const AUDIO_BACKFILL_BATCH_SIZE = 40; // ReccoBeats max per request is 40

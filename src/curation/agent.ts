@@ -11,7 +11,7 @@ import { resolveMode } from "./modes";
 import { shouldBeFresh } from "./arc";
 import { SpotifyClient } from "../spotify/client";
 import { playTracks, queueTracks, createPlaylist, getActiveDevice, transferPlayback } from "../spotify/playback";
-import { getTopFresh, markFreshUsed } from "../discovery/pool";
+import { getTopFresh } from "../discovery/pool";
 import { captureContext, type ContextInput, type ContextSnapshot } from "../context/capture";
 import { computeContextMultiplier, summarizeBiases, type ScoredContext } from "./context_score";
 import { computeAcousticFit, type AudioFeatureValues } from "../audio/fit";
@@ -281,12 +281,10 @@ export async function startSession(
     await db.batch(trackInserts.slice(i, i + 100));
   }
 
-  // Mark fresh tracks as queued in the pool
-  for (const t of selected) {
-    if (t.source !== "familiar") {
-      await markFreshUsed(db, t.track_id, "queued");
-    }
-  }
+  // Fresh tracks stay in the pool until the feedback loop observes an
+  // actual outcome (played, liked, skipped). Marking them "queued" here
+  // would drain the pool after one session even if the tracks were never
+  // actually listened to.
 
   // ── Execute output ──
   const trackIds = selected.map(t => t.track_id);

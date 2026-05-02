@@ -152,12 +152,12 @@ export default {
                   'top_artist_search': 'Top Artist Releases',
                 };
                 const label = sourceLabels[fpCheck.source] || fpCheck.source;
-                const detail = fpCheck.source_detail && fpCheck.source_detail !== label ? ` (${fpCheck.source_detail})` : '';
+                const reason = fpCheck.source_detail || label;
                 playContext = {
                   inSession: false,
                   source: "discovery",
                   sourceDetail: fpCheck.source,
-                  reasons: [`Discovery: ${label}${detail}`],
+                  reasons: [`Discovery: ${reason}`],
                 };
               }
             }
@@ -461,7 +461,7 @@ export default {
                 "SELECT track_name, source, source_detail, taste_score FROM fresh_pool WHERE track_id = ?"
               ).bind(st.track_id).first<{ track_name: string; source: string; source_detail: string | null; taste_score: number }>();
               if (freshEntry?.source_detail) {
-                reasons.push(`Discovery: new from ${freshEntry.source_detail}`);
+                reasons.push(`Discovery: ${freshEntry.source_detail}`);
               } else {
                 reasons.push("Fresh discovery");
               }
@@ -1712,6 +1712,17 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
           "UPDATE play_events SET classification = 'abandoned' WHERE classification IN ('skipped', 'partial')"
         ).run();
         await env.KV.put("migration:abandon_reclassify", new Date().toISOString());
+      }
+
+      // One-time migration: reset "queued" fresh pool entries to "fresh".
+      // "queued" was a premature status set at session build time that drained the pool.
+      // Now tracks only leave the pool on actual listening outcomes (played/liked/skipped).
+      const poolMigrated = await env.KV.get("migration:fresh_pool_queued_reset");
+      if (!poolMigrated) {
+        await env.DB.prepare(
+          "UPDATE fresh_pool SET status = 'fresh' WHERE status = 'queued'"
+        ).run();
+        await env.KV.put("migration:fresh_pool_queued_reset", new Date().toISOString());
       }
 
       // Daily at 5am UTC (1am ET): sync recent plays, derive, rebuild taste + affinities, audio backfill, prune

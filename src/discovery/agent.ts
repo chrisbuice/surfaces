@@ -48,11 +48,21 @@ export async function runDiscoveryAgent(
   ).all<{ track_id: string }>();
   for (const r of tasteRows.results) knownTracks.add(r.track_id);
 
-  // Tracks already in play_events
+  // Tracks already in play_events (live-derived)
   const playedRows = await db.prepare(
     "SELECT DISTINCT track_id FROM play_events"
   ).all<{ track_id: string }>();
   for (const r of playedRows.results) knownTracks.add(r.track_id);
+
+  // Tracks in the historical plays table (15-year export).
+  // URIs are "spotify:track:<id>" — extract the bare track ID.
+  const historyRows = await db.prepare(
+    "SELECT DISTINCT spotify_track_uri FROM plays WHERE spotify_track_uri LIKE 'spotify:track:%'"
+  ).all<{ spotify_track_uri: string }>();
+  for (const r of historyRows.results) {
+    const id = r.spotify_track_uri.replace("spotify:track:", "");
+    knownTracks.add(id);
+  }
 
   // Also load existing fresh pool track names to avoid name-level duplicates
   const poolNames = new Set<string>();
@@ -93,17 +103,17 @@ export async function runDiscoveryAgent(
   ).all<{ primary_artist_id: string }>();
   for (const r of seasonalRows.results) seasonalArtists.add(r.primary_artist_id);
 
-  const scored = dedupedCandidates.map(c => ({
-    ...c,
-    score: scoreCandidate(c, artistScores, seasonalArtists),
-  }));
-
-  // Split into editorial and artist-search buckets, score within each
+  // Split into editorial and artist-search buckets, score differently
   const isEditorial = (source: string) =>
     EDITORIAL_SOURCE_PREFIXES.some(p => source.startsWith(p));
 
-  const editorialCandidates = scored.filter(c => isEditorial(c.source));
-  const artistSearchCandidates = scored.filter(c => !isEditorial(c.source));
+  const editorialCandidates = dedupedCandidates
+    .filter(c => isEditorial(c.source))
+    .map(c => ({ ...c, score: scoreEditorial(c, artistScores, seasonalArtists) }));
+
+  const artistSearchCandidates = dedupedCandidates
+    .filter(c => !isEditorial(c.source))
+    .map(c => ({ ...c, score: scoreCandidate(c, artistScores, seasonalArtists) }));
 
   editorialCandidates.sort((a, b) => b.score - a.score);
   artistSearchCandidates.sort((a, b) => b.score - a.score);
@@ -182,6 +192,52 @@ function scoreCandidate(
   // Source bonus: followed artist releases get a boost
   if (candidate.source === "followed_artist_release") {
     score += 1.5;
+  }
+
+  return Math.round(score * 100) / 100;
+}
+
+/**
+ * Score an editorial/external candidate.
+ *
+ * Editorial tracks are the core of discovery — they come from human curation
+ * (Hype Machine, music blogs, Last.fm similar artists) independent of the
+ * user's listening bubble. The scoring here is intentionally different:
+ *
+ * - Unknown artists get a novelty bonus (the whole point of discovery)
+ * - Known-artist contribution is capped so familiar names don't crowd out
+ *   genuinely new music
+ * - A small taste-fit signal still exists so we pick editorial tracks the
+ *   user is more likely to enjoy, but it never dominates
+ */
+function scoreEditorial(
+  candidate: DiscoveryCandidate,
+  artistScores: Map<string, number>,
+  seasonalArtists: Set<string>
+): number {
+  const primaryScore = artistScores.get(candidate.primaryArtistId);
+  const isUnknownArtist = primaryScore === undefined;
+
+  // Base score: novelty bonus for completely unknown artists
+  let score = isUnknownArtist ? 5 : 0;
+
+  // Capped taste-fit signal: known artists get a small boost, not a dominant one
+  if (primaryScore !== undefined) {
+    score += Math.min(primaryScore * 0.3, 3);
+  }
+
+  // Small collaborator signal (e.g., unknown artist featuring a known one)
+  for (const artistId of candidate.artistIds) {
+    if (artistId === candidate.primaryArtistId) continue;
+    const collabScore = artistScores.get(artistId);
+    if (collabScore !== undefined) {
+      score += Math.min(collabScore * 0.1, 1);
+    }
+  }
+
+  // Seasonal artist presence — mild boost, still capped
+  if (seasonalArtists.has(candidate.primaryArtistId)) {
+    score += 1;
   }
 
   return Math.round(score * 100) / 100;

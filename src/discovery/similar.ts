@@ -84,7 +84,7 @@ export async function pullLastFmCandidates(
             artistIds: track.artists.map(a => a.id),
             primaryArtistId: track.artists[0]?.id ?? "",
             source: "lastfm:artist_similar",
-            sourceDetail: seed.artist_name,
+            sourceDetail: `${similar.name} (similar to ${seed.artist_name})`,
           });
         }
       } catch {

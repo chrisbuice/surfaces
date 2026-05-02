@@ -42,7 +42,12 @@ export async function addToFreshPool(
       ON CONFLICT(track_id) DO UPDATE SET
         taste_score = MAX(excluded.taste_score, fresh_pool.taste_score),
         source = CASE WHEN excluded.taste_score > fresh_pool.taste_score THEN excluded.source ELSE fresh_pool.source END,
-        source_detail = CASE WHEN excluded.taste_score > fresh_pool.taste_score THEN excluded.source_detail ELSE fresh_pool.source_detail END
+        source_detail = CASE WHEN excluded.taste_score > fresh_pool.taste_score THEN excluded.source_detail ELSE fresh_pool.source_detail END,
+        -- Re-discovered tracks go back to fresh unless the user explicitly
+        -- liked or skipped them. "queued", "played", and "expired" are
+        -- non-terminal — the track deserves another chance.
+        status = CASE WHEN fresh_pool.status IN ('liked', 'skipped') THEN fresh_pool.status ELSE 'fresh' END,
+        expires_at = CASE WHEN fresh_pool.status IN ('liked', 'skipped') THEN fresh_pool.expires_at ELSE excluded.expires_at END
     `).bind(
       entry.trackId, entry.trackName, JSON.stringify(entry.artistIds),
       entry.primaryArtistId, entry.source, entry.sourceDetail ?? null,
@@ -71,11 +76,11 @@ export async function expireStaleEntries(db: D1Database): Promise<number> {
   return result.meta.changes ?? 0;
 }
 
-/** Mark a fresh pool entry as played/queued */
+/** Mark a fresh pool entry based on actual listening outcome */
 export async function markFreshUsed(
   db: D1Database,
   trackId: string,
-  status: "queued" | "played" | "liked" | "skipped"
+  status: "played" | "liked" | "skipped"
 ): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
   await db.prepare(
