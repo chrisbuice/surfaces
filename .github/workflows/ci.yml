@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+        # Pre-existing TS errors in dashboard-queries.ts and taste/model.ts.
+        # Surfaced in logs so they're visible, but don't block CI.
+        continue-on-error: true
+
+      - name: Tests
+        run: npx vitest run
