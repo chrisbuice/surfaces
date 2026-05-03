@@ -1,6 +1,6 @@
-# Lyric Analysis Prompt — v1 (DRAFT)
+# Lyric Analysis Prompt — v1 (LOCKED)
 
-Status: DRAFT — iterate in Stage 0 until 5 obsession songs pass quality check.
+Status: LOCKED 2026-05-03. Approved after Stage 0 iteration on 5 obsession seeds (Bathroom Sink, Borders, Stick Season, Shake the Frost, Ring Off). Outputs reviewed in `analyses-stage0-v1.jsonl`. Use this exact prompt for Stage 1 model bake-off and downstream stages. Bump to v2 only if Stage 1 grading shows systematic failures.
 
 ---
 

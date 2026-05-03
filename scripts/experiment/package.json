@@ -7,15 +7,14 @@
   "scripts": {
     "pick-candidates": "tsx 00-pick-candidates.ts",
     "validate-golden": "tsx 01-pick-golden-set.ts",
-    "analyze": "tsx 02-analyze-models.ts",
+    "analyze": "tsx 02-analyze-sonnet.ts",
     "embed": "tsx 03-embed-voyage.ts",
     "rank": "tsx 04-rank.ts",
-    "audio": "tsx 07-analyze-audio.ts",
-    "results": "tsx 08-results.ts"
+    "audio": "tsx 06-analyze-audio.ts",
+    "results": "tsx 07-results.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
-    "openai": "^5.0.0",
     "dotenv": "^16.4.0"
   },
   "devDependencies": {
