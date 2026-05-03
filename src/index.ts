@@ -255,6 +255,64 @@ export default {
           });
         }
 
+        case "/api/listening-by-month": {
+          // Public, CORS-permissive. Nightly-rebuilt monthly play counts
+          // cached in KV — same pattern as /api/constellation.
+          if (request.method !== "GET") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          const { LISTENING_BY_MONTH_KEY } = await import("./listening/page-queries");
+          const lbmCached = await env.KV.get(LISTENING_BY_MONTH_KEY);
+          if (!lbmCached) {
+            return new Response(
+              JSON.stringify({ error: "listening-by-month not yet generated" }),
+              {
+                status: 404,
+                headers: {
+                  "Content-Type": "application/json; charset=utf-8",
+                  "Cache-Control": "no-store",
+                },
+              },
+            );
+          }
+          return new Response(lbmCached, {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "public, max-age=3600",
+            },
+          });
+        }
+
+        case "/api/top-artists": {
+          // Public, CORS-permissive. Nightly-rebuilt top 12 artists
+          // cached in KV — same pattern as /api/constellation.
+          if (request.method !== "GET") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          const { TOP_ARTISTS_KEY } = await import("./listening/page-queries");
+          const taCached = await env.KV.get(TOP_ARTISTS_KEY);
+          if (!taCached) {
+            return new Response(
+              JSON.stringify({ error: "top-artists not yet generated" }),
+              {
+                status: 404,
+                headers: {
+                  "Content-Type": "application/json; charset=utf-8",
+                  "Cache-Control": "no-store",
+                },
+              },
+            );
+          }
+          return new Response(taCached, {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "public, max-age=3600",
+            },
+          });
+        }
+
         case "/api/submit-track": {
           // Spec §7.3. Public endpoint, but auth-gated via X-Surfaces-Secret
           // (chrisbuice.com's Pages Function attaches it). Insert-only.
@@ -351,6 +409,29 @@ export default {
           const { runConstellationCron } = await import("./constellation/cron");
           const summary = await runConstellationCron(env.DB, spotify, env.KV);
           return Response.json(summary);
+        }
+
+        case "/debug/rebuild-page-data": {
+          // One-shot trigger for the nightly page-data build. Rebuilds
+          // /api/listening-by-month and /api/top-artists KV caches.
+          // No auth — matches existing /debug/* pattern (decision D4).
+          const {
+            buildListeningByMonth, buildTopArtists,
+            LISTENING_BY_MONTH_KEY: lbmKey, TOP_ARTISTS_KEY: taKey,
+            KV_TTL_SECONDS: pageTtl,
+          } = await import("./listening/page-queries");
+          const [lbmResult, taResult] = await Promise.all([
+            buildListeningByMonth(env.DB),
+            buildTopArtists(env.DB),
+          ]);
+          await Promise.all([
+            env.KV.put(lbmKey, JSON.stringify(lbmResult), { expirationTtl: pageTtl }),
+            env.KV.put(taKey, JSON.stringify(taResult), { expirationTtl: pageTtl }),
+          ]);
+          return Response.json({
+            listening_by_month: { months: lbmResult.months.length },
+            top_artists: { artists: taResult.artists.map(a => a.name) },
+          });
         }
 
         case "/debug/top-tracks-by-score": {
@@ -1194,12 +1275,13 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
 
         case "/api/listening/queue": {
           if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
-          const queueBody = await request.json() as { mode?: string; length_min?: number; seed?: string };
+          const queueBody = await request.json() as { mode?: string; length_min?: number; seed?: string; familiarity?: number };
           const { generateQueue } = await import("./listening/queue");
           const queueResult = await generateQueue(env.DB, {
-            mode: (queueBody.mode as "rediscover" | "era" | "morning" | "default") ?? "default",
+            mode: (queueBody.mode as "rediscover" | "reflection" | "morning" | "default") ?? "default",
             seed: queueBody.seed,
             lengthMin: queueBody.length_min ?? 60,
+            familiarity: queueBody.familiarity ?? 0.5,
           });
           return Response.json(queueResult);
         }
@@ -1311,7 +1393,6 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
         }
 
         case "/api/recent-history": {
-          const since = Math.floor(Date.now() / 1000) - 24 * 3600;
           const rows = await env.DB.prepare(`
             SELECT pe.track_id, pe.started_at, pe.duration_listened_ms, pe.classification,
                    pe.hour_of_day, pe.device_type, pe.session_id, pe.context_type, pe.context_uri,
@@ -1324,10 +1405,10 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
             LEFT JOIN poll_observations po ON po.track_id = pe.track_id
             LEFT JOIN artist_taste at2 ON at2.artist_id = tt.primary_artist_id
             LEFT JOIN session_tracks st ON st.session_id = pe.session_id AND st.track_id = pe.track_id
-            WHERE pe.started_at >= ?
             GROUP BY pe.id
             ORDER BY pe.started_at DESC
-          `).bind(since).all();
+            LIMIT 25
+          `).all();
           return Response.json(rows.results);
         }
 
@@ -1361,12 +1442,12 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
           return Response.json({ source: "local_history", year, days: heatmap });
         }
 
-        case "/api/listening/eras": {
-          const erasJson = await import("./listening/data/eras.json");
-          const eras = Array.isArray(erasJson.default) ? erasJson.default : erasJson;
+        case "/api/listening/reflections": {
+          const reflectionsJson = await import("./listening/data/reflections.json");
+          const reflections = Array.isArray(reflectionsJson.default) ? reflectionsJson.default : reflectionsJson;
           const enriched = [];
-          for (const era of eras as Array<{ name: string; years: number[]; artists: string[]; summary: string }>) {
-            const yearPlaceholders = era.years.map(() => "?").join(",");
+          for (const reflection of reflections as Array<{ name: string; years: number[]; artists: string[]; summary: string }>) {
+            const yearPlaceholders = reflection.years.map(() => "?").join(",");
             const stats = await env.DB.prepare(
               `SELECT COUNT(*) as plays,
                       ROUND(SUM(minutes) / 60.0, 1) as hours,
@@ -1374,24 +1455,24 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
                       (SELECT COUNT(*) FROM (SELECT 1 FROM plays WHERE year IN (${yearPlaceholders}) GROUP BY artist_name COLLATE NOCASE)) as artists,
                       ROUND(100.0 * SUM(CASE WHEN reason_end = 'fwdbtn' THEN 1 ELSE 0 END) / COUNT(*), 1) as skip_rate
                FROM plays WHERE year IN (${yearPlaceholders})`
-            ).bind(...era.years, ...era.years).first<{ plays: number; hours: number; tracks: number; artists: number; skip_rate: number }>();
+            ).bind(...reflection.years, ...reflection.years).first<{ plays: number; hours: number; tracks: number; artists: number; skip_rate: number }>();
             const topArtists = await env.DB.prepare(
               `SELECT artist_name, COUNT(*) as plays, ROUND(SUM(minutes)/60.0, 1) as hours
                FROM plays WHERE year IN (${yearPlaceholders})
                GROUP BY artist_name COLLATE NOCASE ORDER BY plays DESC LIMIT 8`
-            ).bind(...era.years).all<{ artist_name: string; plays: number; hours: number }>();
+            ).bind(...reflection.years).all<{ artist_name: string; plays: number; hours: number }>();
             const topTrack = await env.DB.prepare(
               `SELECT track_name, artist_name, COUNT(*) as plays
                FROM plays WHERE year IN (${yearPlaceholders})
                GROUP BY track_name COLLATE NOCASE, artist_name COLLATE NOCASE
                ORDER BY plays DESC LIMIT 1`
-            ).bind(...era.years).first<{ track_name: string; artist_name: string; plays: number }>();
+            ).bind(...reflection.years).first<{ track_name: string; artist_name: string; plays: number }>();
             // Per-year play counts for mini sparkline
             const yearlySQL = `SELECT year, COUNT(*) as plays FROM plays WHERE year IN (${yearPlaceholders}) GROUP BY year ORDER BY year`;
-            const yearly = await env.DB.prepare(yearlySQL).bind(...era.years)
+            const yearly = await env.DB.prepare(yearlySQL).bind(...reflection.years)
               .all<{ year: number; plays: number }>();
             enriched.push({
-              ...era,
+              ...reflection,
               totalPlays: stats?.plays ?? 0,
               totalHours: stats?.hours ?? 0,
               uniqueTracks: stats?.tracks ?? 0,
@@ -1402,7 +1483,7 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
               yearlyPlays: yearly.results,
             });
           }
-          return Response.json({ source: "local_history", eras: enriched });
+          return Response.json({ source: "local_history", reflections: enriched });
         }
 
         case "/api/listening/month": {
@@ -1916,6 +1997,26 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
         console.log(`constellation: rebuilt — ${summary.nodes} nodes, ${summary.edges} edges`);
       } catch (err) {
         console.error(`constellation: rebuild failed: ${err}`);
+      }
+
+      // Rebuild /surfaces page data (listening-by-month + top-artists).
+      // Runs after constellation so all nightly visuals update together.
+      try {
+        const {
+          buildListeningByMonth, buildTopArtists,
+          LISTENING_BY_MONTH_KEY, TOP_ARTISTS_KEY, KV_TTL_SECONDS,
+        } = await import("./listening/page-queries");
+        const [lbm, ta] = await Promise.all([
+          buildListeningByMonth(env.DB),
+          buildTopArtists(env.DB),
+        ]);
+        await Promise.all([
+          env.KV.put(LISTENING_BY_MONTH_KEY, JSON.stringify(lbm), { expirationTtl: KV_TTL_SECONDS }),
+          env.KV.put(TOP_ARTISTS_KEY, JSON.stringify(ta), { expirationTtl: KV_TTL_SECONDS }),
+        ]);
+        console.log(`page-data: rebuilt — ${lbm.months.length} months, ${ta.artists.length} artists`);
+      } catch (err) {
+        console.error(`page-data: rebuild failed: ${err}`);
       }
     }
 
