@@ -6,3 +6,4 @@ SHORTCUT_TOKEN=your_random_token_here
 # Shared secret for /api/submit-track — chrisbuice.com sends this in
 # X-Surfaces-Secret. Generate with: openssl rand -hex 32
 SURFACES_SECRET=your_random_secret_here
+NOTIFICATION_EMAIL=your_email_here

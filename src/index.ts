@@ -20,6 +20,7 @@ export interface Env {
   SPOTIFY_CLIENT_SECRET: string;
   SHORTCUT_TOKEN: string;
   RESEND_API_KEY: string;
+  NOTIFICATION_EMAIL: string;
   LASTFM_API_KEY?: string;
   // Shared secret for POST /api/submit-track. chrisbuice.com's Pages
   // Function adds it as the X-Surfaces-Secret header; this worker
@@ -795,7 +796,7 @@ export default {
         }
 
         case "/debug/send-summary": {
-          const emailResult = await generateAndSendSummary(env.DB, env.RESEND_API_KEY);
+          const emailResult = await generateAndSendSummary(env.DB, env.RESEND_API_KEY, env.NOTIFICATION_EMAIL);
           return Response.json(emailResult);
         }
 
@@ -2057,7 +2058,7 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
 
     if (cron === "0 0 * * *") {
       // Midnight UTC (8pm ET): send nightly listening summary
-      await generateAndSendSummary(env.DB, env.RESEND_API_KEY);
+      await generateAndSendSummary(env.DB, env.RESEND_API_KEY, env.NOTIFICATION_EMAIL);
     }
 
   },

@@ -261,7 +261,7 @@ Per the plan, these milestones are deferred:
 |------|-------|
 | Worker URL | `https://spotify-agent.chrisbuice.workers.dev` |
 | Spotify Client ID | `1a78c31c5d7c40f7811ebd6577fc3b6a` |
-| Spotify Client Secret | `6fa583a2744d45cc9d217765a9536700` (consider rotating — visible in chat history) |
+| Spotify Client Secret | `<redacted — rotated 2026-05-03>` |
 | Shortcut Token | `01cf403770ffe6e42951ad30f5e7686b9900cef134f0ed6ef3ab3da9178b72b9` |
 | Spotify User ID | `121776622` |
 | D1 Database ID | `a639e396-3fb1-4db6-b5a5-ce61c60d5779` |

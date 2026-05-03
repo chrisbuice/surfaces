@@ -6,7 +6,6 @@
  */
 
 const RESEND_API = "https://api.resend.com/emails";
-const TO_EMAIL = "chrisbuice@gmail.com";
 const FROM_EMAIL = "Surfaces <spotify-agent@amberglow.ai>";
 
 interface DailySummary {
@@ -34,7 +33,8 @@ interface DailySummary {
 
 export async function generateAndSendSummary(
   db: D1Database,
-  resendApiKey: string
+  resendApiKey: string,
+  toEmail: string
 ): Promise<{ sent: boolean; error?: string }> {
   const summary = await buildSummary(db);
 
@@ -62,7 +62,7 @@ export async function generateAndSendSummary(
       },
       body: JSON.stringify({
         from: FROM_EMAIL,
-        to: [TO_EMAIL],
+        to: [toEmail],
         subject,
         html,
       }),

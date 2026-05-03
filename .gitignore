@@ -6,5 +6,8 @@ dist/
 .DS_Store
 data/
 
+# Lyric analysis experiment (personal taste data, keep local)
+docs/experiments/lyric-analysis-2026-05/
+
 # Stack container secrets (live only on grimmauldplace)
 stack/**/.env
