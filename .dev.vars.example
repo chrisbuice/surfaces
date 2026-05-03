@@ -8,3 +8,6 @@ SHORTCUT_TOKEN=your_random_token_here
 SURFACES_SECRET=your_random_secret_here
 NOTIFICATION_EMAIL=your_email_here
 SPOTIFY_USER_ID=your_spotify_user_id
+ACCESS_ALLOWED_EMAIL=your_email_here
+ACCESS_TEAM_NAME=your_team_name
+ACCESS_AUD=your_application_audience_tag

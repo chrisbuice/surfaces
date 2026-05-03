@@ -1,5 +1,6 @@
 import { handleLogin, handleCallback, refreshAccessToken } from "./auth/spotify-oauth";
 import { getTokens, saveTokens } from "./auth/tokens";
+import { verifyAccessJwt } from "./auth/access-jwt";
 import { SpotifyClient } from "./spotify/client";
 import { handlePoll } from "./tracker/poll";
 import { derivePlayEvents } from "./tracker/derive";
@@ -22,6 +23,9 @@ export interface Env {
   RESEND_API_KEY: string;
   NOTIFICATION_EMAIL: string;
   SPOTIFY_USER_ID: string;
+  ACCESS_ALLOWED_EMAIL: string;
+  ACCESS_TEAM_NAME: string;
+  ACCESS_AUD: string;
   LASTFM_API_KEY?: string;
   // Shared secret for POST /api/submit-track. chrisbuice.com's Pages
   // Function adds it as the X-Surfaces-Secret header; this worker
@@ -80,16 +84,21 @@ export default {
         }
 
         case "/auth/login":
-          return handleLogin(request, env);
+          return await handleLogin(request, env);
 
         case "/auth/callback":
           return await handleCallback(request, env);
 
         // ── Token broker for grimmauldplace containers ──
         // Protected by Cloudflare Access service token on /admin/*
+        // Defense-in-depth: also verify the authenticated user email header
         case "/admin/spotify-token": {
           if (request.method !== "POST") {
             return new Response("Method not allowed", { status: 405 });
+          }
+          const accessEmail = request.headers.get("Cf-Access-Authenticated-User-Email");
+          if (!accessEmail || accessEmail !== env.ACCESS_ALLOWED_EMAIL) {
+            return new Response("Unauthorized", { status: 401 });
           }
           const tokens = await getTokens(env.KV);
           if (!tokens) {
@@ -461,6 +470,10 @@ export default {
         case "/api/start-session": {
           if (request.method !== "POST") {
             return new Response("Method not allowed", { status: 405 });
+          }
+          const startAuth = await verifyAccessJwt(request, env);
+          if (!startAuth.ok || startAuth.email !== env.ACCESS_ALLOWED_EMAIL) {
+            return new Response("Unauthorized", { status: 401 });
           }
           const spotify = new SpotifyClient(env);
           const body = await request.json() as {
@@ -1057,6 +1070,7 @@ export default {
         }
 
         case "/debug/audio-features-table": {
+          const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
           const afLimit = parseInt(url.searchParams.get("limit") ?? "50") || 50;
           const afRows = await env.DB.prepare(`
             SELECT tt.track_name, at2.artist_name, tt.taste_score,
@@ -1095,7 +1109,7 @@ td{padding:6px 8px;border-bottom:1px solid #1e1e1e;}
 
           for (let i = 0; i < afRows.results.length; i++) {
             const r = afRows.results[i];
-            html += `<tr><td>${i+1}</td><td>${r.track_name}</td><td>${r.artist_name ?? ""}</td><td class="num">${r.taste_score.toFixed(1)}</td>`;
+            html += `<tr><td>${i+1}</td><td>${esc(r.track_name)}</td><td>${esc(r.artist_name ?? "")}</td><td class="num">${r.taste_score.toFixed(1)}</td>`;
             for (const d of dims) {
               const v = r[d as keyof typeof r] as number;
               const fmt = d === "loudness" ? v.toFixed(1) : d === "tempo" ? v.toFixed(0) : v.toFixed(3);
@@ -1160,6 +1174,10 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
         case "/api/like-track":
         case "/api/block-track": {
           if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const markAuth = await verifyAccessJwt(request, env);
+          if (!markAuth.ok || markAuth.email !== env.ACCESS_ALLOWED_EMAIL) {
+            return new Response("Unauthorized", { status: 401 });
+          }
           const spotify = new SpotifyClient(env);
           const { track_id: actionTrackId } = await request.json() as { track_id: string };
           if (!actionTrackId) return Response.json({ ok: false, error: "track_id required" });
@@ -1204,6 +1222,10 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
 
         case "/api/queue-track": {
           if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const queueAuth = await verifyAccessJwt(request, env);
+          if (!queueAuth.ok || queueAuth.email !== env.ACCESS_ALLOWED_EMAIL) {
+            return new Response("Unauthorized", { status: 401 });
+          }
           const spotify = new SpotifyClient(env);
           const { track_id } = await request.json() as { track_id: string };
           if (!track_id) return Response.json({ ok: false, error: "track_id required" });
@@ -1223,6 +1245,10 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
 
         case "/api/player/skip": {
           if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const skipAuth = await verifyAccessJwt(request, env);
+          if (!skipAuth.ok || skipAuth.email !== env.ACCESS_ALLOWED_EMAIL) {
+            return new Response("Unauthorized", { status: 401 });
+          }
           const spotify = new SpotifyClient(env);
           await spotify.post("/v1/me/player/next");
           return Response.json({ ok: true });
@@ -1230,6 +1256,10 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
 
         case "/api/player/previous": {
           if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const prevAuth = await verifyAccessJwt(request, env);
+          if (!prevAuth.ok || prevAuth.email !== env.ACCESS_ALLOWED_EMAIL) {
+            return new Response("Unauthorized", { status: 401 });
+          }
           const spotify = new SpotifyClient(env);
           await spotify.post("/v1/me/player/previous");
           return Response.json({ ok: true });
@@ -1237,6 +1267,10 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
 
         case "/api/player/repeat": {
           if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const repeatAuth = await verifyAccessJwt(request, env);
+          if (!repeatAuth.ok || repeatAuth.email !== env.ACCESS_ALLOWED_EMAIL) {
+            return new Response("Unauthorized", { status: 401 });
+          }
           const spotify = new SpotifyClient(env);
           // Cycle: off → context → track → off
           const { state } = await request.json() as { state?: string };
@@ -1247,6 +1281,10 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
 
         case "/api/play-track": {
           if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const playAuth = await verifyAccessJwt(request, env);
+          if (!playAuth.ok || playAuth.email !== env.ACCESS_ALLOWED_EMAIL) {
+            return new Response("Unauthorized", { status: 401 });
+          }
           const spotify = new SpotifyClient(env);
           const { track_id: playTrackId } = await request.json() as { track_id: string };
           if (!playTrackId) return Response.json({ ok: false, error: "track_id required" });
@@ -1265,6 +1303,10 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
 
         case "/api/listening/sync": {
           if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const syncAuth = await verifyAccessJwt(request, env);
+          if (!syncAuth.ok || syncAuth.email !== env.ACCESS_ALLOWED_EMAIL) {
+            return new Response("Unauthorized", { status: 401 });
+          }
           const spotify = new SpotifyClient(env);
           const { syncRecentPlays } = await import("./listening/sync");
           const syncResult = await syncRecentPlays(env.DB, spotify, env.KV);
@@ -1277,6 +1319,10 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
 
         case "/api/listening/queue": {
           if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+          const lqAuth = await verifyAccessJwt(request, env);
+          if (!lqAuth.ok || lqAuth.email !== env.ACCESS_ALLOWED_EMAIL) {
+            return new Response("Unauthorized", { status: 401 });
+          }
           const queueBody = await request.json() as { mode?: string; length_min?: number; seed?: string; familiarity?: number };
           const { generateQueue } = await import("./listening/queue");
           const queueResult = await generateQueue(env.DB, {

@@ -33,9 +33,15 @@ interface Env {
 }
 
 /** Step 1: redirect user to Spotify login */
-export function handleLogin(request: Request, env: Env): Response {
+export async function handleLogin(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const redirectUri = `${url.origin}/auth/callback`;
+
+  // Generate a random state parameter to prevent CSRF on callback
+  const stateBytes = new Uint8Array(32);
+  crypto.getRandomValues(stateBytes);
+  const state = Array.from(stateBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  await env.KV.put(`oauth_state:${state}`, "1", { expirationTtl: 600 });
 
   const params = new URLSearchParams({
     response_type: "code",
@@ -43,6 +49,7 @@ export function handleLogin(request: Request, env: Env): Response {
     scope: SCOPES,
     redirect_uri: redirectUri,
     show_dialog: "true",
+    state,
   });
 
   return Response.redirect(`https://accounts.spotify.com/authorize?${params}`, 302);
@@ -53,10 +60,19 @@ export async function handleCallback(request: Request, env: Env): Promise<Respon
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const error = url.searchParams.get("error");
+  const state = url.searchParams.get("state");
 
   if (error) {
     return new Response(`Spotify auth error: ${error}`, { status: 400 });
   }
+  if (!state) {
+    return new Response("Missing state parameter", { status: 400 });
+  }
+  const storedState = await env.KV.get(`oauth_state:${state}`);
+  if (!storedState) {
+    return new Response("Invalid or expired state", { status: 400 });
+  }
+  await env.KV.delete(`oauth_state:${state}`);
   if (!code) {
     return new Response("Missing authorization code", { status: 400 });
   }
