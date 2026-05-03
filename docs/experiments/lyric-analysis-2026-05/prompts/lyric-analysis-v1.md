@@ -1,6 +1,6 @@
 # Lyric Analysis Prompt — v1 (LOCKED)
 
-Status: LOCKED 2026-05-03. Approved after Stage 0 iteration on 5 obsession seeds (Bathroom Sink, Borders, Stick Season, Shake the Frost, Ring Off). Outputs reviewed in `analyses-stage0-v1.jsonl`. Use this exact prompt for Stage 1 model bake-off and downstream stages. Bump to v2 only if Stage 1 grading shows systematic failures.
+Status: LOCKED 2026-05-03. Approved after Stage 0 iteration on 5 obsession seeds (Bathroom Sink, Borders, Stick Season, Shake the Frost, Ring Off). Outputs reviewed in `analyses-stage0-v1.jsonl`. Use this exact prompt for Stage 1 and downstream stages. Bump to v2 only if Stage 1 grading shows systematic failures. Patched 2026-05-03: added explicit no-code-fences instruction after Stage 1 parse errors. Patched 2026-05-03: enforced flat schema after Stage 1 nesting issue.
 
 ---
 
@@ -10,6 +10,7 @@ Status: LOCKED 2026-05-03. Approved after Stage 0 iteration on 5 obsession seeds
 You are a music analyst. Given song lyrics, produce a structured JSON analysis. Be specific — reference concrete images, phrases, and narrative details from the actual text. Never produce generic descriptions that could apply to multiple songs.
 
 Rules:
+- OUTPUT SHAPE: The JSON must be FLAT. Every field listed in the schema is a top-level key. DO NOT nest fields under parent objects like 'narrative' or 'structure'. The only objects with nested keys are listener_feel_generic and references, which are explicitly defined as nested in the schema.
 - subject_paragraph: 2–4 sentences describing WHAT HAPPENS in the song. Name specific imagery, settings, actions from the lyrics. If someone read only this paragraph, they should be able to identify which song it's about.
 - subject_tags: 3–6 short noun phrases capturing the concrete subjects (not vibes — objects, settings, relationships, actions).
 - tones: 2–5 tone labels. These describe the EMOTIONAL TEXTURE of the delivery, not the topic. A sad song delivered with dark humor should include both.
@@ -25,7 +26,7 @@ Rules:
 ## User Message Template
 
 ```
-Analyze these lyrics. Return ONLY valid JSON matching the schema below.
+Analyze these lyrics. Return ONLY valid JSON matching the schema below — no markdown code fences, no explanatory text, just the JSON object starting with { and ending with }.
 
 Track: {track_name}
 Artist: {artist_name}
@@ -52,11 +53,11 @@ Lyrics:
     "intensity": "number (0-1)",
     "ambivalence": "number (0-1, how much the song pulls in opposing emotional directions)"
   },
-  "narrative_pov": "first | second | third | mixed",
-  "addressed_to": "lover | self | friend | family | god | crowd | enemy | abstract | none",
-  "time_frame": "present | retrospective | prospective | timeless",
-  "story_arc": "string (one sentence)",
-  "narrator_reliability": "straight | ironic | unreliable | persona",
+  "narrative_pov": "first | second | third | mixed",  // FLAT FIELD — not nested under "narrative"
+  "addressed_to": "lover | self | friend | family | god | crowd | enemy | abstract | none",  // FLAT FIELD
+  "time_frame": "present | retrospective | prospective | timeless",  // FLAT FIELD
+  "story_arc": "string (one sentence)",  // FLAT FIELD
+  "narrator_reliability": "straight | ironic | unreliable | persona",  // FLAT FIELD
   "vocal_delivery_inferred": ["string", "..."],
   "tempo_feel": "dragging | slow | mid | driving | frantic",
   "energy_curve": "string (e.g. 'builds steadily', 'flat intensity', 'peaks then resolves')",
@@ -72,11 +73,11 @@ Lyrics:
   "explicitness": "number (0-1)",
   "content_flags": ["string"],
   "quotability": "number (0-10, how many individual lines are memorable standalone)",
-  "rhyme_scheme": "string (e.g. 'ABAB', 'free verse', 'internal rhyme dominant')",
-  "repetition_density": "number (0-1, fraction of lyrics that are repeated phrases/choruses)",
-  "chorus_verse_balance": "number (0-1, 0=all verse, 1=all chorus)",
-  "has_bridge": "boolean",
-  "structure_signature": "string (e.g. 'verse-chorus-verse-chorus-bridge-chorus')",
+  "rhyme_scheme": "string (e.g. 'ABAB', 'free verse', 'internal rhyme dominant')",  // FLAT FIELD — not nested under "structure"
+  "repetition_density": "number (0-1, fraction of lyrics that are repeated phrases/choruses)",  // FLAT FIELD
+  "chorus_verse_balance": "number (0-1, 0=all verse, 1=all chorus)",  // FLAT FIELD
+  "has_bridge": "boolean",  // FLAT FIELD
+  "structure_signature": "string (e.g. 'verse-chorus-verse-chorus-bridge-chorus')",  // FLAT FIELD
   "language": "string (BCP-47, e.g. 'en')"
 }
 ```

@@ -222,6 +222,10 @@ async function submitBatch(input: "golden-set" | "all", output: string) {
 
   const client = new Anthropic({ apiKey });
 
+  // custom_id must match ^[a-zA-Z0-9_-]{1,64}$ — strip "spotify:track:" prefix
+  const uriToCustomId = (uri: string) => uri.replace("spotify:track:", "");
+  const customIdToUri = (id: string) => `spotify:track:${id}`;
+
   const requests = songsWithLyrics.map((song) => {
     const lyrics = lyricsMap.get(song.spotify_track_uri)!;
     const userMessage = userTemplate
@@ -230,9 +234,9 @@ async function submitBatch(input: "golden-set" | "all", output: string) {
       .replace("{lyrics_plain}", lyrics);
 
     return {
-      custom_id: song.spotify_track_uri,
+      custom_id: uriToCustomId(song.spotify_track_uri),
       params: {
-        model: "claude-sonnet-4-6-20250514" as const,
+        model: "claude-sonnet-4-6" as const,
         max_tokens: 2048,
         system,
         messages: [{ role: "user" as const, content: userMessage }],
@@ -287,26 +291,36 @@ async function pollAndDownload(batchId: string, output: string) {
   console.log("\nBatch complete! Downloading results...");
   const results = await client.messages.batches.results(batchId);
 
+  // Restore "spotify:track:" prefix stripped during submission
+  const customIdToUri = (id: string) =>
+    id.startsWith("spotify:track:") ? id : `spotify:track:${id}`;
+
   const lines: string[] = [];
   for await (const result of results) {
+    const uri = customIdToUri(result.custom_id);
     if (result.result.type === "succeeded") {
       const content = result.result.message.content[0];
       if (content.type === "text") {
         try {
-          const analysis = JSON.parse(content.text);
+          // Strip markdown code fences if Sonnet wrapped the JSON
+          let text = content.text.trim();
+          if (text.startsWith('```')) {
+            text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+          }
+          const analysis = JSON.parse(text);
           lines.push(
             JSON.stringify({
-              spotify_track_uri: result.custom_id,
+              spotify_track_uri: uri,
               analysis,
             })
           );
         } catch (e) {
           console.warn(
-            `  Parse error for ${result.custom_id}: ${(e as Error).message}`
+            `  Parse error for ${uri}: ${(e as Error).message}`
           );
           lines.push(
             JSON.stringify({
-              spotify_track_uri: result.custom_id,
+              spotify_track_uri: uri,
               error: "parse_error",
               raw: content.text.slice(0, 500),
             })
@@ -314,10 +328,10 @@ async function pollAndDownload(batchId: string, output: string) {
         }
       }
     } else {
-      console.warn(`  Failed: ${result.custom_id} — ${result.result.type}`);
+      console.warn(`  Failed: ${uri} — ${result.result.type}`);
       lines.push(
         JSON.stringify({
-          spotify_track_uri: result.custom_id,
+          spotify_track_uri: uri,
           error: result.result.type,
         })
       );
@@ -328,6 +342,21 @@ async function pollAndDownload(batchId: string, output: string) {
   console.log(`\nWrote ${lines.length} results to ${outputPath}`);
 
   // Write human-readable summary for spot-checking
+  function pick(obj: any, ...paths: string[]): any {
+    for (const path of paths) {
+      const v = path.split('.').reduce((a: any, k: string) => a?.[k], obj);
+      if (v !== undefined) return v;
+    }
+    return undefined;
+  }
+
+  function fmt(val: any): string {
+    if (val === undefined || val === null) return "?";
+    if (Array.isArray(val)) return val.join(", ");
+    if (typeof val === "object") return JSON.stringify(val);
+    return String(val);
+  }
+
   const summaryPath = outputPath.replace(".jsonl", "-readable.md");
   const summaryLines: string[] = [
     `# Lyric Analysis Results — ${output}\n`,
@@ -346,19 +375,41 @@ async function pollAndDownload(batchId: string, output: string) {
       continue;
     }
     const a = item.analysis;
+
+    const subject = pick(a, "subject_paragraph") || "?";
+    const tags = pick(a, "subject_tags");
+    const tones = pick(a, "tones");
+    const emotion = pick(a, "listener_feel_generic.primary_emotion", "primary_emotion") || "?";
+    const valence = pick(a, "listener_feel_generic.valence");
+    const arousal = pick(a, "listener_feel_generic.arousal");
+    const intensity = pick(a, "listener_feel_generic.intensity");
+    const pov = pick(a, "narrative_pov", "narrative.pov", "narrative.point_of_view") || "?";
+    const addressedTo = pick(a, "addressed_to", "narrative.addressed_to") || "?";
+    const timeFrame = pick(a, "time_frame", "narrative.time_frame") || "?";
+    const arc = pick(a, "story_arc", "narrative.story_arc") || "?";
+    const narrator = pick(a, "narrator_reliability", "narrative.narrator_reliability") || "?";
+    const delivery = pick(a, "vocal_delivery_inferred");
+    const tempo = pick(a, "tempo_feel") || "?";
+    const energy = pick(a, "energy_curve") || "?";
+    const dynRange = pick(a, "dynamic_range") || "?";
+    const vocab = pick(a, "vocab_level") || "?";
+    const quotability = pick(a, "quotability");
+    const structure = pick(a, "structure_signature", "structure.signature") || "?";
+    const repetition = pick(a, "repetition_density", "structure.repetition_density");
+
     summaryLines.push(
       `## ${item.spotify_track_uri}\n`,
-      `**Subject:** ${a.subject_paragraph}\n`,
-      `**Tags:** ${(a.subject_tags || []).join(", ")}`,
-      `**Tones:** ${(a.tones || []).join(", ")}`,
-      `**Feel:** ${a.listener_feel_generic?.primary_emotion || "?"} (valence=${a.listener_feel_generic?.valence}, arousal=${a.listener_feel_generic?.arousal}, intensity=${a.listener_feel_generic?.intensity})`,
-      `**POV:** ${a.narrative_pov} → ${a.addressed_to} | ${a.time_frame}`,
-      `**Arc:** ${a.story_arc}`,
-      `**Narrator:** ${a.narrator_reliability}`,
-      `**Delivery:** ${(a.vocal_delivery_inferred || []).join(", ")}`,
-      `**Tempo/Energy:** ${a.tempo_feel} | ${a.energy_curve} | range=${a.dynamic_range}`,
-      `**Vocab:** ${a.vocab_level} | Quotability=${a.quotability}/10`,
-      `**Structure:** ${a.structure_signature} | repetition=${a.repetition_density}`,
+      `**Subject:** ${subject}\n`,
+      `**Tags:** ${fmt(tags)}`,
+      `**Tones:** ${fmt(tones)}`,
+      `**Feel:** ${emotion} (valence=${valence ?? "?"}, arousal=${arousal ?? "?"}, intensity=${intensity ?? "?"})`,
+      `**POV:** ${pov} → ${addressedTo} | ${timeFrame}`,
+      `**Arc:** ${arc}`,
+      `**Narrator:** ${narrator}`,
+      `**Delivery:** ${fmt(delivery)}`,
+      `**Tempo/Energy:** ${tempo} | ${energy} | range=${dynRange}`,
+      `**Vocab:** ${vocab} | Quotability=${quotability ?? "?"}/10`,
+      `**Structure:** ${structure} | repetition=${repetition ?? "?"}`,
       `\n---\n`
     );
   }
