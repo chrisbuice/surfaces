@@ -5,7 +5,7 @@ Build 6 shortcuts — one per mode — that start a music session with physical 
 ## What you need
 
 - iPhone with iOS 16+ and the **Shortcuts** app (pre-installed)
-- Your shortcut token: `01cf403770ffe6e42951ad30f5e7686b9900cef134f0ed6ef3ab3da9178b72b9`
+- Your shortcut token: `<redacted — rotated 2026-05-03>`
 - Your Worker URL: `https://spotify-agent.chrisbuice.workers.dev`
 
 ## Build the "Working Music" shortcut (template for all 6)
@@ -49,7 +49,7 @@ Open the **Shortcuts** app and tap **+** to create a new shortcut.
    - **Method:** POST
    - **Headers:** Add one header:
      - Key: `Authorization`
-     - Value: `Bearer 01cf403770ffe6e42951ad30f5e7686b9900cef134f0ed6ef3ab3da9178b72b9`
+     - Value: `Bearer <redacted — rotated 2026-05-03>`
    - **Request Body:** JSON
    - Tap the body field and select the **Dictionary** from Step 3
 
