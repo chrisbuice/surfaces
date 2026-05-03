@@ -18,10 +18,6 @@ import { SpotifyClient } from "../spotify/client";
 import { getUserPlaylists } from "../spotify/library";
 import { getPlaylistTracksViaEmbed } from "../spotify/embed";
 
-// Hardcoded user id used elsewhere in the codebase (taste/seasonal.ts).
-// Pulled from getUserPlaylists().owner.id check; here so non-owned
-// playlists get filtered out without an extra round-trip.
-const USER_SPOTIFY_ID = "121776622";
 
 export interface SyncPlaylistsResult {
   total_owned: number;
@@ -33,9 +29,10 @@ export interface SyncPlaylistsResult {
 export async function syncOwnedPlaylistsForConstellation(
   db: D1Database,
   spotify: SpotifyClient,
+  userSpotifyId: string,
 ): Promise<SyncPlaylistsResult> {
   const playlists = await getUserPlaylists(spotify, 500);
-  const owned = playlists.filter(p => p.owner?.id === USER_SPOTIFY_ID);
+  const owned = playlists.filter(p => p.owner?.id === userSpotifyId);
 
   const now = Math.floor(Date.now() / 1000);
   let scraped = 0;

@@ -43,7 +43,6 @@ const YEAR_REGEX = /\b(20\d{2})\b/;
 // Also match 2-digit year shorthand like "summer 25", "fall 24"
 const SHORT_YEAR_REGEX = /\b(\d{2})\b/;
 
-const USER_SPOTIFY_ID = "121776622";
 
 interface SeasonalPlaylistInfo {
   spotifyPlaylistId: string;
@@ -54,13 +53,13 @@ interface SeasonalPlaylistInfo {
 }
 
 /** Scan user's playlists and return ones that look seasonal */
-export async function detectSeasonalPlaylists(spotify: SpotifyClient): Promise<SeasonalPlaylistInfo[]> {
+export async function detectSeasonalPlaylists(spotify: SpotifyClient, userSpotifyId: string): Promise<SeasonalPlaylistInfo[]> {
   const playlists = await getUserPlaylists(spotify);
   const results: SeasonalPlaylistInfo[] = [];
 
   for (const pl of playlists) {
     // Only consider playlists owned by the user
-    if (pl.owner?.id !== USER_SPOTIFY_ID) continue;
+    if (pl.owner?.id !== userSpotifyId) continue;
 
     // Skip explicitly excluded playlist IDs
     if (EXCLUDE_PLAYLIST_IDS.has(pl.id)) continue;
@@ -125,9 +124,10 @@ export function getCurrentSeason(): string {
 /** Sync detected seasonal playlists into D1 */
 export async function syncSeasonalPlaylists(
   db: D1Database,
-  spotify: SpotifyClient
+  spotify: SpotifyClient,
+  userSpotifyId: string,
 ): Promise<{ synced: number; total: number }> {
-  const detected = await detectSeasonalPlaylists(spotify);
+  const detected = await detectSeasonalPlaylists(spotify, userSpotifyId);
   const currentSeason = getCurrentSeason();
   const currentYear = new Date().getFullYear();
   const now = Math.floor(Date.now() / 1000);

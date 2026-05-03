@@ -7,3 +7,4 @@ SHORTCUT_TOKEN=your_random_token_here
 # X-Surfaces-Secret. Generate with: openssl rand -hex 32
 SURFACES_SECRET=your_random_secret_here
 NOTIFICATION_EMAIL=your_email_here
+SPOTIFY_USER_ID=your_spotify_user_id

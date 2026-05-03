@@ -37,7 +37,7 @@ interface ArtistAccumulator {
   is_followed: boolean;
 }
 
-export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient): Promise<{
+export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient, userSpotifyId: string): Promise<{
   tracksScored: number;
   artistsScored: number;
   seasonalPlaylists: number;
@@ -65,7 +65,7 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient):
     getTopArtists(spotify, "medium_term"),
     getTopArtists(spotify, "long_term"),
     getFollowedArtists(spotify),
-    syncSeasonalPlaylists(db, spotify),
+    syncSeasonalPlaylists(db, spotify, userSpotifyId),
   ]);
 
   // ── Build track accumulators ──

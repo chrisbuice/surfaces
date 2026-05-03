@@ -21,6 +21,7 @@ export interface Env {
   SHORTCUT_TOKEN: string;
   RESEND_API_KEY: string;
   NOTIFICATION_EMAIL: string;
+  SPOTIFY_USER_ID: string;
   LASTFM_API_KEY?: string;
   // Shared secret for POST /api/submit-track. chrisbuice.com's Pages
   // Function adds it as the X-Surfaces-Secret header; this worker
@@ -396,7 +397,7 @@ export default {
 
         case "/debug/rebuild-taste": {
           const spotify = new SpotifyClient(env);
-          const result = await rebuildTasteModel(env.DB, spotify);
+          const result = await rebuildTasteModel(env.DB, spotify, env.SPOTIFY_USER_ID);
           return Response.json(result);
         }
 
@@ -408,7 +409,7 @@ export default {
           // after deploy so the endpoint doesn't 404 until tomorrow).
           const spotify = new SpotifyClient(env);
           const { runConstellationCron } = await import("./constellation/cron");
-          const summary = await runConstellationCron(env.DB, spotify, env.KV);
+          const summary = await runConstellationCron(env.DB, spotify, env.KV, env.SPOTIFY_USER_ID);
           return Response.json(summary);
         }
 
@@ -1951,7 +1952,7 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
 
       const snapshotId = await getLatestSnapshotId(env.DB);
       await derivePlayEvents(env.DB, snapshotId);
-      await rebuildTasteModel(env.DB, spotify);
+      await rebuildTasteModel(env.DB, spotify, env.SPOTIFY_USER_ID);
       await rebuildAffinities(env.DB);
 
       // Audio features backfill — runs after taste rebuild so newly-scored
@@ -1994,7 +1995,7 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
 
       const { runConstellationCron } = await import("./constellation/cron");
       try {
-        const summary = await runConstellationCron(env.DB, spotify, env.KV);
+        const summary = await runConstellationCron(env.DB, spotify, env.KV, env.SPOTIFY_USER_ID);
         console.log(`constellation: rebuilt — ${summary.nodes} nodes, ${summary.edges} edges`);
       } catch (err) {
         console.error(`constellation: rebuild failed: ${err}`);

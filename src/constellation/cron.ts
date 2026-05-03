@@ -5,10 +5,11 @@
  *   1. Sync owned playlists into playlist_tracks (curatorial signal)
  *   2. Build node list (≥10 plays artists, peak year, years active)
  *   3. Build edge list (chained per-year session co-occurrence + playlist co-occurrence)
- *   4. Compute era buckets (data-driven quintiles by peak_year)
+ *   4. Compute reflection buckets (data-driven quintiles by peak_year)
  *   5. Run d3-force layout + size + opacity
- *   6. Compute labeled-8
- *   7. Assemble JSON, write to KV with 26h TTL
+ *   6. Detect clusters (Louvain community detection for orbit motion)
+ *   7. Compute labeled-8
+ *   8. Assemble JSON, write to KV with 26h TTL
  *
  * Output JSON conforms to spec §6 — the public contract with chrisbuice.com.
  */
@@ -16,21 +17,22 @@
 import { SpotifyClient } from "../spotify/client";
 import {
   buildNodes, buildEdges, buildStats,
-  computeEraBuckets, eraIndexFor, eraLabel,
+  computeReflectionBuckets, reflectionIndexFor, reflectionLabel,
 } from "./queries";
 import { runForceLayout } from "./layout";
 import { selectLabeledEight } from "./labels";
+import { detectClusters } from "./clusters";
 import { syncOwnedPlaylistsForConstellation } from "./sync_playlists";
 import type {
-  ConstellationJson, ConstellationNode, ConstellationEdge, EraBucket,
+  ConstellationJson, ConstellationNode, ConstellationEdge, ReflectionBucket,
 } from "./types";
 
 export const KV_KEY = "constellation:latest";
 export const KV_TTL_SECONDS = 26 * 60 * 60;     // 26 hours — covers a missed nightly run
 
 // Bichromatic palette per spec §5.4: warm amber → cream → hunter green.
-// Five interpolated stops; first is warmest (earliest era), last is hunter green.
-const ERA_PALETTE: string[] = [
+// Five interpolated stops; first is warmest (earliest reflection), last is hunter green.
+const REFLECTION_PALETTE: string[] = [
   "#c8956d",  // warm amber
   "#b8a07a",
   "#9ba588",
@@ -58,6 +60,7 @@ export interface BuildConstellationOptions {
 export async function buildConstellation(
   db: D1Database,
   spotify: SpotifyClient,
+  userSpotifyId: string,
   opts: BuildConstellationOptions = {},
 ): Promise<ConstellationJson> {
   // Phase 0 — sync playlist track membership. Best-effort; if Spotify
@@ -65,7 +68,7 @@ export async function buildConstellation(
   // alone (the playlist term collapses to zero for missing pairs).
   if (!opts.skipPlaylistSync) {
     try {
-      await syncOwnedPlaylistsForConstellation(db, spotify);
+      await syncOwnedPlaylistsForConstellation(db, spotify, userSpotifyId);
     } catch (err) {
       console.warn(`constellation: playlist sync failed, continuing without playlist signal: ${err}`);
     }
@@ -78,21 +81,24 @@ export async function buildConstellation(
   // Phase 2 — edges.
   const edgeRows = await buildEdges(db, nodeArtists);
 
-  // Phase 3 — era buckets.
+  // Phase 3 — reflection buckets.
   const peakYears = nodeRows.map(n => n.peak_year);
-  const eraBoundaries = computeEraBuckets(peakYears);
-  const eraBuckets: EraBucket[] = eraBoundaries.map((b, i) => ({
-    label: eraLabel(b, i === eraBoundaries.length - 1),
-    color: ERA_PALETTE[i] ?? ERA_PALETTE[ERA_PALETTE.length - 1],
+  const reflectionBoundaries = computeReflectionBuckets(peakYears);
+  const reflectionBuckets: ReflectionBucket[] = reflectionBoundaries.map((b, i) => ({
+    label: reflectionLabel(b, i === reflectionBoundaries.length - 1),
+    color: REFLECTION_PALETTE[i] ?? REFLECTION_PALETTE[REFLECTION_PALETTE.length - 1],
   }));
 
   // Phase 4 — layout.
   const layoutNodes = runForceLayout(nodeRows, edgeRows, { ticks: opts.ticks });
 
-  // Phase 5 — labeled-8.
+  // Phase 5 — clusters (Louvain community detection for orbit motion, spec §5.14).
+  const clusterResult = detectClusters(layoutNodes, edgeRows);
+
+  // Phase 6 — labeled-8.
   const labeledNames = selectLabeledEight(nodeRows);
 
-  // Phase 6 — top-3 neighbors per node + edge selection.
+  // Phase 7 — top-3 neighbors per node + edge selection.
   const indexByName = new Map<string, number>();
   layoutNodes.forEach((n, i) => indexByName.set(n.artist_name, i));
 
@@ -127,8 +133,8 @@ export async function buildConstellation(
     }
   }
 
-  // Phase 7 — assemble nodes JSON. id, top_neighbors, era index, label flag.
-  const nodes: ConstellationNode[] = layoutNodes.map(n => {
+  // Phase 8 — assemble nodes JSON. id, top_neighbors, reflection index, label flag, cluster_id.
+  const nodes: ConstellationNode[] = layoutNodes.map((n, i) => {
     const id = formatNodeId(n.artist_name, n.artist_id);
     const neighbors = (edgesByNode.get(n.artist_name) ?? [])
       .slice(0, EDGES_PER_NODE)
@@ -140,23 +146,25 @@ export async function buildConstellation(
       y: n.y,
       r: n.r,
       opacity: n.opacity,
-      era: eraIndexFor(n.peak_year, eraBoundaries),
+      reflection: reflectionIndexFor(n.peak_year, reflectionBoundaries),
       plays: n.total_plays,
       peak_year: n.peak_year,
       years_active: n.years_active,
+      cluster_id: clusterResult.assignments[i],
       top_neighbors: neighbors,
       is_labeled: labeledNames.has(n.artist_name),
     };
   });
 
-  // Phase 8 — stats.
+  // Phase 9 — stats.
   const stats = await buildStats(db);
 
   return {
     generated_at: new Date().toISOString(),
     stats,
-    era_buckets: eraBuckets,
+    reflection_buckets: reflectionBuckets,
     viewbox: { width: 1000, height: 1000 },
+    clusters: clusterResult.clusters,
     nodes,
     edges: finalEdges,
   };
@@ -170,8 +178,9 @@ export async function runConstellationCron(
   db: D1Database,
   spotify: SpotifyClient,
   kv: KVNamespace,
+  userSpotifyId: string,
 ): Promise<{ nodes: number; edges: number }> {
-  const json = await buildConstellation(db, spotify);
+  const json = await buildConstellation(db, spotify, userSpotifyId);
   await kv.put(KV_KEY, JSON.stringify(json), { expirationTtl: KV_TTL_SECONDS });
   return { nodes: json.nodes.length, edges: json.edges.length };
 }
