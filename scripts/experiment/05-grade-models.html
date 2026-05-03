@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stage 1 — Model Bake-off Grading</title>
+  <style>
+    /* TODO: styling */
+    body { font-family: system-ui; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Stage 1 — Blind Model Grading</h1>
+  <p>Load analyses from all 3 models (90 total). Grade each on 3 axes. Model identity hidden until all graded.</p>
+
+  <!-- TODO: implement
+    1. Load analyses-sonnet-4-6.jsonl, analyses-gpt-5.jsonl, analyses-gpt-5-5.jsonl
+    2. Combine into 90 items, shuffle with seeded RNG
+    3. For each: show song title + artist + analysis JSON fields
+    4. HIDE which model produced it
+    5. Three buttons per axis: pass / fail / unsure
+       - subject_paragraph specificity
+       - tone match
+       - emotion match
+    6. After all 90 graded, reveal model attribution
+    7. Write results to model-bakeoff-results.csv (download)
+  -->
+
+  <div id="app">
+    <p><em>Not yet implemented — scaffold only.</em></p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,306 @@
+{
+  "description": "Top 50 tracks by play count with lyrics — obsession centroid seeds",
+  "selection_method": "Top 50 by play_count from plays table, filtered to track_lyrics.status='ok' AND non-instrumental AND lyrics_length > 100",
+  "seeds": [
+    {
+      "spotify_track_uri": "spotify:track:2buPg3KvHsc4TzMEHkeVYn",
+      "track_name": "Boots",
+      "artist_name": "Kesha",
+      "play_count": 396
+    },
+    {
+      "spotify_track_uri": "spotify:track:19MkwMrRjO7773zpuGss1o",
+      "track_name": "Shake the Frost (Live)",
+      "artist_name": "Tyler Childers",
+      "play_count": 390
+    },
+    {
+      "spotify_track_uri": "spotify:track:1sx4GRirvsRPocH3W04e5a",
+      "track_name": "Feels",
+      "artist_name": "Kiiara",
+      "play_count": 331
+    },
+    {
+      "spotify_track_uri": "spotify:track:0PFfAiEFREC6PugLPN03aa",
+      "track_name": "Use Me",
+      "artist_name": "The Goo Goo Dolls",
+      "play_count": 300
+    },
+    {
+      "spotify_track_uri": "spotify:track:1KGi9sZVMeszgZOWivFpxs",
+      "track_name": "No Scrubs",
+      "artist_name": "TLC",
+      "play_count": 300
+    },
+    {
+      "spotify_track_uri": "spotify:track:2U2Z1IXnmJIvlknWizFykZ",
+      "track_name": "High Horse",
+      "artist_name": "Kacey Musgraves",
+      "play_count": 300
+    },
+    {
+      "spotify_track_uri": "spotify:track:2CPLGREl5ahzA2WPBMkpxh",
+      "track_name": "Fallingwater",
+      "artist_name": "Maggie Rogers",
+      "play_count": 280
+    },
+    {
+      "spotify_track_uri": "spotify:track:0YV73fsl9Wzlj61EPspjJ3",
+      "track_name": "Bathroom Sink",
+      "artist_name": "Miranda Lambert",
+      "play_count": 277
+    },
+    {
+      "spotify_track_uri": "spotify:track:2Z9Yid1RueNo2sHS9x4gdh",
+      "track_name": "Ring Off",
+      "artist_name": "Beyoncé",
+      "play_count": 266
+    },
+    {
+      "spotify_track_uri": "spotify:track:1LkpaAtSjAx5n4rrTkIQyu",
+      "track_name": "Fabulous",
+      "artist_name": "MEEK",
+      "play_count": 252
+    },
+    {
+      "spotify_track_uri": "spotify:track:1qbmS6ep2hbBRaEZFpn7BX",
+      "track_name": "Man I Need",
+      "artist_name": "Olivia Dean",
+      "play_count": 245
+    },
+    {
+      "spotify_track_uri": "spotify:track:2ihHDb5epUtpn97W0pOsOA",
+      "track_name": "All the Things She Said",
+      "artist_name": "Harrison",
+      "play_count": 236
+    },
+    {
+      "spotify_track_uri": "spotify:track:1FKxKGONukVFXWVJxAKmlz",
+      "track_name": "Sweet Dreams",
+      "artist_name": "Beyoncé",
+      "play_count": 231
+    },
+    {
+      "spotify_track_uri": "spotify:track:2TIEeLrOQrGnO2D2OeDDJu",
+      "track_name": "Time Marches On",
+      "artist_name": "Tracy Lawrence",
+      "play_count": 223
+    },
+    {
+      "spotify_track_uri": "spotify:track:1vvNmPOiUuyCbgWmtc6yfm",
+      "track_name": "My Way",
+      "artist_name": "Calvin Harris",
+      "play_count": 220
+    },
+    {
+      "spotify_track_uri": "spotify:track:0KlahhzNb98zyN83Vwae0l",
+      "track_name": "Untouched",
+      "artist_name": "The Veronicas",
+      "play_count": 215
+    },
+    {
+      "spotify_track_uri": "spotify:track:2QD4C6RRHgRNRAyrfnoeAo",
+      "track_name": "Play Hard (feat. Ne-Yo & Akon)",
+      "artist_name": "David Guetta",
+      "play_count": 207
+    },
+    {
+      "spotify_track_uri": "spotify:track:1tJkic0TURTCXw3rBhYgWu",
+      "track_name": "What Would You Do?",
+      "artist_name": "City High",
+      "play_count": 200
+    },
+    {
+      "spotify_track_uri": "spotify:track:0QRzk1Mnxd7UybNHLiRUNE",
+      "track_name": "These Days - Live",
+      "artist_name": "Jackson Browne",
+      "play_count": 196
+    },
+    {
+      "spotify_track_uri": "spotify:track:24LS4lQShWyixJ0ZrJXfJ5",
+      "track_name": "Sweet Nothing (feat. Florence Welch)",
+      "artist_name": "Calvin Harris",
+      "play_count": 196
+    },
+    {
+      "spotify_track_uri": "spotify:track:2U15ix0JMkQY8EsxneUfyL",
+      "track_name": "You're Gonna Go Far (with Brandi Carlile)",
+      "artist_name": "Noah Kahan",
+      "play_count": 196
+    },
+    {
+      "spotify_track_uri": "spotify:track:0mflMxspEfB0VbI1kyLiAv",
+      "track_name": "Stick Season",
+      "artist_name": "Noah Kahan",
+      "play_count": 194
+    },
+    {
+      "spotify_track_uri": "spotify:track:21RzyxY3EFaxVy6K4RqaU9",
+      "track_name": "Body",
+      "artist_name": "Loud Luxury",
+      "play_count": 194
+    },
+    {
+      "spotify_track_uri": "spotify:track:2Za1AlJNvksouPPWbXpR2X",
+      "track_name": "Good Old Days (feat. Kesha)",
+      "artist_name": "Macklemore",
+      "play_count": 191
+    },
+    {
+      "spotify_track_uri": "spotify:track:0PXWpNBYg52gABrn1qL1bD",
+      "track_name": "Unwell - 2007 Remaster",
+      "artist_name": "Matchbox Twenty",
+      "play_count": 189
+    },
+    {
+      "spotify_track_uri": "spotify:track:0cVeP9t3QChKYHKNGWfPnD",
+      "track_name": "Borders",
+      "artist_name": "M.I.A.",
+      "play_count": 188
+    },
+    {
+      "spotify_track_uri": "spotify:track:09qzRI951OVkXGCc33gzcT",
+      "track_name": "My Maria",
+      "artist_name": "Brooks & Dunn",
+      "play_count": 187
+    },
+    {
+      "spotify_track_uri": "spotify:track:07UFnnK3uPIuKv5Rs9TmXl",
+      "track_name": "Orange Juice",
+      "artist_name": "Noah Kahan",
+      "play_count": 185
+    },
+    {
+      "spotify_track_uri": "spotify:track:0a372z4DKf82q5WHUkO01W",
+      "track_name": "Lost",
+      "artist_name": "Emily Afton",
+      "play_count": 185
+    },
+    {
+      "spotify_track_uri": "spotify:track:1SjsVdSXpwm1kTdYEHoPIT",
+      "track_name": "Sun to Me",
+      "artist_name": "Zach Bryan",
+      "play_count": 185
+    },
+    {
+      "spotify_track_uri": "spotify:track:2L6orAlH8tBhiFTumIfMyF",
+      "track_name": "Call on Me - Ryan Riback Remix",
+      "artist_name": "Starley",
+      "play_count": 183
+    },
+    {
+      "spotify_track_uri": "spotify:track:0WbMK4wrZ1wFSty9F7FCgu",
+      "track_name": "Good Luck, Babe!",
+      "artist_name": "Chappell Roan",
+      "play_count": 179
+    },
+    {
+      "spotify_track_uri": "spotify:track:0CZ8lquoTX2Dkg7Ak2inwA",
+      "track_name": "1950",
+      "artist_name": "King Princess",
+      "play_count": 178
+    },
+    {
+      "spotify_track_uri": "spotify:track:2ikbRpHU3pH3Y0va9we9s6",
+      "track_name": "I Was Gonna Marry You",
+      "artist_name": "Tristan Prettyman",
+      "play_count": 178
+    },
+    {
+      "spotify_track_uri": "spotify:track:1cioTI6lHVmW4UWKEi8ChG",
+      "track_name": "Gold Dust Woman - 2004 Remaster",
+      "artist_name": "Fleetwood Mac",
+      "play_count": 177
+    },
+    {
+      "spotify_track_uri": "spotify:track:2YrAC1ZW7G7jiZfz2tHoXw",
+      "track_name": "Grown Woman",
+      "artist_name": "Beyoncé",
+      "play_count": 176
+    },
+    {
+      "spotify_track_uri": "spotify:track:0nDjzA4kns1QOWPXuOn6Xw",
+      "track_name": "Where The Green Grass Grows",
+      "artist_name": "Tim McGraw",
+      "play_count": 174
+    },
+    {
+      "spotify_track_uri": "spotify:track:11IzgLRXV7Cgek3tEgGgjw",
+      "track_name": "Under Pressure - Remastered 2011",
+      "artist_name": "Queen",
+      "play_count": 174
+    },
+    {
+      "spotify_track_uri": "spotify:track:0k664IuFwVP557Gnx7RhIl",
+      "track_name": "Juice",
+      "artist_name": "Lizzo",
+      "play_count": 173
+    },
+    {
+      "spotify_track_uri": "spotify:track:1MtUq6Wp1eQ8PC6BbPCj8P",
+      "track_name": "I Took A Pill In Ibiza - Seeb Remix",
+      "artist_name": "Mike Posner",
+      "play_count": 172
+    },
+    {
+      "spotify_track_uri": "spotify:track:2goLsvvODILDzeeiT4dAoR",
+      "track_name": "Believe",
+      "artist_name": "Cher",
+      "play_count": 172
+    },
+    {
+      "spotify_track_uri": "spotify:track:1rBittbf1aWwzeW28dI7Lv",
+      "track_name": "Da Baddest Bitch",
+      "artist_name": "Trina",
+      "play_count": 170
+    },
+    {
+      "spotify_track_uri": "spotify:track:2VjtYe7gpfUi2OkGxR2O2z",
+      "track_name": "Look What You Made Me Do",
+      "artist_name": "Taylor Swift",
+      "play_count": 166
+    },
+    {
+      "spotify_track_uri": "spotify:track:0EcxKmWwogn7f51Z0UHFQd",
+      "track_name": "Travelin' Light",
+      "artist_name": "Dierks Bentley",
+      "play_count": 165
+    },
+    {
+      "spotify_track_uri": "spotify:track:0azC730Exh71aQlOt9Zj3y",
+      "track_name": "This Is What You Came For",
+      "artist_name": "Calvin Harris",
+      "play_count": 163
+    },
+    {
+      "spotify_track_uri": "spotify:track:2IY7eOUDjw2ArKYxKa2jXc",
+      "track_name": "Starboy",
+      "artist_name": "The Weeknd",
+      "play_count": 162
+    },
+    {
+      "spotify_track_uri": "spotify:track:08c3wmdjKSjxTJY9cHSts7",
+      "track_name": "XXX's And OOO's (An American Girl)",
+      "artist_name": "Trisha Yearwood",
+      "play_count": 161
+    },
+    {
+      "spotify_track_uri": "spotify:track:0t2QiRkpag0fAgs9zuCPlH",
+      "track_name": "Disparate Youth",
+      "artist_name": "Santigold",
+      "play_count": 159
+    },
+    {
+      "spotify_track_uri": "spotify:track:09vsySrvxLLyJKzeNAXjQj",
+      "track_name": "Home Run",
+      "artist_name": "The Man The Myth The Meatslab",
+      "play_count": 158
+    },
+    {
+      "spotify_track_uri": "spotify:track:1SJtlNRJDeYHioymcvsqev",
+      "track_name": "Crying in the Club",
+      "artist_name": "Camila Cabello",
+      "play_count": 158
+    }
+  ]
+}

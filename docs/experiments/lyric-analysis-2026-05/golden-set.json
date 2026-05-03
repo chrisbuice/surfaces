@@ -1,0 +1,246 @@
+{
+  "description": "30 known songs for Stage 1 H1 quality gate — multi-model bake-off",
+  "selection_criteria": "Stratified across genre (folk, pop, alt-rock, R&B, country, hip-hop/dance), era (pre-2000 through 2020s), and lyrical complexity (narrative, abstract, hooks-only, political/tonal)",
+  "songs": [
+    {
+      "spotify_track_uri": "spotify:track:19MkwMrRjO7773zpuGss1o",
+      "track_name": "Shake the Frost (Live)",
+      "artist_name": "Tyler Childers",
+      "genre_bucket": "folk_americana",
+      "complexity": "narrative",
+      "rationale": "Raw Appalachian storytelling with specific imagery — tests literal narrative extraction"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0QRzk1Mnxd7UybNHLiRUNE",
+      "track_name": "These Days - Live",
+      "artist_name": "Jackson Browne",
+      "genre_bucket": "folk_americana",
+      "complexity": "abstract",
+      "rationale": "Introspective 70s singer-songwriter, abstract melancholy — tests mood without plot"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1wLNEMiUzwvRZz9XHCXhAE",
+      "track_name": "Fifth of May",
+      "artist_name": "Zach Bryan",
+      "genre_bucket": "folk_americana",
+      "complexity": "narrative",
+      "rationale": "Modern folk with narrative density — tests whether model captures scene-setting"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1vqtj4c5aNPKkLS2LXkd4E",
+      "track_name": "If I Go, I'm Goin",
+      "artist_name": "Gregory Alan Isakov",
+      "genre_bucket": "folk_americana",
+      "complexity": "abstract",
+      "rationale": "Poetic and sparse — tests whether model captures restraint vs over-reading"
+    },
+    {
+      "spotify_track_uri": "spotify:track:250RLekaiL1q9qZer975Eg",
+      "track_name": "If We Were Vampires",
+      "artist_name": "Jason Isbell and the 400 Unit",
+      "genre_bucket": "folk_americana",
+      "complexity": "narrative",
+      "rationale": "Narrative love song with mortality framing — tests thematic depth detection"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0WbMK4wrZ1wFSty9F7FCgu",
+      "track_name": "Good Luck, Babe!",
+      "artist_name": "Chappell Roan",
+      "genre_bucket": "pop",
+      "complexity": "narrative",
+      "rationale": "Queer heartbreak layered under a bop — tests whether model reads past the surface"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0sY6ZUTh4yoctD8VIXz339",
+      "track_name": "champagne problems",
+      "artist_name": "Taylor Swift",
+      "genre_bucket": "pop",
+      "complexity": "narrative",
+      "rationale": "Dense narrative with literary references — tests handling of allusion and perspective shifts"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0ENSn4fwAbCGeFGVUbXEU3",
+      "track_name": "Hello",
+      "artist_name": "Adele",
+      "genre_bucket": "pop",
+      "complexity": "narrative",
+      "rationale": "Huge emotional directness with simple language — tests whether model avoids hallucinating depth"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0EcQcdcbQeVJn9fknj44Be",
+      "track_name": "I Like Me Better",
+      "artist_name": "Lauv",
+      "genre_bucket": "pop",
+      "complexity": "hooks_only",
+      "rationale": "Minimal lyrics — tests whether model avoids over-reading a simple love declaration"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2TTYIwTM2iLC1YOyHuhRMt",
+      "track_name": "Lucky",
+      "artist_name": "Britney Spears",
+      "genre_bucket": "pop",
+      "complexity": "narrative",
+      "rationale": "Meta-narrative about fame and loneliness, deceptively simple structure"
+    },
+    {
+      "spotify_track_uri": "spotify:track:28iw1FqJf6Vnfl2Fcu9rBh",
+      "track_name": "Same Old Blues",
+      "artist_name": "Phantogram",
+      "genre_bucket": "alt_rock",
+      "complexity": "abstract",
+      "rationale": "Abstract and moody, electronic-tinged — tests atmospheric mood extraction"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1gk3FhAV07q9Jg77UxnVjX",
+      "track_name": "Gooey",
+      "artist_name": "Glass Animals",
+      "genre_bucket": "alt_rock",
+      "complexity": "abstract",
+      "rationale": "Surreal imagery and sensory overload — tests whether model handles non-literal lyrics"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0gEyKnHvgkrkBM6fbeHdwK",
+      "track_name": "Linger",
+      "artist_name": "The Cranberries",
+      "genre_bucket": "alt_rock",
+      "complexity": "narrative",
+      "rationale": "90s alt with emotional directness — baseline for straightforward emotional parsing"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0uQxV7ysuBPhbfUkW1WOCp",
+      "track_name": "First Class",
+      "artist_name": "Rainbow Kitten Surprise",
+      "genre_bucket": "alt_rock",
+      "complexity": "abstract",
+      "rationale": "Poetic stream-of-consciousness — tests handling of associative rather than linear lyrics"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0fOjUafaAhJV16oRBgCtz7",
+      "track_name": "Ladies and gentlemen we are floating in space",
+      "artist_name": "Spiritualized",
+      "genre_bucket": "alt_rock",
+      "complexity": "abstract",
+      "rationale": "Repetitive/mantric structure — tests whether model recognizes minimalism as intentional"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2Z9Yid1RueNo2sHS9x4gdh",
+      "track_name": "Ring Off",
+      "artist_name": "Beyoncé",
+      "genre_bucket": "r_and_b",
+      "complexity": "narrative",
+      "rationale": "Narrative about her mother's divorce with specific details — tests biographical reading"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1KGi9sZVMeszgZOWivFpxs",
+      "track_name": "No Scrubs",
+      "artist_name": "TLC",
+      "genre_bucket": "r_and_b",
+      "complexity": "hooks_only",
+      "rationale": "Cultural artifact, attitude-driven with simple message — tests tone vs content"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0CZ8lquoTX2Dkg7Ak2inwA",
+      "track_name": "1950",
+      "artist_name": "King Princess",
+      "genre_bucket": "r_and_b",
+      "complexity": "abstract",
+      "rationale": "Queer longing with retro references — tests whether model catches historical subtext"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1qbmS6ep2hbBRaEZFpn7BX",
+      "track_name": "Man I Need",
+      "artist_name": "Olivia Dean",
+      "genre_bucket": "r_and_b",
+      "complexity": "narrative",
+      "rationale": "Warm and intimate with specific desires — tests granularity of emotional reading"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1tJkic0TURTCXw3rBhYgWu",
+      "track_name": "What Would You Do?",
+      "artist_name": "City High",
+      "genre_bucket": "r_and_b",
+      "complexity": "narrative",
+      "rationale": "Social narrative with specific scenario — tests story comprehension in R&B context"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0YV73fsl9Wzlj61EPspjJ3",
+      "track_name": "Bathroom Sink",
+      "artist_name": "Miranda Lambert",
+      "genre_bucket": "country",
+      "complexity": "narrative",
+      "rationale": "Confessional with vivid domestic imagery — tests concrete detail extraction"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0nDjzA4kns1QOWPXuOn6Xw",
+      "track_name": "Where The Green Grass Grows",
+      "artist_name": "Tim McGraw",
+      "genre_bucket": "country",
+      "complexity": "hooks_only",
+      "rationale": "Nostalgic pastoral with simple sentiment — tests whether model reads appropriate depth"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2TIEeLrOQrGnO2D2OeDDJu",
+      "track_name": "Time Marches On",
+      "artist_name": "Tracy Lawrence",
+      "genre_bucket": "country",
+      "complexity": "narrative",
+      "rationale": "Multi-generational narrative with time progression — tests structural comprehension"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0pMfPzdRiPAoSM9yWF4OcT",
+      "track_name": "Golden Hour",
+      "artist_name": "Kacey Musgraves",
+      "genre_bucket": "country",
+      "complexity": "abstract",
+      "rationale": "Abstract atmospheric love song — tests mood extraction from country/pop crossover"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0ZUo4YjG4saFnEJhdWp9Bt",
+      "track_name": "Before He Cheats",
+      "artist_name": "Carrie Underwood",
+      "genre_bucket": "country",
+      "complexity": "narrative",
+      "rationale": "Revenge narrative with very specific actions — tests literal vs tonal reading"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0cVeP9t3QChKYHKNGWfPnD",
+      "track_name": "Borders",
+      "artist_name": "M.I.A.",
+      "genre_bucket": "hiphop_dance",
+      "complexity": "political",
+      "rationale": "Political with tonal complexity about immigration — tests socio-political reading"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0b9oOr2ZgvyQu88wzixux9",
+      "track_name": "This Is America",
+      "artist_name": "Childish Gambino",
+      "genre_bucket": "hiphop_dance",
+      "complexity": "political",
+      "rationale": "Satirical layered social commentary — tests irony and multi-level meaning detection"
+    },
+    {
+      "spotify_track_uri": "spotify:track:00i2HU7TEzzftShjRrDSEF",
+      "track_name": "Changes",
+      "artist_name": "2Pac",
+      "genre_bucket": "hiphop_dance",
+      "complexity": "political",
+      "rationale": "Political/social narrative with emotional weight — tests earnest political reading"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1rBittbf1aWwzeW28dI7Lv",
+      "track_name": "Da Baddest Bitch",
+      "artist_name": "Trina",
+      "genre_bucket": "hiphop_dance",
+      "complexity": "hooks_only",
+      "rationale": "Braggadocio and hooks — tests tone detection without mistaking confidence for narrative"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1CmUZGtH29Kx36C1Hleqlz",
+      "track_name": "Thrift Shop (feat. Wanz)",
+      "artist_name": "Macklemore & Ryan Lewis",
+      "genre_bucket": "hiphop_dance",
+      "complexity": "narrative",
+      "rationale": "Comedic narrative with cultural commentary — tests humor and irony detection"
+    }
+  ]
+}
