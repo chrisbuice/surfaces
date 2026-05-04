@@ -1,0 +1,1623 @@
+{
+  "description": "200 barely-heard tracks (1-3 plays, last heard >1yr ago) for blind rating experiment",
+  "selection_method": "Stratified ~1/3 each at play_count 1, 2, 3. Filtered to track_lyrics.status='ok', non-instrumental, lyrics_length > 100. Shuffled with seeded mulberry32 RNG.",
+  "rng_seed": 20260503,
+  "cutoff_ts": 1714521600,
+  "cutoff_date": "2025-05-01",
+  "generated_at": "2026-05-03T00:00:00Z",
+  "stats": {
+    "total": 200,
+    "by_play_count": {
+      "1": 67,
+      "2": 67,
+      "3": 66
+    },
+    "by_era": {
+      "2016-2020": 116,
+      "2021-2025": 39,
+      "2011-2015": 45
+    }
+  },
+  "candidates": [
+    {
+      "spotify_track_uri": "spotify:track:1qss894MHqoOi381K3owNr",
+      "track_name": "Don't Leave Me Lonely - Bonus Track",
+      "artist_name": "Amos Lee",
+      "play_count": 1,
+      "last_played": 1488999540,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1f2lkuLldqRzvaFjJdjGXX",
+      "track_name": "Santa Claus Is Comin' to Town",
+      "artist_name": "Mariah Carey",
+      "play_count": 2,
+      "last_played": 1514218297,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1ITsmuChPVC05ogvorAyVu",
+      "track_name": "Boys",
+      "artist_name": "Lizzo",
+      "play_count": 3,
+      "last_played": 1567378267,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0pRzVOubQTzJ9hlk8CDp4i",
+      "track_name": "I've Got My Love To Keep Me Warm",
+      "artist_name": "Ella Fitzgerald",
+      "play_count": 2,
+      "last_played": 1465310731,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1EIxbLbBCR73asB6f2WZOe",
+      "track_name": "My Milkshake",
+      "artist_name": "Kelis",
+      "play_count": 3,
+      "last_played": 1559475510,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1qrpoAMXodY6895hGKoUpA",
+      "track_name": "You Belong With Me (Taylor\u2019s Version)",
+      "artist_name": "Taylor Swift",
+      "play_count": 3,
+      "last_played": 1679757920,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:07uI5Ji4JYYV3j0Bfd3Mn1",
+      "track_name": "Atonement",
+      "artist_name": "Anberlin",
+      "play_count": 1,
+      "last_played": 1406148860,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2JRLoT6z48Pfihyj1s1u77",
+      "track_name": "Day Dreaming",
+      "artist_name": "Jack & Jack",
+      "play_count": 2,
+      "last_played": 1622175705,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0ubzTDRfqwMcmbbpK15sQX",
+      "track_name": "Let the River Run (Arr. Johnson)",
+      "artist_name": "Carly Simon",
+      "play_count": 3,
+      "last_played": 1493227432,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:078kLYfYCjjPMbABqriXT3",
+      "track_name": "Lost",
+      "artist_name": "Liza Anne",
+      "play_count": 3,
+      "last_played": 1559327098,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0nSuUgfP7TERZQyij22T5K",
+      "track_name": "Bounce (feat. Kelis) - Extended Mix",
+      "artist_name": "Calvin Harris",
+      "play_count": 3,
+      "last_played": 1378399610,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2GtbaovnGwV3oCDzmr9gey",
+      "track_name": "Burning Desire",
+      "artist_name": "Lana Del Rey",
+      "play_count": 2,
+      "last_played": 1662135332,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0ac6wpfha90oah72SCNTPV",
+      "track_name": "Pieces of Us (feat. King Princess)",
+      "artist_name": "Mark Ronson",
+      "play_count": 2,
+      "last_played": 1565697077,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:23EblUTQTswA21CfIzBL6z",
+      "track_name": "If Drinkin' Don't Kill Me (Her Memory Will)",
+      "artist_name": "George Jones",
+      "play_count": 2,
+      "last_played": 1446651521,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1czaCgWLWgqp0eRIZ0BcXh",
+      "track_name": "Everywhere I Go",
+      "artist_name": "Hollywood Undead",
+      "play_count": 1,
+      "last_played": 1625615121,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1oHcr3hoqP66hkNcWPilfu",
+      "track_name": "Gotta' Jibboo",
+      "artist_name": "Phish",
+      "play_count": 1,
+      "last_played": 1357198758,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0VoQCaHK0kzgQ6fVtcLChy",
+      "track_name": "Feels Like Home (feat. Kent Jones)",
+      "artist_name": "Sigala",
+      "play_count": 2,
+      "last_played": 1529959906,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0nNocEvNLEXbkUkbMBM1Fo",
+      "track_name": "Bad Guy",
+      "artist_name": "Hatchie",
+      "play_count": 3,
+      "last_played": 1547743632,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1tdXx8akntCDxyLcpTKa5s",
+      "track_name": "Sophia",
+      "artist_name": "Laura Marling",
+      "play_count": 1,
+      "last_played": 1356897020,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2eQMZp4HLfQAX5S7wRuso3",
+      "track_name": "My World",
+      "artist_name": "Avril Lavigne",
+      "play_count": 1,
+      "last_played": 1622731807,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1qMqdx2ON1OdxrEa09jwUt",
+      "track_name": "Disco",
+      "artist_name": "The Foxies",
+      "play_count": 1,
+      "last_played": 1513491324,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:18iPfjcNpNOx0XtpMhogl2",
+      "track_name": "Standing Still",
+      "artist_name": "Roman Lob",
+      "play_count": 2,
+      "last_played": 1381234652,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2RdikLCjMpAKr5j7OsxXAD",
+      "track_name": "Arizona Fire",
+      "artist_name": "Becca Mancari",
+      "play_count": 3,
+      "last_played": 1522681698,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2LI6cjLd6ptHt0ij7TWkzl",
+      "track_name": "Secure Yourself",
+      "artist_name": "Indigo Girls",
+      "play_count": 1,
+      "last_played": 1696806242,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:17AtR2mHWKdDXCPUFydJKL",
+      "track_name": "Drink Up",
+      "artist_name": "Train",
+      "play_count": 1,
+      "last_played": 1522160681,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0D6W6EGTvdLunfJHMvPkD6",
+      "track_name": "Get On Home",
+      "artist_name": "The Jesus and Mary Chain",
+      "play_count": 1,
+      "last_played": 1519709171,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2jTNXOnOsqE8MjRM0Qtpxb",
+      "track_name": "Without You",
+      "artist_name": "Anderson East",
+      "play_count": 3,
+      "last_played": 1518751652,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:10V1dKQyQlL9nI7KpPPeBp",
+      "track_name": "When I'm Gone",
+      "artist_name": "Gary Clark Jr.",
+      "play_count": 2,
+      "last_played": 1574357186,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:18mfe5YtwXeqhbuSABYVCK",
+      "track_name": "Big Jet Plane - Animal Trainer Remix",
+      "artist_name": "Jan Blomqvist",
+      "play_count": 3,
+      "last_played": 1490816078,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1r11RYCh3EMeG5vKhwOviQ",
+      "track_name": "Busted",
+      "artist_name": "Dustbowl Revival",
+      "play_count": 1,
+      "last_played": 1478536286,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2frsXomR4jT08i7KKGNOMm",
+      "track_name": "Szeplo - Arston Remix",
+      "artist_name": "EDX",
+      "play_count": 2,
+      "last_played": 1479142896,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1UebLMXVLAaAYoFXxegCIP",
+      "track_name": "The Star",
+      "artist_name": "Mariah Carey",
+      "play_count": 1,
+      "last_played": 1508512635,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1BrsTQ8p0zQtMZ0s9c5DqJ",
+      "track_name": "Taking You There - Live From Spotify London",
+      "artist_name": "BROODS",
+      "play_count": 1,
+      "last_played": 1410549921,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1bQqHdgXeFwbQtTY2PfCQy",
+      "track_name": "Let It Roll",
+      "artist_name": "Flo Rida",
+      "play_count": 1,
+      "last_played": 1358821623,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1CsUH29MaAIMbfGh4FEG4w",
+      "track_name": "Hella Good",
+      "artist_name": "No Doubt",
+      "play_count": 3,
+      "last_played": 1524856146,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0k2puHMjDeAUyWvoaU7LhQ",
+      "track_name": "Summertime Mama",
+      "artist_name": "Becca Mancari",
+      "play_count": 1,
+      "last_played": 1545089165,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1WbuxG1NrZeKn3QiXujSxb",
+      "track_name": "Hey Ya",
+      "artist_name": "DENM",
+      "play_count": 3,
+      "last_played": 1543402405,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0y8knKp9jLfRHN07OvDO5o",
+      "track_name": "Love Me Right",
+      "artist_name": "Sister",
+      "play_count": 2,
+      "last_played": 1556021089,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:02sxLAd3jijSlOb8HM9qV1",
+      "track_name": "Heatwave",
+      "artist_name": "Wild Ones",
+      "play_count": 3,
+      "last_played": 1496694122,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1kz91PzVKwqo6na9LT1JQz",
+      "track_name": "Hallelujah",
+      "artist_name": "k.d. lang",
+      "play_count": 1,
+      "last_played": 1604701459,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2Fv3LSqbgv5lrdClrc6XKc",
+      "track_name": "Carolina In My Mind",
+      "artist_name": "James Taylor",
+      "play_count": 3,
+      "last_played": 1537722353,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2RY435p47Cv9rrvPTiUC3B",
+      "track_name": "Playground",
+      "artist_name": "Sia",
+      "play_count": 3,
+      "last_played": 1512854374,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2UFtUjo3UebrpxbAFvSdRz",
+      "track_name": "Peach Fuzz",
+      "artist_name": "Caamp",
+      "play_count": 3,
+      "last_played": 1574017191,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2gnw3EezOUpaBgNgmbbKMq",
+      "track_name": "Kill Em With Kindness - River Tiber Remix",
+      "artist_name": "Selena Gomez",
+      "play_count": 3,
+      "last_played": 1467379037,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0KMYgSe9JWHloFeEVBU6qq",
+      "track_name": "Me, Myself & I",
+      "artist_name": "G-Eazy",
+      "play_count": 3,
+      "last_played": 1474984797,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0TCeMX3ZxLZkAIAw1amrsx",
+      "track_name": "Human Contact",
+      "artist_name": "Catey Shaw",
+      "play_count": 2,
+      "last_played": 1410266945,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1rzCLw4kDialEipO0Ud8tz",
+      "track_name": "I Believe You",
+      "artist_name": "Carpenters",
+      "play_count": 3,
+      "last_played": 1615289801,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:165lX6DbMhTzqODVZKLmkm",
+      "track_name": "Apartment",
+      "artist_name": "Young the Giant",
+      "play_count": 2,
+      "last_played": 1352779764,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1I40L32fTSSkBkPeArX9Ul",
+      "track_name": "Time Moves Slow",
+      "artist_name": "BADBADNOTGOOD",
+      "play_count": 3,
+      "last_played": 1627737198,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2CyJ9yMupqe9XI3xC8RxBi",
+      "track_name": "Maybe",
+      "artist_name": "Alison Krauss",
+      "play_count": 1,
+      "last_played": 1628036783,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1wHkIswzW9zGCOLDBYbHFL",
+      "track_name": "Kiss You All Over - Single Edit",
+      "artist_name": "Isaac Elton",
+      "play_count": 2,
+      "last_played": 1510800747,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2M55R2A9IAhLdsCGFj8r8k",
+      "track_name": "I'm Every Woman",
+      "artist_name": "Chaka Khan",
+      "play_count": 3,
+      "last_played": 1496402067,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0AjcdGri5vhJsmZnduCEqd",
+      "track_name": "October Passed Me By",
+      "artist_name": "girl in red",
+      "play_count": 1,
+      "last_played": 1682439751,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2Epqce6wM48J6Wnlmhn42c",
+      "track_name": "Can't Take That Away (Mariah's Theme)",
+      "artist_name": "Mariah Carey",
+      "play_count": 3,
+      "last_played": 1612172050,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:22k7tgwEMTVivPrlLJdYQj",
+      "track_name": "Think That You Might Be Wrong",
+      "artist_name": "Great Lake Swimmers",
+      "play_count": 3,
+      "last_played": 1400198999,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0Perbjux3gxagOCJo64dlq",
+      "track_name": "Locomotion",
+      "artist_name": "Kylie Minogue",
+      "play_count": 2,
+      "last_played": 1529362779,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0u1R2vf95rA1LWNQ3RGbuH",
+      "track_name": "Our Love",
+      "artist_name": "Caribou",
+      "play_count": 2,
+      "last_played": 1408456227,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1UchiQD1aiASH7b5PymAM9",
+      "track_name": "Ozempic Wegovy Mounjaro",
+      "artist_name": "Ari Dayan",
+      "play_count": 3,
+      "last_played": 1686785610,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0BdKwsyVfNrzl6O6MlpUFE",
+      "track_name": "Cascades",
+      "artist_name": "Horse Feathers",
+      "play_count": 2,
+      "last_played": 1387234473,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1nTZzdmt21UxK0BStnopjN",
+      "track_name": "Collide",
+      "artist_name": "EVVY",
+      "play_count": 1,
+      "last_played": 1490018484,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0q3t7y66GtzpasziMOaayT",
+      "track_name": "The One I Love",
+      "artist_name": "David Gray",
+      "play_count": 2,
+      "last_played": 1467911439,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0JNTSnfzz1CynZ8EhgsptS",
+      "track_name": "Cry Wolf",
+      "artist_name": "Luna Shadows",
+      "play_count": 2,
+      "last_played": 1547339413,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2hbrah0o7ppR1HeQkDvLhj",
+      "track_name": "Is Anybody Goin' to San Antone",
+      "artist_name": "Charley Pride",
+      "play_count": 3,
+      "last_played": 1625617278,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1NarGDteHRuDA9OfGyQ2MG",
+      "track_name": "Hey There Delilah",
+      "artist_name": "Plain White T's",
+      "play_count": 2,
+      "last_played": 1550418908,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1JCCdiru7fhstOIF4N7WJC",
+      "track_name": "Amnesia",
+      "artist_name": "5 Seconds of Summer",
+      "play_count": 3,
+      "last_played": 1630740368,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:15mlPrdH10GLQJafz07Q8X",
+      "track_name": "Casey Jones - 2001 Remaster",
+      "artist_name": "Grateful Dead",
+      "play_count": 2,
+      "last_played": 1461170623,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1bt3kig9NTuDozp9jFVBs3",
+      "track_name": "Do Not Hang Your Head",
+      "artist_name": "Elizabeth & the Catapult",
+      "play_count": 2,
+      "last_played": 1453129911,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1qemgR2X1mGCByRX5PWv0C",
+      "track_name": "Dancing in the Dark",
+      "artist_name": "Ruth Moody",
+      "play_count": 1,
+      "last_played": 1446042984,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2D5QhvAWddOJTvk1XawrTU",
+      "track_name": "Family Affair",
+      "artist_name": "Mary J. Blige",
+      "play_count": 1,
+      "last_played": 1550631570,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2gPzyhZFqhkzGymsBOctwz",
+      "track_name": "Molly - Radio Edit",
+      "artist_name": "Cedric Gervais",
+      "play_count": 1,
+      "last_played": 1375039296,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0Ao3qWJKueyfs3iqwGN30F",
+      "track_name": "Wasted Days and Wasted Nights",
+      "artist_name": "Freddy Fender",
+      "play_count": 2,
+      "last_played": 1552539477,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1150rOwzEa4Z8vwn9HBAIm",
+      "track_name": "All Skaters Go to Heaven",
+      "artist_name": "IAN SWEET",
+      "play_count": 1,
+      "last_played": 1574089074,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:14nWsmzymZ6MV9TDhaH2SV",
+      "track_name": "Bird",
+      "artist_name": "Billie Marten",
+      "play_count": 2,
+      "last_played": 1543261585,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0GdmnHOvSyHhWd9MEJO4JX",
+      "track_name": "You Are Goodbye",
+      "artist_name": "Holly Conlan",
+      "play_count": 2,
+      "last_played": 1628201995,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0TyOpxlWwDx98bjkIVHUgY",
+      "track_name": "In My Head",
+      "artist_name": "Jason Derulo",
+      "play_count": 2,
+      "last_played": 1474554554,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2dONSFE5071BNXsfLtxYcz",
+      "track_name": "She Didn't Have Time",
+      "artist_name": "Terri Clark",
+      "play_count": 2,
+      "last_played": 1605729033,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:03N1cRSM66ekDwnHzNvr3f",
+      "track_name": "4 and 20",
+      "artist_name": "Joss Stone",
+      "play_count": 2,
+      "last_played": 1446505310,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0SjaL4cjD4PXOY4orbZSMZ",
+      "track_name": "Shine",
+      "artist_name": "Olly Alexander (Years & Years)",
+      "play_count": 3,
+      "last_played": 1625935804,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0zSGK8ZpVuo0XdIY21Vyrh",
+      "track_name": "Ugly Boy",
+      "artist_name": "Die Antwoord",
+      "play_count": 1,
+      "last_played": 1578692316,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:18nA47glcIiZkFJZXghTnn",
+      "track_name": "Stole Your Car",
+      "artist_name": "Charlotte Lawrence",
+      "play_count": 2,
+      "last_played": 1574446580,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0tI1sX5IoYjczT1jtHqGlK",
+      "track_name": "Real World - 2007 Remaster",
+      "artist_name": "Matchbox Twenty",
+      "play_count": 1,
+      "last_played": 1507164617,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1J14CdDAvBTE1AJYUOwl6C",
+      "track_name": "Arcade",
+      "artist_name": "Duncan Laurence",
+      "play_count": 1,
+      "last_played": 1629039304,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2FSr1wPITnikEtqGEIAEOo",
+      "track_name": "Cry (Glee Cast Version)",
+      "artist_name": "Glee Cast",
+      "play_count": 3,
+      "last_played": 1706139112,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1d78RiDXDTZqOfCSBozRjJ",
+      "track_name": "Do It",
+      "artist_name": "Christina Milian",
+      "play_count": 1,
+      "last_played": 1489496380,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1ezFtClxTMcS2AotqjTZX5",
+      "track_name": "Stone",
+      "artist_name": "Jaymes Young",
+      "play_count": 3,
+      "last_played": 1628395878,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0fJtP2HkuZtzfh30XIMtPw",
+      "track_name": "Your Song",
+      "artist_name": "Lady Gaga",
+      "play_count": 3,
+      "last_played": 1627027213,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:01F8B0dhzGdWvmcSO6vUdi",
+      "track_name": "Just The Two Of Us",
+      "artist_name": "Will Smith",
+      "play_count": 1,
+      "last_played": 1496007568,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0Yi128S6QgQDnAKg5A0OZw",
+      "track_name": "To Be With You",
+      "artist_name": "Mr. Big",
+      "play_count": 3,
+      "last_played": 1439557337,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1fLDyLc4zw1TqyWJdvSFf2",
+      "track_name": "Pucker Up",
+      "artist_name": "Ciara",
+      "play_count": 2,
+      "last_played": 1680730723,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:26hxS5JLqql7qCX4IzoLt3",
+      "track_name": "Sweet Sixteen",
+      "artist_name": "Hilary Duff",
+      "play_count": 3,
+      "last_played": 1510324429,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1uMfMZ1P6zpZdNM7DO5SkE",
+      "track_name": "Crash into Me - Live; 2019 Remaster",
+      "artist_name": "Stevie Nicks",
+      "play_count": 3,
+      "last_played": 1690287914,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1x3bxSSANgIxkoyGldhmdX",
+      "track_name": "Grapevine Fires",
+      "artist_name": "Death Cab for Cutie",
+      "play_count": 3,
+      "last_played": 1541815397,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2mI7XadiW2VoC3ptipPeo7",
+      "track_name": "Wherever You Will Go",
+      "artist_name": "The Calling",
+      "play_count": 1,
+      "last_played": 1417461225,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1YqDTevO7EQsKO7jOzDirX",
+      "track_name": "How Bad We Need Each Other",
+      "artist_name": "Marc Scibilia",
+      "play_count": 2,
+      "last_played": 1461677269,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1LF3VWJhOqD2VuuruLMSmu",
+      "track_name": "I Should Live in Salt - The National Cover - Live from Spotify, London",
+      "artist_name": "\u00c1sgeir",
+      "play_count": 2,
+      "last_played": 1536797069,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0oP9pK1D1lNF3Lb7jkl6Xx",
+      "track_name": "Thunder",
+      "artist_name": "Imagine Dragons",
+      "play_count": 1,
+      "last_played": 1493390034,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1Ec7xc3zWcd4ysMINmr9LW",
+      "track_name": "Lookin' For A Good Time",
+      "artist_name": "Lady A",
+      "play_count": 3,
+      "last_played": 1465226484,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1hEiVb61xXfCc9JL4cJRQP",
+      "track_name": "I Believe (feat. Demi Lovato) - As featured in the Walt Disney Pictures' \"A WRINKLE IN TIME\"",
+      "artist_name": "DJ Khaled",
+      "play_count": 1,
+      "last_played": 1521215379,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:29aCzWypaMOYAwfRkk71UQ",
+      "track_name": "Beggar in the Morning",
+      "artist_name": "The Barr Brothers",
+      "play_count": 3,
+      "last_played": 1405025496,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1q9siR3OqGFnTeqFxwzN1S",
+      "track_name": "The Sweet Escape",
+      "artist_name": "Gwen Stefani",
+      "play_count": 2,
+      "last_played": 1376318578,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2driOHZZnMIlaUIt9e3SRD",
+      "track_name": "Feed the Beast",
+      "artist_name": "A R I Z O N A",
+      "play_count": 2,
+      "last_played": 1501267628,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1Nj2oBISdFDSF8eDuXcALz",
+      "track_name": "Start Again (feat. Logic)",
+      "artist_name": "OneRepublic",
+      "play_count": 2,
+      "last_played": 1530545349,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:25G5T7Yu4pkMya46S7qIAb",
+      "track_name": "Bet (feat. Devont\u00e9 Hynes)",
+      "artist_name": "Tinashe",
+      "play_count": 2,
+      "last_played": 1412347690,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2EnwjJGoGX3K7RzDHyiyfA",
+      "track_name": "Best Years Of Our Lives",
+      "artist_name": "Baha Men",
+      "play_count": 2,
+      "last_played": 1532129759,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2Xzwy48kdZBWGo2lTc8fVn",
+      "track_name": "Restless",
+      "artist_name": "Cold War Kids",
+      "play_count": 3,
+      "last_played": 1512851057,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0QXSKayRWtfxMKHJxVurkZ",
+      "track_name": "Rebel Beat",
+      "artist_name": "The Goo Goo Dolls",
+      "play_count": 3,
+      "last_played": 1399902453,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0hroZQJfRxMVB5W7eOsJNj",
+      "track_name": "You Don't Have to Cry - 2005 Remaster",
+      "artist_name": "Crosby, Stills & Nash",
+      "play_count": 3,
+      "last_played": 1539778017,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0y675KDleCZEudjoeL1sQQ",
+      "track_name": "Feelings",
+      "artist_name": "Lauv",
+      "play_count": 3,
+      "last_played": 1572282151,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2cy4K8w5NvEkXCpzixrYJu",
+      "track_name": "Higher - Stripped",
+      "artist_name": "The Naked And Famous",
+      "play_count": 2,
+      "last_played": 1511902409,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0EHDEzu14gcx4Z3hOYVpTn",
+      "track_name": "Whiskey River - Live",
+      "artist_name": "Willie Nelson",
+      "play_count": 1,
+      "last_played": 1522098771,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0J988QVIOQl9QikOji6ShH",
+      "track_name": "Haha",
+      "artist_name": "The Garden",
+      "play_count": 1,
+      "last_played": 1491311985,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1hGy2eLcmC8eKx7qr1tOqx",
+      "track_name": "Beautiful Girls",
+      "artist_name": "Sean Kingston",
+      "play_count": 3,
+      "last_played": 1462459531,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1zyqZONW985Cs4osz9wlsu",
+      "track_name": "On the Hotline - Amended Version",
+      "artist_name": "Pretty Ricky",
+      "play_count": 1,
+      "last_played": 1666471610,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:24SM5UDYgjEzNUcVu2cURV",
+      "track_name": "I Do (Cherish You)",
+      "artist_name": "Mark Wills",
+      "play_count": 3,
+      "last_played": 1623422526,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2KSezpA4CZxv1RkQvA1jXE",
+      "track_name": "1979",
+      "artist_name": "Freedom Fry",
+      "play_count": 1,
+      "last_played": 1539915110,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0p20xyAdYkaxAPWdXr0sir",
+      "track_name": "I Love Rock 'n' Roll",
+      "artist_name": "The Black Jets",
+      "play_count": 1,
+      "last_played": 1549979666,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0OPyDgTRuIdCJ9B4bYSths",
+      "track_name": "Hotel Room Service",
+      "artist_name": "Pitbull",
+      "play_count": 3,
+      "last_played": 1620758114,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2mPvlzZtB7rnZptVXEq98V",
+      "track_name": "Sweetness",
+      "artist_name": "Pearl and the Beard",
+      "play_count": 1,
+      "last_played": 1387151523,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0iSMAOr4EWdHJFOPi1xfiT",
+      "track_name": "Good Enough",
+      "artist_name": "Sarah McLachlan",
+      "play_count": 3,
+      "last_played": 1604489010,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:16OFkCrdYH524sqvTPt6CT",
+      "track_name": "It Must Be Love",
+      "artist_name": "Alan Jackson",
+      "play_count": 3,
+      "last_played": 1605655690,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2fyTojfPYs67KBWN4WYRX7",
+      "track_name": "Too Close",
+      "artist_name": "Next",
+      "play_count": 3,
+      "last_played": 1464870929,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1nxebACXgKGhpB2DPs3qP0",
+      "track_name": "Linger (Acoustic Version)",
+      "artist_name": "The Cranberries",
+      "play_count": 3,
+      "last_played": 1713475322,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2fQrGHiQOvpL9UgPvtYy6G",
+      "track_name": "Bank Account",
+      "artist_name": "21 Savage",
+      "play_count": 2,
+      "last_played": 1553286592,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2cZrrQMjB63c0iIugYH9zS",
+      "track_name": "Rain Over Me (feat. Marc Anthony)",
+      "artist_name": "Pitbull",
+      "play_count": 3,
+      "last_played": 1602090361,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1134rBuGPEXUX6N4cczFZh",
+      "track_name": "My Baby Just Care for Me",
+      "artist_name": "Nina Simone",
+      "play_count": 1,
+      "last_played": 1439051981,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1WfaepSEaRFtnsCT5wNRq2",
+      "track_name": "I Do My Father's Drugs",
+      "artist_name": "Joe Pug",
+      "play_count": 3,
+      "last_played": 1388702956,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2jvuMDqBK04WvCYYz5qjvG",
+      "track_name": "Dogs",
+      "artist_name": "Pink Floyd",
+      "play_count": 1,
+      "last_played": 1549109008,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0jBElTAFXF5BDQsIIM62jy",
+      "track_name": "Don't Forget About Me",
+      "artist_name": "CLOVES",
+      "play_count": 2,
+      "last_played": 1621167621,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0b4uubOkNrnhTcMqw6Q1xR",
+      "track_name": "Heartbroken",
+      "artist_name": "Fickle Friends",
+      "play_count": 2,
+      "last_played": 1591655935,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2BdSaGVMxZzEeJYjjrlo6n",
+      "track_name": "American Woman",
+      "artist_name": "Lenny Kravitz",
+      "play_count": 3,
+      "last_played": 1539827818,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:05NPD3aPP0u9B4gdAx2DjH",
+      "track_name": "Say Anything",
+      "artist_name": "Say Anything",
+      "play_count": 1,
+      "last_played": 1403630418,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0IYbYGGVKQGlcaIu9Bs1Iz",
+      "track_name": "I'm Stuck",
+      "artist_name": "Noah Cyrus",
+      "play_count": 3,
+      "last_played": 1533306468,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:12HgZnRqGPwIZJD0gPsUor",
+      "track_name": "Breathing",
+      "artist_name": "Jason Derulo",
+      "play_count": 3,
+      "last_played": 1462459534,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1mOzw85duE3UegWXtoQB4s",
+      "track_name": "The Show Must Go On - Original Film Version",
+      "artist_name": "Jim Broadbent",
+      "play_count": 2,
+      "last_played": 1536398917,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1iDcKYNvo6gglrOG6lvnHL",
+      "track_name": "Sympathy For The Devil",
+      "artist_name": "The Rolling Stones",
+      "play_count": 1,
+      "last_played": 1497984228,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0IdSezptoRChPUve2I2fEM",
+      "track_name": "Why Does It Have to Be (Wrong or Right)",
+      "artist_name": "Restless Heart",
+      "play_count": 1,
+      "last_played": 1573562526,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0xo5dRgtkZlR2zNJwSYB37",
+      "track_name": "Lesson In Leavin'",
+      "artist_name": "Jo Dee Messina",
+      "play_count": 2,
+      "last_played": 1693082148,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2VwBhM5L7wGE4lLavyJy0L",
+      "track_name": "God Love Her",
+      "artist_name": "Toby Keith",
+      "play_count": 2,
+      "last_played": 1605813838,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:02GjIfCpwttPAikjm5Hwcb",
+      "track_name": "Good Time",
+      "artist_name": "Owl City",
+      "play_count": 1,
+      "last_played": 1344305277,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0eE4tBCOcKOrvsqKrKzV24",
+      "track_name": "Just Around the Riverbend",
+      "artist_name": "Judy Kuhn",
+      "play_count": 1,
+      "last_played": 1616600907,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2fR87xADQylPuAlq7r3Jod",
+      "track_name": "Wherever You Will Go",
+      "artist_name": "Charlene Soraia",
+      "play_count": 2,
+      "last_played": 1400288967,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1oKwSREiOeE1bNDO2clP1c",
+      "track_name": "Please Don't Stop The Rain",
+      "artist_name": "James Morrison",
+      "play_count": 3,
+      "last_played": 1530193901,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0iHoFvDT4Zg6BewMJwUspA",
+      "track_name": "Traveler's Song",
+      "artist_name": "The Greencards",
+      "play_count": 2,
+      "last_played": 1461354012,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0T44sAekhl2UgLSMkzBKef",
+      "track_name": "The Peace of Wild Things/dayblind",
+      "artist_name": "Crooked Still",
+      "play_count": 1,
+      "last_played": 1356942779,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0d9PbHaIlNHYqnizRF1odR",
+      "track_name": "Changed",
+      "artist_name": "JP Saxe",
+      "play_count": 1,
+      "last_played": 1493392156,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1xMT1AcN5fOaaiGqGjqrMO",
+      "track_name": "orange",
+      "artist_name": "CLAY",
+      "play_count": 3,
+      "last_played": 1580238910,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2Ykf8tMyWIf9WZNIZlk1UP",
+      "track_name": "Soulmate",
+      "artist_name": "Natasha Bedingfield",
+      "play_count": 3,
+      "last_played": 1546524798,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0OURixtwzJF8pON5JpMHKv",
+      "track_name": "Everyone She Knows",
+      "artist_name": "Kenny Chesney",
+      "play_count": 1,
+      "last_played": 1605656322,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1nSfvLVhsozMHS7rCF1BTi",
+      "track_name": "Rose Colored Lenses",
+      "artist_name": "Miley Cyrus",
+      "play_count": 2,
+      "last_played": 1696448689,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:28aKEO0jirDd7ACRlcgxlo",
+      "track_name": "Kissing Boys",
+      "artist_name": "GRAACE",
+      "play_count": 1,
+      "last_played": 1527693593,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1M2YOA6qhKSY5CZc8i0apQ",
+      "track_name": "Come On - Saturday Club / 1963",
+      "artist_name": "The Rolling Stones",
+      "play_count": 1,
+      "last_played": 1507303093,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2ITbC6v8GHxn33LT4Qq4ym",
+      "track_name": "What Did I Do",
+      "artist_name": "Southern Avenue",
+      "play_count": 3,
+      "last_played": 1547053550,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0fXnUUwq5vvaRvMzXLu4WO",
+      "track_name": "LaserLight",
+      "artist_name": "Jessie J",
+      "play_count": 1,
+      "last_played": 1381354664,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1ng36571Iyov4HBxUClySn",
+      "track_name": "Pepper",
+      "artist_name": "Butthole Surfers",
+      "play_count": 2,
+      "last_played": 1693084797,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1etZkroZMmSujuLsCIZbu4",
+      "track_name": "Wichita Skyline",
+      "artist_name": "Shawn Colvin",
+      "play_count": 1,
+      "last_played": 1446582950,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1cDQku650Uev3TnRGdlbE5",
+      "track_name": "Never Going Home",
+      "artist_name": "Maggie Rogers",
+      "play_count": 1,
+      "last_played": 1713234991,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:225bpg0taMSKykeXZ9imee",
+      "track_name": "Dead Air",
+      "artist_name": "CHVRCHES",
+      "play_count": 1,
+      "last_played": 1415110405,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0UZfuz8nAjDyH5H4mhlOaP",
+      "track_name": "Cool With It",
+      "artist_name": "REYNA",
+      "play_count": 2,
+      "last_played": 1535431801,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0gxnWasBZbCbgKshNrFQYw",
+      "track_name": "No Diga M\u00e1s",
+      "artist_name": "Dillon Francis",
+      "play_count": 1,
+      "last_played": 1501251710,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1gtxo3ZKU5PFdEPt6tSjH8",
+      "track_name": "Earthquake (feat. Tinie Tempah)",
+      "artist_name": "Labrinth",
+      "play_count": 2,
+      "last_played": 1373912182,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0VQ0n5gMgJLNixG8BfWBT5",
+      "track_name": "Lovin', Touchin', Squeezin'",
+      "artist_name": "Journey",
+      "play_count": 2,
+      "last_played": 1676831253,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0My8NPmENHrN5W7OfgZnZJ",
+      "track_name": "The One",
+      "artist_name": "Kodaline",
+      "play_count": 3,
+      "last_played": 1510824481,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1GxBN5TkWnFDFt4vT2g1jh",
+      "track_name": "One Lonely Light",
+      "artist_name": "Amos Lee",
+      "play_count": 1,
+      "last_played": 1488996205,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2d8QhqqQH7PpY21k7kM2RN",
+      "track_name": "Read My Mind",
+      "artist_name": "Geographer",
+      "play_count": 2,
+      "last_played": 1538658232,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1gZADNt16Oh23jWyMYRk4p",
+      "track_name": "Prisoner",
+      "artist_name": "The Weeknd",
+      "play_count": 2,
+      "last_played": 1522801729,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0qnoS5hMZMphvKWi0D2LQh",
+      "track_name": "I Miss My Friend",
+      "artist_name": "Darryl Worley",
+      "play_count": 3,
+      "last_played": 1604180437,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2NAY99q4qBsdJVDD3JDtLG",
+      "track_name": "I Think We\u2019re Alone Now",
+      "artist_name": "The Wild Reeds",
+      "play_count": 1,
+      "last_played": 1662225744,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2IEVTySbkSonW9npiFtv0d",
+      "track_name": "Mighty Good Leader",
+      "artist_name": "Audio Adrenaline",
+      "play_count": 2,
+      "last_played": 1365809636,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0WIWwgrlE6eziOP79hYA5p",
+      "track_name": "That's What She Say",
+      "artist_name": "Wild Child",
+      "play_count": 3,
+      "last_played": 1387293080,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0o7yqilFaW0ND4oeJVUl0D",
+      "track_name": "Run to You - Film Version",
+      "artist_name": "Whitney Houston",
+      "play_count": 1,
+      "last_played": 1512144915,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1htzbmpAYnmTjoYfY3QLlJ",
+      "track_name": "LIKE I WOULD - Oliver Nelson Remix",
+      "artist_name": "ZAYN",
+      "play_count": 2,
+      "last_played": 1509925052,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1GwdUrz7DujSedNxnzVfqI",
+      "track_name": "Beautiful Life",
+      "artist_name": "Ace of Base",
+      "play_count": 3,
+      "last_played": 1377228298,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0PgejWYSlSaTwzxwCI15pW",
+      "track_name": "Try",
+      "artist_name": "The xx",
+      "play_count": 2,
+      "last_played": 1372163675,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1IHWl5LamUGEuP4ozKQSXZ",
+      "track_name": "Tit\u00ed Me Pregunt\u00f3",
+      "artist_name": "Bad Bunny",
+      "play_count": 3,
+      "last_played": 1671986830,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0ClDL3UrFy6vXhuGPKlNMJ",
+      "track_name": "You Turn Me On, I'm a Radio",
+      "artist_name": "Joni Mitchell",
+      "play_count": 2,
+      "last_played": 1611566937,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:28TxD5rsFvbocFAtjdmmtP",
+      "track_name": "All This TIme",
+      "artist_name": "Sara Watkins",
+      "play_count": 2,
+      "last_played": 1356955638,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0ObkEn7HhjHWCdoyv0ZeHA",
+      "track_name": "Wild Fire - Mahogany Sessions",
+      "artist_name": "Laura Marling",
+      "play_count": 3,
+      "last_played": 1520287375,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0kpUy1RnLuYajgYgTM6w16",
+      "track_name": "You Win My Love - Shania Vocal Mix",
+      "artist_name": "Shania Twain",
+      "play_count": 1,
+      "last_played": 1602001100,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2dMboVTQTO2BVNddTO0G4D",
+      "track_name": "Cold",
+      "artist_name": "Mating Ritual",
+      "play_count": 3,
+      "last_played": 1493733031,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0ZfjMd3JdvmzzKeEvW0ZBb",
+      "track_name": "Just Don't Have the Time",
+      "artist_name": "Jessica Lamb",
+      "play_count": 1,
+      "last_played": 1509992240,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0Jw6f9OfWddSnuBQ5hJHHl",
+      "track_name": "Loyal to Me",
+      "artist_name": "Nina Nesbitt",
+      "play_count": 3,
+      "last_played": 1535796718,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1RxBP0IROVDIbwkGPW02Fp",
+      "track_name": "Out On a Limb",
+      "artist_name": "Joseph Arthur",
+      "play_count": 1,
+      "last_played": 1378836503,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0saRymHp9crBWjng4YEsQG",
+      "track_name": "Sonoma",
+      "artist_name": "Ciaran Lavery",
+      "play_count": 2,
+      "last_played": 1469540336,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0mrcdB0q2BlAjHMxOuFqbx",
+      "track_name": "Time to Wander (Joan Of Arc remix)",
+      "artist_name": "GATC",
+      "play_count": 2,
+      "last_played": 1363725543,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1qkzRGsiP90ZMjz8Bs97eg",
+      "track_name": "Peaks and Troughs",
+      "artist_name": "We Were Promised Jetpacks",
+      "play_count": 1,
+      "last_played": 1413817558,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0QJU13S307gWlr4nhUh2SV",
+      "track_name": "Whuteva",
+      "artist_name": "Remy Ma",
+      "play_count": 3,
+      "last_played": 1490993192,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0xR8lFvagLHapgSw6C5Y5i",
+      "track_name": "Bigger Than the Beatles",
+      "artist_name": "Joe Diffie",
+      "play_count": 2,
+      "last_played": 1685531799,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1c8e9rdsGARATWuBsHG852",
+      "track_name": "At Midnight (My Love Will Lift You Up)",
+      "artist_name": "Rufus",
+      "play_count": 1,
+      "last_played": 1683667342,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:29cvbkZWIWyMRJI7DD9n3w",
+      "track_name": "None Of Your Business",
+      "artist_name": "Salt-N-Pepa",
+      "play_count": 2,
+      "last_played": 1443727346,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1U4V5Fx7HaSvAc7P8nHGNA",
+      "track_name": "Wild Love - Kove Remix",
+      "artist_name": "James Bay",
+      "play_count": 1,
+      "last_played": 1520722564,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2beEAftF0CBYurCu8ET5HW",
+      "track_name": "I Found A Reason",
+      "artist_name": "The Velvet Underground",
+      "play_count": 1,
+      "last_played": 1359436149,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1Bgo3zDzgY7jzORxfZhw5u",
+      "track_name": "The Lonely, The Lonesome & The Gone",
+      "artist_name": "Lee Ann Womack",
+      "play_count": 1,
+      "last_played": 1573582572,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:01hJnhpAmjzg85Etnz2ECH",
+      "track_name": "Body and Soul",
+      "artist_name": "Tony Bennett",
+      "play_count": 2,
+      "last_played": 1502336031,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1oV1tu8utgHQjLJsEK9sVl",
+      "track_name": "Take Me to the River - 2005 Remaster",
+      "artist_name": "Talking Heads",
+      "play_count": 2,
+      "last_played": 1600954266,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2mOlOSaDLP1X0Vl0KKEjAq",
+      "track_name": "Heart of Glass",
+      "artist_name": "Me First and the Gimme Gimmes",
+      "play_count": 2,
+      "last_played": 1532490613,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:02B72T4dhMmwen7elw5U7k",
+      "track_name": "The Needle Has Landed",
+      "artist_name": "Neko Case",
+      "play_count": 2,
+      "last_played": 1358869908,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0kSTfcoPCpp5xHQ2JszYiR",
+      "track_name": "Sentimental Journey",
+      "artist_name": "Bob Dylan",
+      "play_count": 1,
+      "last_played": 1503542657,
+      "era_bucket": "2016-2020"
+    },
+    {
+      "spotify_track_uri": "spotify:track:0sNKiz82ATCvT3f3XVVUUj",
+      "track_name": "Why Don't You Get A Job",
+      "artist_name": "The Offspring",
+      "play_count": 3,
+      "last_played": 1698590939,
+      "era_bucket": "2021-2025"
+    },
+    {
+      "spotify_track_uri": "spotify:track:1vy8XIjdeI4ePThaaVTWMC",
+      "track_name": "Turn the Beat Around",
+      "artist_name": "Laura Branigan",
+      "play_count": 2,
+      "last_played": 1359052981,
+      "era_bucket": "2011-2015"
+    },
+    {
+      "spotify_track_uri": "spotify:track:2QPgkd7IteBb7ONLgTQ5nc",
+      "track_name": "Carousel",
+      "artist_name": "A Blaze of Feather",
+      "play_count": 1,
+      "last_played": 1507578467,
+      "era_bucket": "2016-2020"
+    }
+  ]
+}

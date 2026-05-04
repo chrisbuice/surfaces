@@ -13,12 +13,37 @@
       min-height: 100vh;
     }
     h1 { font-size: 1.4rem; margin-bottom: 0.5rem; color: #fff; }
-    .progress { font-size: 0.85rem; color: #888; margin-bottom: 2rem; }
+    .progress { font-size: 0.85rem; color: #888; margin-bottom: 1.5rem; }
     .progress span { color: #1db954; font-weight: 600; }
-    #status { margin: 1.5rem 0; padding: 1rem; border-radius: 8px; background: #16213e; text-align: center; min-height: 80px; display: flex; align-items: center; justify-content: center; }
+
+    #status {
+      margin: 1.5rem 0; padding: 1.2rem; border-radius: 8px;
+      background: #16213e; text-align: center; min-height: 80px;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 0.5rem;
+    }
     #status.playing { border: 2px solid #1db954; }
     #status.waiting { border: 2px solid #444; }
-    .rating-row { display: flex; gap: 0.75rem; justify-content: center; margin: 1.5rem 0; }
+    #status.error { border: 2px solid #e74c3c; }
+    #status-text { font-size: 1rem; }
+    #status-sub { font-size: 0.75rem; color: #666; }
+
+    .step-label {
+      text-align: center; font-size: 0.9rem; color: #aaa;
+      margin-bottom: 0.75rem; font-weight: 500;
+    }
+
+    #play-area { text-align: center; margin: 1.5rem 0; }
+    #play-btn {
+      padding: 1rem 2.5rem; border-radius: 30px; border: none;
+      background: #1db954; color: #000; font-size: 1.1rem; font-weight: 700;
+      cursor: pointer; transition: all 0.15s;
+    }
+    #play-btn:hover { background: #1ed760; transform: scale(1.05); }
+    #play-btn:disabled { background: #444; color: #888; cursor: default; transform: none; }
+
+    #rating-area { display: none; margin-top: 1.5rem; }
+    .rating-row { display: flex; gap: 0.75rem; justify-content: center; margin: 0.75rem 0; }
     .rating-btn {
       width: 56px; height: 56px; border-radius: 50%; border: 2px solid #444;
       background: #16213e; color: #e0e0e0; font-size: 1.4rem; font-weight: 700;
@@ -26,27 +51,34 @@
     }
     .rating-btn:hover { border-color: #1db954; background: #1db95422; transform: scale(1.1); }
     .rating-btn:active { transform: scale(0.95); }
-    .skip-btn {
-      display: block; margin: 1rem auto; padding: 0.6rem 1.5rem;
-      background: none; border: 1px solid #555; border-radius: 20px;
-      color: #888; font-size: 0.85rem; cursor: pointer;
+
+    .secondary-actions { display: flex; gap: 1rem; justify-content: center; margin-top: 1rem; }
+    .secondary-btn {
+      padding: 0.5rem 1.2rem; background: none; border: 1px solid #555;
+      border-radius: 20px; color: #888; font-size: 0.8rem; cursor: pointer;
     }
-    .skip-btn:hover { border-color: #aaa; color: #aaa; }
+    .secondary-btn:hover { border-color: #aaa; color: #aaa; }
+    .secondary-btn.undo { border-color: #e67e22; color: #e67e22; }
+    .secondary-btn.undo:hover { border-color: #f39c12; color: #f39c12; }
+
     .controls { margin-top: 2rem; display: flex; gap: 1rem; justify-content: center; }
     .controls button {
       padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid #444;
       background: #16213e; color: #e0e0e0; font-size: 0.85rem; cursor: pointer;
     }
     .controls button:hover { border-color: #1db954; }
-    .done { text-align: center; padding: 2rem; }
+
+    .done { text-align: center; padding: 2rem; display: none; }
     .done h2 { color: #1db954; margin-bottom: 1rem; }
     #export-btn {
       padding: 0.7rem 1.5rem; border-radius: 6px; border: none;
       background: #1db954; color: #000; font-weight: 600; font-size: 1rem;
       cursor: pointer; margin-top: 1rem;
     }
+
     .history { margin-top: 2rem; font-size: 0.75rem; color: #666; }
     .history summary { cursor: pointer; color: #888; }
+    .instruction { font-size: 0.8rem; color: #666; text-align: center; margin: 1rem 0; line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -59,9 +91,17 @@
 
   <div id="status" class="waiting">
     <span id="status-text">Loading...</span>
+    <span id="status-sub"></span>
   </div>
 
-  <div id="rating-area" style="display:none;">
+  <div id="play-area">
+    <p class="step-label">Step 1: Listen</p>
+    <button id="play-btn">▶ Play on Spotify</button>
+    <p class="instruction">Starts the track on your active Spotify device. Listen for at least 30 seconds before rating.</p>
+  </div>
+
+  <div id="rating-area">
+    <p class="step-label">Step 2: Rate</p>
     <div class="rating-row">
       <button class="rating-btn" data-rating="1">1</button>
       <button class="rating-btn" data-rating="2">2</button>
@@ -69,29 +109,36 @@
       <button class="rating-btn" data-rating="4">4</button>
       <button class="rating-btn" data-rating="5">5</button>
     </div>
-    <button class="skip-btn" id="skip-btn">skip — can't form an opinion</button>
+    <div class="secondary-actions">
+      <button class="secondary-btn" id="replay-btn">replay this song</button>
+      <button class="secondary-btn" id="skip-btn">skip — can't decide</button>
+      <button class="secondary-btn undo" id="undo-btn" style="display:none;">undo last</button>
+    </div>
   </div>
 
   <div class="controls">
-    <button id="play-btn">Play Current</button>
-    <button id="next-btn" style="display:none;">Next (unrated)</button>
     <button id="export-btn-small">Export CSV</button>
+    <button id="reset-btn">Reset All</button>
   </div>
 
-  <div id="done-screen" style="display:none;" class="done">
+  <div id="done-screen" class="done">
     <h2>All done!</h2>
     <p>You've rated all 200 songs.</p>
-    <button id="export-btn">Download rankings.csv</button>
+    <button id="export-btn">Download blind-ratings.csv</button>
   </div>
 
   <details class="history">
-    <summary>Session history</summary>
+    <summary>Recent ratings</summary>
     <pre id="history-log"></pre>
   </details>
 
   <script>
-    // ─── Seeded RNG (mulberry32) ────────────────────────────────────────────
+    // ─── Config ─────────────────────────────────────────────────────────────
+    const SURFACES_BASE = 'https://spotify-agent.chrisbuice.workers.dev';
     const RNG_SEED = 20260503;
+    const STORAGE_KEY = 'lyric-experiment-ratings-v1';
+
+    // ─── Seeded RNG (mulberry32) ────────────────────────────────────────────
     function mulberry32(seed) {
       let t = seed;
       return () => {
@@ -111,11 +158,12 @@
     }
 
     // ─── State ──────────────────────────────────────────────────────────────
-    const STORAGE_KEY = 'lyric-experiment-ratings-v1';
     let candidates = [];
-    let order = []; // shuffled indices
-    let currentIdx = 0; // position in order[]
-    let ratings = {}; // uri → { rating: 1-5 | null, skipped: bool }
+    let order = [];
+    let currentIdx = 0;
+    let ratings = {}; // uri → { rating: 1-5 | null, skipped: bool, timestamp }
+    let lastRatedUri = null;
+    let hasPlayedCurrent = false;
 
     function loadState() {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -125,89 +173,92 @@
         currentIdx = parsed.currentIdx || 0;
       }
     }
-
     function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ratings, currentIdx }));
     }
 
-    // ─── Spotify playback via Surfaces API ──────────────────────────────────
-    const SURFACES_BASE = 'https://surfaces.chrisbuice.com';
+    // ─── Playback ───────────────────────────────────────────────────────────
+    let currentPlayingUri = null;
 
     async function playTrack(uri) {
+      const trackId = uri.replace('spotify:track:', '');
+      setStatus('Starting playback...', 'waiting', '');
+
       try {
-        const trackId = uri.replace('spotify:track:', '');
-        const res = await fetch(`${SURFACES_BASE}/api/play-track?uri=${encodeURIComponent(uri)}`, {
+        const res = await fetch(`${SURFACES_BASE}/api/play-track`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ track_id: trackId }),
         });
-        if (!res.ok) {
-          // Fallback: try queue endpoint
-          const qRes = await fetch(`${SURFACES_BASE}/api/queue-track?uri=${encodeURIComponent(uri)}`, {
-            method: 'POST',
-          });
-          if (!qRes.ok) throw new Error(`Queue failed: ${qRes.status}`);
-          setStatus('Queued — press play on Spotify', 'waiting');
-          return;
+
+        if (res.ok) {
+          currentPlayingUri = uri;
+          setStatus('Now playing', 'playing', 'Rate when ready. Hit "replay" if you need to hear it again.');
+          hasPlayedCurrent = true;
+          document.getElementById('rating-area').style.display = 'block';
+        } else {
+          const text = await res.text();
+          setStatus('Play failed', 'error', `${res.status}: ${text.slice(0, 100)}`);
         }
-        setStatus('Playing...', 'playing');
       } catch (e) {
-        // If API fails, show Spotify link as fallback
-        setStatus(`API unavailable. Open: spotify:track:${uri.replace('spotify:track:','')}`, 'waiting');
+        setStatus('Network error', 'error', `Cannot reach ${SURFACES_BASE}. Is Spotify active on a device?`);
       }
     }
 
     // ─── UI ─────────────────────────────────────────────────────────────────
-    function setStatus(text, cls) {
-      const el = document.getElementById('status');
+    function setStatus(text, cls, sub) {
+      document.getElementById('status').className = cls;
       document.getElementById('status-text').textContent = text;
-      el.className = cls;
+      document.getElementById('status-sub').textContent = sub || '';
     }
 
     function updateProgress() {
-      const rated = Object.values(ratings).filter(r => r.rating !== null && r.rating !== undefined).length;
+      const rated = Object.values(ratings).filter(r => r.rating != null).length;
       const skipped = Object.values(ratings).filter(r => r.skipped).length;
       document.getElementById('current-pos').textContent = currentIdx + 1;
       document.getElementById('rated-count').textContent = rated;
       document.getElementById('skipped-count').textContent = skipped;
+      document.getElementById('undo-btn').style.display = lastRatedUri ? 'inline-block' : 'none';
     }
 
-    function findNextUnrated() {
-      // Find next position in order that hasn't been rated or skipped
+    function advanceToNextUnrated() {
       for (let i = currentIdx; i < order.length; i++) {
         const uri = candidates[order[i]].spotify_track_uri;
-        if (!ratings[uri]) return i;
+        if (!ratings[uri]) { currentIdx = i; return true; }
       }
-      // Wrap around from beginning
       for (let i = 0; i < currentIdx; i++) {
         const uri = candidates[order[i]].spotify_track_uri;
-        if (!ratings[uri]) return i;
+        if (!ratings[uri]) { currentIdx = i; return true; }
       }
-      return -1; // all done
+      return false; // all done
     }
 
     function showCurrent() {
-      const nextIdx = findNextUnrated();
-      if (nextIdx === -1) {
-        // All done
+      if (!advanceToNextUnrated()) {
+        document.getElementById('play-area').style.display = 'none';
         document.getElementById('rating-area').style.display = 'none';
         document.getElementById('done-screen').style.display = 'block';
-        setStatus('Complete!', 'waiting');
+        setStatus('All songs rated!', 'playing', '');
         updateProgress();
         return;
       }
-      currentIdx = nextIdx;
-      updateProgress();
-      setStatus(`Ready — press Play to listen (song ${currentIdx + 1})`, 'waiting');
-      document.getElementById('rating-area').style.display = 'block';
+
+      hasPlayedCurrent = false;
+      document.getElementById('rating-area').style.display = 'none';
+      document.getElementById('play-area').style.display = 'block';
       document.getElementById('done-screen').style.display = 'none';
+      document.getElementById('play-btn').disabled = false;
+      setStatus(`Song ${currentIdx + 1} — press Play to listen`, 'waiting', '');
+      updateProgress();
       saveState();
     }
 
     function recordRating(rating) {
       const uri = candidates[order[currentIdx]].spotify_track_uri;
       ratings[uri] = { rating, skipped: false, timestamp: Date.now() };
+      lastRatedUri = uri;
       saveState();
-      logHistory(`#${currentIdx + 1}: rated ${rating}`);
+      logHistory(`#${currentIdx + 1}: ★${rating}`);
       currentIdx++;
       showCurrent();
     }
@@ -215,15 +266,28 @@
     function recordSkip() {
       const uri = candidates[order[currentIdx]].spotify_track_uri;
       ratings[uri] = { rating: null, skipped: true, timestamp: Date.now() };
+      lastRatedUri = uri;
       saveState();
       logHistory(`#${currentIdx + 1}: skipped`);
       currentIdx++;
       showCurrent();
     }
 
+    function undoLast() {
+      if (!lastRatedUri) return;
+      delete ratings[lastRatedUri];
+      lastRatedUri = null;
+      saveState();
+      logHistory('(undo)');
+      // Go back to that song
+      advanceToNextUnrated();
+      showCurrent();
+    }
+
     function logHistory(msg) {
       const el = document.getElementById('history-log');
-      el.textContent = msg + '\n' + el.textContent;
+      const time = new Date().toLocaleTimeString();
+      el.textContent = `${time}  ${msg}\n` + (el.textContent || '').slice(0, 2000);
     }
 
     // ─── Export ─────────────────────────────────────────────────────────────
@@ -243,30 +307,21 @@
 
     // ─── Init ───────────────────────────────────────────────────────────────
     async function init() {
-      try {
-        const res = await fetch('../../docs/experiments/lyric-analysis-2026-05/candidates.json');
-        if (!res.ok) {
-          // Try relative paths for different serve locations
-          const res2 = await fetch('./candidates.json');
-          if (!res2.ok) throw new Error('Cannot load candidates.json');
-          const data = await res2.json();
-          candidates = data.candidates;
-        } else {
-          const data = await res.json();
-          candidates = data.candidates;
-        }
-      } catch (e) {
-        // Try loading from same directory
+      // Try loading candidates.json from same directory
+      let data;
+      for (const path of ['candidates.json', './candidates.json', '../../docs/experiments/lyric-analysis-2026-05/candidates.json']) {
         try {
-          const res = await fetch('candidates.json');
-          const data = await res.json();
-          candidates = data.candidates;
-        } catch (e2) {
-          setStatus('Error: cannot load candidates.json. Serve from experiment dir.', 'waiting');
-          return;
-        }
+          const res = await fetch(path);
+          if (res.ok) { data = await res.json(); break; }
+        } catch {}
       }
 
+      if (!data) {
+        setStatus('Cannot load candidates.json', 'error', 'Make sure candidates.json is in the same directory as this HTML file.');
+        return;
+      }
+
+      candidates = data.candidates;
       document.getElementById('total').textContent = candidates.length;
 
       // Shuffle with seeded RNG
@@ -275,21 +330,33 @@
 
       // Load saved state
       loadState();
-      updateProgress();
       showCurrent();
 
-      // Wire up buttons
-      document.querySelectorAll('.rating-btn').forEach(btn => {
-        btn.addEventListener('click', () => recordRating(parseInt(btn.dataset.rating)));
-      });
-      document.getElementById('skip-btn').addEventListener('click', recordSkip);
+      // Wire up
       document.getElementById('play-btn').addEventListener('click', () => {
         const uri = candidates[order[currentIdx]].spotify_track_uri;
         playTrack(uri);
       });
+      document.querySelectorAll('.rating-btn').forEach(btn => {
+        btn.addEventListener('click', () => recordRating(parseInt(btn.dataset.rating)));
+      });
+      document.getElementById('skip-btn').addEventListener('click', recordSkip);
+      document.getElementById('replay-btn').addEventListener('click', () => {
+        const uri = candidates[order[currentIdx]].spotify_track_uri;
+        playTrack(uri);
+      });
+      document.getElementById('undo-btn').addEventListener('click', undoLast);
       document.getElementById('export-btn-small').addEventListener('click', exportCSV);
-      const exportBtn = document.getElementById('export-btn');
-      if (exportBtn) exportBtn.addEventListener('click', exportCSV);
+      document.getElementById('export-btn').addEventListener('click', exportCSV);
+      document.getElementById('reset-btn').addEventListener('click', () => {
+        if (confirm('Delete all ratings and start over?')) {
+          localStorage.removeItem(STORAGE_KEY);
+          ratings = {};
+          currentIdx = 0;
+          lastRatedUri = null;
+          showCurrent();
+        }
+      });
     }
 
     init();
