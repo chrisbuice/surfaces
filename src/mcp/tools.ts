@@ -12,6 +12,7 @@ import { isSkip } from "../listening/helpers";
 import { ensureAnalysisPending } from "../lyrics_analysis/pending";
 import { cosineSimilarity } from "../lyrics_analysis/cosine";
 import { embedQuery } from "../lyrics_analysis/voyage";
+import { resolveCurrentlyPlaying } from "../lyrics_analysis/resolve_playing";
 
 export interface McpToolDefinition {
   name: string;
@@ -154,13 +155,12 @@ export function getToolDefinitions(): McpToolDefinition[] {
     },
     {
       name: "explain_song",
-      description: "Get a structured lyric analysis for a track: what it's about, its tones, narrative perspective, and how it might make you feel. If the track hasn't been analyzed yet, queues it for analysis (~10 minute turnaround).",
+      description: "Get a structured lyric analysis for a track: what it's about, its tones, narrative perspective, and how it might make you feel. If no URI is provided, analyzes whatever is currently playing. If the track hasn't been analyzed yet, queues it for analysis (~10 minute turnaround).",
       inputSchema: {
         type: "object",
         properties: {
-          uri: { type: "string", description: "Spotify track URI, e.g. spotify:track:abc123." },
+          uri: { type: "string", description: "Spotify track URI, e.g. spotify:track:abc123. If omitted, uses the currently playing track." },
         },
-        required: ["uri"],
       },
     },
     {
@@ -612,8 +612,36 @@ export async function callTool(
     }
 
     case "explain_song": {
-      const uri = args.uri as string;
-      if (!uri) return { error: "uri is required." };
+      let uri = args.uri as string | undefined;
+      let resolvedTrackName: string | undefined;
+      let resolvedArtistName: string | undefined;
+
+      if (!uri) {
+        try {
+          const resolved = await resolveCurrentlyPlaying(env);
+          if (!resolved) {
+            return {
+              source: "local-history-derived",
+              error: "Nothing is currently playing — provide a URI or start playback.",
+            };
+          }
+          uri = resolved.uri;
+          resolvedTrackName = resolved.track_name;
+          resolvedArtistName = resolved.artist_name;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg.includes("No Spotify tokens") || msg.includes("/auth/login")) {
+            return {
+              source: "local-history-derived",
+              error: "Spotify integration isn't configured — provide a URI directly.",
+            };
+          }
+          return {
+            source: "local-history-derived",
+            error: "Couldn't reach Spotify — provide a URI directly.",
+          };
+        }
+      }
 
       const row = await env.DB.prepare(
         `SELECT tla.*
@@ -629,6 +657,7 @@ export async function callTool(
           source: "local-history-derived",
           status: "pending",
           message: "Analysis queued — check back in ~10 minutes.",
+          ...(resolvedTrackName && { track_name: resolvedTrackName, artist_name: resolvedArtistName }),
         };
       }
 
@@ -641,6 +670,7 @@ export async function callTool(
       return {
         source: "local-history-derived",
         uri,
+        ...(resolvedTrackName && { track_name: resolvedTrackName, artist_name: resolvedArtistName }),
         subject_paragraph: row.subject_paragraph,
         subject_tags: parseJson(row.subject_tags),
         tones: parseJson(row.tones),

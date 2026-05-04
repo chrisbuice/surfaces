@@ -1,7 +1,14 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import { env } from "cloudflare:test";
 import { callTool } from "../../src/mcp/tools";
 import type { Env } from "../../src/index";
+
+// Mock the resolve_playing module so we can control Spotify resolution in tests
+vi.mock("../../src/lyrics_analysis/resolve_playing", () => ({
+  resolveCurrentlyPlaying: vi.fn(),
+}));
+
+const { resolveCurrentlyPlaying } = await import("../../src/lyrics_analysis/resolve_playing");
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -183,6 +190,43 @@ describe("lyrics MCP tools", () => {
       ).bind(URIS.unanalyzed).first<{ status: string; attempts: number }>();
       expect(row?.status).toBe("pending");
       expect(row?.attempts).toBe(0);
+    });
+
+    it("resolves currently-playing when uri is omitted (happy path)", async () => {
+      vi.mocked(resolveCurrentlyPlaying).mockResolvedValue({
+        uri: URIS.analyzed,
+        track_name: "Leaving Home",
+        artist_name: "The Wanderers",
+      });
+
+      const result = (await callTool("explain_song", {}, testEnv())) as Record<string, unknown>;
+      expect(result.source).toBe("local-history-derived");
+      expect(result.subject_paragraph).toBe("A song about leaving home and finding yourself.");
+      expect(result.track_name).toBe("Leaving Home");
+      expect(result.artist_name).toBe("The Wanderers");
+    });
+
+    it("returns clear message when nothing is playing", async () => {
+      vi.mocked(resolveCurrentlyPlaying).mockResolvedValue(null);
+
+      const result = (await callTool("explain_song", {}, testEnv())) as Record<string, unknown>;
+      expect(result.error).toContain("Nothing is currently playing");
+    });
+
+    it("returns clear message when Spotify API fails", async () => {
+      vi.mocked(resolveCurrentlyPlaying).mockRejectedValue(new Error("fetch failed"));
+
+      const result = (await callTool("explain_song", {}, testEnv())) as Record<string, unknown>;
+      expect(result.error).toContain("Couldn't reach Spotify");
+    });
+
+    it("returns auth error when tokens are missing", async () => {
+      vi.mocked(resolveCurrentlyPlaying).mockRejectedValue(
+        new Error("No Spotify tokens found. Visit /auth/login first."),
+      );
+
+      const result = (await callTool("explain_song", {}, testEnv())) as Record<string, unknown>;
+      expect(result.error).toContain("isn't configured");
     });
 
     it("returns pending for a track with non-ok status", async () => {
