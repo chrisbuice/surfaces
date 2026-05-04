@@ -2,3 +2,7 @@ services:
   lyrics-backfill:
     build: .
     env_file: .env
+    tty: true
+    container_name: lyrics-run
+    restart: unless-stopped
+    command: lyrics

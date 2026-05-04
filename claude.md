@@ -50,7 +50,7 @@ Top of the queue, in order:
 
 3. **Time-machine memory queries.** "What was I listening to in [month/year]?" Answer from `monthly_top.csv` or a slice of `streams.feather`. Should feel instantaneous.
 
-After those land, the dashboard side gets the calendar heatmap, eras filmstrip, and time-machine picker. Use `Sonic_Life_Dashboard.html` as a design reference for layout and visual language — don't copy code, but the patterns there are good ones.
+After those land, the dashboard side gets the calendar heatmap, reflections filmstrip, and time-machine picker. Use `Sonic_Life_Dashboard.html` as a design reference for layout and visual language — don't copy code, but the patterns there are good ones.
 
 ## Honor the never-stale core
 

@@ -142,10 +142,10 @@ export function getToolDefinitions(): McpToolDefinition[] {
       inputSchema: {
         type: "object",
         properties: {
-          mode: { type: "string", enum: ["rediscover", "era", "morning", "default"], description: "Queue flavor. 'rediscover' mixes ~30% lost favorites. 'era' seeds from a named era. 'morning' weights by 6am-10am listening patterns. 'default' uses global affinity." },
+          mode: { type: "string", enum: ["rediscover", "reflection", "morning", "default"], description: "Queue flavor. 'rediscover' mixes ~30% lost favorites. 'reflection' seeds from a named reflection. 'morning' weights by 6am-10am listening patterns. 'default' uses global affinity." },
           seed: { type: "string", description: "Optional seed: an artist name or spotify:track:URI." },
           length_min: { type: "number", description: "Target queue length in minutes. Default 60." },
-          era_name: { type: "string", description: "Era to seed from when mode='era'. E.g. 'Pop maximalism', 'Texas country + emotional indie'." },
+          reflection_name: { type: "string", description: "Reflection to seed from when mode='reflection'. E.g. 'Pop maximalism', 'Texas country + emotional indie'." },
         },
       },
     },
@@ -566,11 +566,11 @@ export async function callTool(
     }
 
     case "generate_queue": {
-      const mode = (args.mode as "rediscover" | "era" | "morning" | "default") ?? "default";
+      const mode = (args.mode as "rediscover" | "reflection" | "morning" | "default") ?? "default";
       const seed = args.seed as string | undefined;
       const lengthMin = (args.length_min as number) ?? 60;
-      const eraName = args.era_name as string | undefined;
-      return await generateQueue(env.DB, { mode, seed, lengthMin, eraName });
+      const reflectionName = args.reflection_name as string | undefined;
+      return await generateQueue(env.DB, { mode, seed, lengthMin, reflectionName });
     }
 
     default:

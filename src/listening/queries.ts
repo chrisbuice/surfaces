@@ -17,35 +17,35 @@
  */
 
 import type { TimeMachineResult, LostFavorite, AffinityRow } from "./types";
-import erasData from "./data/eras.json";
+import reflectionsData from "./data/reflections.json";
 
 const SNAPSHOT_DATE = "2026-04-29";
 
-function eraForYear(year: number): string | null {
-  for (const era of erasData) {
-    if (era.years.includes(year)) return era.name;
+function reflectionForYear(year: number): string | null {
+  for (const reflection of reflectionsData) {
+    if (reflection.years.includes(year)) return reflection.name;
   }
   return null;
 }
 
-function eraForYears(years: number[]): string | null {
-  // Return the era that covers the majority of the given years
-  const eraCounts: Record<string, number> = {};
+function reflectionForYears(years: number[]): string | null {
+  // Return the reflection that covers the majority of the given years
+  const reflectionCounts: Record<string, number> = {};
   for (const y of years) {
-    const e = eraForYear(y);
-    if (e) eraCounts[e] = (eraCounts[e] ?? 0) + 1;
+    const e = reflectionForYear(y);
+    if (e) reflectionCounts[e] = (reflectionCounts[e] ?? 0) + 1;
   }
   let best: string | null = null;
   let bestCount = 0;
-  for (const [e, c] of Object.entries(eraCounts)) {
+  for (const [e, c] of Object.entries(reflectionCounts)) {
     if (c > bestCount) { best = e; bestCount = c; }
   }
   return best;
 }
 
-function vibeForEra(eraName: string): string | null {
-  const era = erasData.find((e) => e.name === eraName);
-  return era?.summary ?? null;
+function vibeForReflection(reflectionName: string): string | null {
+  const reflection = reflectionsData.find((e) => e.name === reflectionName);
+  return reflection?.summary ?? null;
 }
 
 /**
@@ -103,7 +103,7 @@ export async function getTimeMachine(
   const topArtists = await db.prepare(topArtistsSQL).bind(...binds, limit)
     .all<{ artist_name: string; plays: number; mins: number }>();
 
-  const era = eraForYear(year);
+  const reflection = reflectionForYear(year);
 
   return {
     period,
@@ -122,8 +122,8 @@ export async function getTimeMachine(
       plays: a.plays,
       minutes: Math.round(a.mins * 10) / 10,
     })),
-    era,
-    vibe: era ? vibeForEra(era) : null,
+    reflection,
+    vibe: reflection ? vibeForReflection(reflection) : null,
   };
 }
 
@@ -210,7 +210,7 @@ export async function getLostFavorites(
       .first<{ year: number; month: number; plays: number }>();
 
     const lastDate = new Date(row.last_heard_any_uri * 1000);
-    const era = eraForYear(row.first_year);
+    const reflection = reflectionForYear(row.first_year);
 
     results.push({
       track: row.track_name,
@@ -220,7 +220,7 @@ export async function getLostFavorites(
       lastPlayed: lastDate.toISOString().split("T")[0],
       peakMonth: peak ? `${peak.year}-${String(peak.month).padStart(2, "0")}` : "unknown",
       peakPlays: peak?.plays ?? 0,
-      era,
+      reflection,
     });
   }
 

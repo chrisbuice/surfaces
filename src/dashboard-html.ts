@@ -95,32 +95,32 @@ export default `<!DOCTYPE html>
     .year-nav button { background: var(--surface); border: 1px solid #555; color: var(--ink2); padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
     .year-nav button:hover { border-color: var(--accent); color: var(--accent); }
     .year-nav span { font-size: 16px; font-weight: 600; color: var(--ink); min-width: 50px; text-align: center; }
-    .eras-list { display: flex; flex-direction: column; gap: 16px; }
-    .era-card { background: var(--surface); border-radius: 12px; padding: 20px 24px; border-left: 4px solid transparent; transition: border-color 0.2s; }
-    .era-card:nth-child(1) { border-left-color: var(--accent); }
-    .era-card:nth-child(2) { border-left-color: var(--accent4); }
-    .era-card:nth-child(3) { border-left-color: var(--accent3); }
-    .era-card:nth-child(4) { border-left-color: var(--accent2); }
-    .era-card:nth-child(5) { border-left-color: var(--accent5); }
-    .era-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
-    .era-name { font-size: 20px; font-weight: 700; color: var(--ink); line-height: 1.2; }
-    .era-years { font-size: 13px; color: var(--accent); font-weight: 600; letter-spacing: 0.05em; }
-    .era-summary { font-size: 14px; color: var(--ink2); line-height: 1.5; margin-bottom: 14px; }
-    .era-metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 14px; }
-    @media (max-width: 600px) { .era-metrics { grid-template-columns: repeat(3, 1fr); } }
-    .era-metric { text-align: center; }
-    .era-metric .v { font-size: 18px; font-weight: 700; color: var(--accent); }
-    .era-metric .l { font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.05em; }
-    .era-top-track { background: var(--bg); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
-    .era-top-track .label { font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px; }
-    .era-top-track .title { font-size: 14px; font-weight: 600; }
-    .era-top-track .artist { font-size: 12px; color: var(--ink2); }
-    .era-top-track .plays { font-size: 16px; font-weight: 700; color: var(--accent); }
-    .era-artists { display: flex; gap: 6px; flex-wrap: wrap; }
-    .era-artists .pill { display: inline-block; background: var(--bg); padding: 4px 10px; border-radius: 10px; font-size: 12px; color: var(--ink2); cursor: pointer; transition: color 0.2s; }
-    .era-artists .pill:hover { color: var(--accent); }
-    .era-artists .pill .plays { color: var(--ink3); font-size: 11px; margin-left: 4px; }
-    .era-sparkline { display: flex; align-items: flex-end; gap: 3px; height: 30px; margin-bottom: 14px; }
+    .reflections-list { display: flex; flex-direction: column; gap: 16px; }
+    .reflection-card { background: var(--surface); border-radius: 12px; padding: 20px 24px; border-left: 4px solid transparent; transition: border-color 0.2s; }
+    .reflection-card:nth-child(1) { border-left-color: var(--accent); }
+    .reflection-card:nth-child(2) { border-left-color: var(--accent4); }
+    .reflection-card:nth-child(3) { border-left-color: var(--accent3); }
+    .reflection-card:nth-child(4) { border-left-color: var(--accent2); }
+    .reflection-card:nth-child(5) { border-left-color: var(--accent5); }
+    .reflection-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .reflection-name { font-size: 20px; font-weight: 700; color: var(--ink); line-height: 1.2; }
+    .reflection-years { font-size: 13px; color: var(--accent); font-weight: 600; letter-spacing: 0.05em; }
+    .reflection-summary { font-size: 14px; color: var(--ink2); line-height: 1.5; margin-bottom: 14px; }
+    .reflection-metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 14px; }
+    @media (max-width: 600px) { .reflection-metrics { grid-template-columns: repeat(3, 1fr); } }
+    .reflection-metric { text-align: center; }
+    .reflection-metric .v { font-size: 18px; font-weight: 700; color: var(--accent); }
+    .reflection-metric .l { font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.05em; }
+    .reflection-top-track { background: var(--bg); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .reflection-top-track .label { font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px; }
+    .reflection-top-track .title { font-size: 14px; font-weight: 600; }
+    .reflection-top-track .artist { font-size: 12px; color: var(--ink2); }
+    .reflection-top-track .plays { font-size: 16px; font-weight: 700; color: var(--accent); }
+    .reflection-artists { display: flex; gap: 6px; flex-wrap: wrap; }
+    .reflection-artists .pill { display: inline-block; background: var(--bg); padding: 4px 10px; border-radius: 10px; font-size: 12px; color: var(--ink2); cursor: pointer; transition: color 0.2s; }
+    .reflection-artists .pill:hover { color: var(--accent); }
+    .reflection-artists .pill .plays { color: var(--ink3); font-size: 11px; margin-left: 4px; }
+    .reflection-sparkline { display: flex; align-items: flex-end; gap: 3px; height: 30px; margin-bottom: 14px; }
     .month-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; margin-bottom: 12px; }
     .month-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 2px; color: var(--ink2); cursor: pointer; font-size: 12px; text-align: center; transition: all 0.2s; }
     .month-btn:hover { border-color: var(--accent); color: var(--accent); }
@@ -301,7 +301,7 @@ export default `<!DOCTYPE html>
   <div class="tab-nav" id="tab-nav">
     <button class="tab-btn active" data-tab="pulse">Pulse</button>
     <button class="tab-btn hidden" data-tab="detail" id="detail-tab-btn">Detail</button>
-    <button class="tab-btn" data-tab="eras">Eras</button>
+    <button class="tab-btn" data-tab="reflections">Reflections</button>
     <button class="tab-btn" data-tab="calendar">Calendar</button>
     <button class="tab-btn" data-tab="discover">Discover</button>
     <button class="tab-btn" data-tab="intelligence">Intelligence</button>
@@ -331,6 +331,28 @@ export default `<!DOCTYPE html>
       <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;">UP NEXT</div>
       <div id="np-queue-list"></div>
     </div>
+  </div>
+
+  <!-- Start Session -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Start Session</h2>
+      <select id="output-select">
+        <option value="play_now">Play Now</option>
+        <option value="queue">Queue</option>
+      </select>
+    </div>
+    <div class="mode-buttons">
+      <button class="mode-btn" data-mode="waking_up">Waking Up</button>
+      <button class="mode-btn" data-mode="working">Working</button>
+      <button class="mode-btn" data-mode="driving">Driving</button>
+      <button class="mode-btn" data-mode="brainstorming">Brainstorming</button>
+      <button class="mode-btn" data-mode="unwinding">Unwinding</button>
+      <button class="mode-btn" data-mode="sleeping">Sleeping</button>
+      <button class="mode-btn" data-mode="discover" style="border-color:var(--accent);">Discover</button>
+    </div>
+    <div id="session-status" class="status-msg" style="display:none;"></div>
+    <div id="session-queue" style="display:none; margin-top:12px;"></div>
   </div>
 
   <!-- ════ Pulse Tab ════ -->
@@ -388,37 +410,18 @@ export default `<!DOCTYPE html>
           <select id="qb-mode">
             <option value="default">Default</option>
             <option value="rediscover">Rediscover</option>
-            <option value="era">Era</option>
+            <option value="reflection">Reflection</option>
             <option value="morning">Morning</option>
           </select>
           <input type="range" id="qb-length" min="30" max="120" value="60">
           <span id="qb-length-label" style="font-size:13px;color:var(--ink3);min-width:40px;">60m</span>
+          <span style="font-size:11px;color:var(--ink3);">Fresh</span>
+          <input type="range" id="qb-familiarity" min="0" max="100" value="50" style="min-width:80px;">
+          <span style="font-size:11px;color:var(--ink3);">Familiar</span>
           <button class="pill-btn" onclick="generateQueue()">Generate</button>
         </div>
         <div id="qb-results"></div>
       </div>
-    </div>
-
-    <!-- Start Session -->
-    <div class="card">
-      <div class="card-header">
-        <h2>Start Session</h2>
-        <select id="output-select">
-          <option value="play_now">Play Now</option>
-          <option value="queue">Queue</option>
-        </select>
-      </div>
-      <div class="mode-buttons">
-        <button class="mode-btn" data-mode="waking_up">Waking Up</button>
-        <button class="mode-btn" data-mode="working">Working</button>
-        <button class="mode-btn" data-mode="driving">Driving</button>
-        <button class="mode-btn" data-mode="brainstorming">Brainstorming</button>
-        <button class="mode-btn" data-mode="unwinding">Unwinding</button>
-        <button class="mode-btn" data-mode="sleeping">Sleeping</button>
-        <button class="mode-btn" data-mode="discover" style="border-color:var(--accent);">Discover</button>
-      </div>
-      <div id="session-status" class="status-msg" style="display:none;"></div>
-      <div id="session-queue" style="display:none; margin-top:12px;"></div>
     </div>
 
     <!-- Why These Tracks -->
@@ -461,7 +464,7 @@ export default `<!DOCTYPE html>
     <!-- Recent History -->
     <div class="card">
       <div class="card-header">
-        <h2>Last 24 Hours</h2>
+        <h2>Last 25 Played</h2>
         <button class="refresh-btn" onclick="loadHistory()">Refresh</button>
       </div>
       <div id="history-content">
@@ -499,13 +502,13 @@ export default `<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- ════ Eras Tab ════ -->
-  <div class="tab-content" id="tab-eras">
+  <!-- ════ Reflections Tab ════ -->
+  <div class="tab-content" id="tab-reflections">
     <div class="card">
-      <div class="eyebrow">The Five Eras</div>
+      <div class="eyebrow">The Five Reflections</div>
       <h2 style="color:var(--ink);text-transform:none;letter-spacing:0;font-size:18px;">How your taste moved.</h2>
       <div style="margin-top:12px;">
-        <div id="eras-content" class="eras-list">
+        <div id="reflections-content" class="reflections-list">
           <div class="status-msg">Loading...</div>
         </div>
       </div>
@@ -557,7 +560,7 @@ export default `<!DOCTYPE html>
           <div class="stat-box"><div class="stat-number" id="tm-tracks">-</div><div class="stat-label">Tracks</div></div>
           <div class="stat-box"><div class="stat-number" id="tm-artists">-</div><div class="stat-label">Artists</div></div>
         </div>
-        <div id="tm-era" style="font-size: 13px; color: var(--ink3); margin-bottom: 12px;"></div>
+        <div id="tm-reflection" style="font-size: 13px; color: var(--ink3); margin-bottom: 12px;"></div>
       </div>
       <div id="tm-tracklist"></div>
     </div>
@@ -902,7 +905,7 @@ export default `<!DOCTYPE html>
 
       // Lazy-load tabs
       if (name === 'trends' && !trendsLoaded) loadTrends();
-      if (name === 'eras' && !erasLoaded) { loadEras(); erasLoaded = true; }
+      if (name === 'reflections' && !reflectionsLoaded) { loadReflections(); reflectionsLoaded = true; }
       if (name === 'calendar' && !calendarLoaded) { loadHeatmap(); renderTmMonths(); calendarLoaded = true; }
       if (name === 'discover' && !discoverLoaded) loadDiscover();
       if (name === 'intelligence' && !intelligenceLoaded) loadIntelligence();
@@ -913,7 +916,7 @@ export default `<!DOCTYPE html>
     });
 
     let trendsLoaded = false;
-    let erasLoaded = false;
+    let reflectionsLoaded = false;
     let calendarLoaded = false;
     let discoverLoaded = false;
     let intelligenceLoaded = false;
@@ -1041,7 +1044,7 @@ export default `<!DOCTYPE html>
             <div class="km"><div class="v">\${data.totalMinutes != null ? Math.round(data.totalMinutes).toLocaleString() : '--'}</div><div class="l">Minutes</div></div>
             <div class="km"><div class="v" style="color:\${skipColor}">\${data.skipRate != null ? data.skipRate + '%' : '--'}</div><div class="l">Skip Rate</div><div class="sub-label">avg \${data.avgSkipRate || 29.8}%</div></div>
             <div class="km"><div class="v" style="color:\${compColor}">\${data.completionRate != null ? data.completionRate + '%' : '--'}</div><div class="l">Completion</div><div class="sub-label">avg \${data.avgCompletionRate || 39.2}%</div></div>
-            <div class="km"><div class="v">\${esc(data.era || '--')}</div><div class="l">Era</div></div>
+            <div class="km"><div class="v">\${esc(data.reflection || '--')}</div><div class="l">Reflection</div></div>
           </div>
         \`;
 
@@ -1282,7 +1285,7 @@ export default `<!DOCTYPE html>
             <div class="row">
               <div class="rank">\${i + 1}</div>
               <div class="title">\${trackLink(t.track, t.artist)}<div class="sub"><a onclick="showArtistDetail('\${esc(t.artist)}')">\${esc(t.artist)}</a></div></div>
-              <div class="val gold">\${t.plays} plays<div class="sub">last \${esc(t.lastHeard || '')}</div></div>
+              <div class="val gold">\${t.lifetimePlays} plays<div class="sub">last \${esc(t.lastPlayed || '')}</div></div>
             </div>
           \`).join('');
         } else { lostEl.innerHTML = '<div class="status-msg">No lost favorites</div>'; }
@@ -1305,6 +1308,7 @@ export default `<!DOCTYPE html>
         const data = await apiPost('/api/listening/queue', {
           mode: document.getElementById('qb-mode').value,
           length_min: parseInt(qbLength.value),
+          familiarity: parseInt(document.getElementById('qb-familiarity').value) / 100,
         });
         if (data.tracks && data.tracks.length > 0) {
           resultsEl.innerHTML = data.tracks.map((t, i) => {
@@ -1731,7 +1735,7 @@ export default `<!DOCTYPE html>
         const events = await api('/api/recent-history');
         const el = document.getElementById('history-content');
         if (events.length === 0) {
-          el.innerHTML = '<div class="status-msg">No play events in the last 24 hours.</div>';
+          el.innerHTML = '<div class="status-msg">No recent play events.</div>';
           return;
         }
         const badgeClass = c => ({completed:'badge-completed',skipped:'badge-skipped',partial:'badge-partial',replayed:'badge-replayed'}[c] || '');
@@ -1823,35 +1827,35 @@ export default `<!DOCTYPE html>
       });
     });
 
-    // ── Listening History: Eras ──
-    async function loadEras() {
+    // ── Listening History: Reflections ──
+    async function loadReflections() {
       try {
-        const data = await api('/api/listening/eras');
-        const container = document.getElementById('eras-content');
-        if (!data.eras || !data.eras.length) { container.innerHTML = '<div class="status-msg">No eras data</div>'; return; }
-        container.innerHTML = data.eras.map(era => {
+        const data = await api('/api/listening/reflections');
+        const container = document.getElementById('reflections-content');
+        if (!data.reflections || !data.reflections.length) { container.innerHTML = '<div class="status-msg">No reflections data</div>'; return; }
+        container.innerHTML = data.reflections.map(reflection => {
           // Artist pills with play counts
-          const artistPills = (era.topArtistsByPlays || []).map(a =>
+          const artistPills = (reflection.topArtistsByPlays || []).map(a =>
             \`<span class="pill" onclick="showArtistDetail('\${esc(a.artist)}')">\${esc(a.artist)}<span class="plays">\${a.hours ? a.hours + 'h' : a.plays}</span></span>\`
           ).join('');
 
           // Top track callout
-          const topTrackHtml = era.topTrack
-            ? \`<div class="era-top-track">
+          const topTrackHtml = reflection.topTrack
+            ? \`<div class="reflection-top-track">
                 <div>
                   <div class="label">Defining track</div>
-                  <div class="title">\${trackLink(era.topTrack.track, era.topTrack.artist)}</div>
-                  <div class="artist">\${esc(era.topTrack.artist)}</div>
+                  <div class="title">\${trackLink(reflection.topTrack.track, reflection.topTrack.artist)}</div>
+                  <div class="artist">\${esc(reflection.topTrack.artist)}</div>
                 </div>
-                <div class="plays">\${era.topTrack.plays}</div>
+                <div class="plays">\${reflection.topTrack.plays}</div>
               </div>\`
             : '';
 
           // Mini sparkline (per-year bars)
-          const yearlyPlays = era.yearlyPlays || [];
+          const yearlyPlays = reflection.yearlyPlays || [];
           const maxYearPlays = Math.max(...yearlyPlays.map(y => y.plays), 1);
           const sparkHtml = yearlyPlays.length > 1
-            ? \`<div class="era-sparkline">\${yearlyPlays.map(y => {
+            ? \`<div class="reflection-sparkline">\${yearlyPlays.map(y => {
                 const h = Math.max(3, Math.round((y.plays / maxYearPlays) * 28));
                 return \`<div style="display:flex;flex-direction:column;align-items:center;flex:1;">
                   <div style="width:100%;height:\${h}px;background:var(--accent);border-radius:2px;"></div>
@@ -1860,27 +1864,27 @@ export default `<!DOCTYPE html>
               }).join('')}</div>\`
             : '';
 
-          return \`<div class="era-card">
-            <div class="era-header">
+          return \`<div class="reflection-card">
+            <div class="reflection-header">
               <div>
-                <div class="era-name">\${esc(era.name)}</div>
-                <div class="era-years">\${era.years[0]}\\u2013\${era.years[era.years.length - 1]}</div>
+                <div class="reflection-name">\${esc(reflection.name)}</div>
+                <div class="reflection-years">\${reflection.years[0]}\\u2013\${reflection.years[reflection.years.length - 1]}</div>
               </div>
             </div>
-            <div class="era-summary">\${esc(era.summary || '')}</div>
-            <div class="era-metrics">
-              <div class="era-metric"><div class="v">\${(era.totalPlays || 0).toLocaleString()}</div><div class="l">Plays</div></div>
-              <div class="era-metric"><div class="v">\${era.totalHours || 0}</div><div class="l">Hours</div></div>
-              <div class="era-metric"><div class="v">\${(era.uniqueTracks || 0).toLocaleString()}</div><div class="l">Tracks</div></div>
-              <div class="era-metric"><div class="v">\${(era.uniqueArtists || 0).toLocaleString()}</div><div class="l">Artists</div></div>
-              <div class="era-metric"><div class="v">\${era.skipRate || 0}%</div><div class="l">Skip Rate</div></div>
+            <div class="reflection-summary">\${esc(reflection.summary || '')}</div>
+            <div class="reflection-metrics">
+              <div class="reflection-metric"><div class="v">\${(reflection.totalPlays || 0).toLocaleString()}</div><div class="l">Plays</div></div>
+              <div class="reflection-metric"><div class="v">\${reflection.totalHours || 0}</div><div class="l">Hours</div></div>
+              <div class="reflection-metric"><div class="v">\${(reflection.uniqueTracks || 0).toLocaleString()}</div><div class="l">Tracks</div></div>
+              <div class="reflection-metric"><div class="v">\${(reflection.uniqueArtists || 0).toLocaleString()}</div><div class="l">Artists</div></div>
+              <div class="reflection-metric"><div class="v">\${reflection.skipRate || 0}%</div><div class="l">Skip Rate</div></div>
             </div>
             \${sparkHtml}
             \${topTrackHtml}
-            <div class="era-artists">\${artistPills}</div>
+            <div class="reflection-artists">\${artistPills}</div>
           </div>\`;
         }).join('');
-      } catch (e) { document.getElementById('eras-content').innerHTML = \`<div class="status-msg error">\${e.message}</div>\`; }
+      } catch (e) { document.getElementById('reflections-content').innerHTML = \`<div class="status-msg error">\${e.message}</div>\`; }
     }
 
     // ── Listening History: Calendar Heatmap ──
@@ -1963,7 +1967,7 @@ export default `<!DOCTYPE html>
         document.getElementById('tm-hours').textContent = data.totalHours || 0;
         document.getElementById('tm-tracks').textContent = data.uniqueTracks || 0;
         document.getElementById('tm-artists').textContent = data.uniqueArtists || 0;
-        document.getElementById('tm-era').textContent = data.era ? \`Era: \${data.era}\` : '';
+        document.getElementById('tm-reflection').textContent = data.reflection ? \`Reflection: \${data.reflection}\` : '';
         const list = document.getElementById('tm-tracklist');
         if (data.topTracks && data.topTracks.length) {
           list.innerHTML = data.topTracks.map(t =>

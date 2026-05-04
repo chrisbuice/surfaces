@@ -54,7 +54,7 @@ Each row is a candidate. The "Why offload" / "Why keep" columns are the actual t
 Three places, each for a different reason:
 
 1. **`~/stack/etl/data/derived/`** on grimmauldplace — canonical. The container writes here.
-2. **The Worker** continues to read the embedded `eras.json`, `never_stale_core.json`, `companions.json`, `ip_geo.json` from the repo as today. These are stable enough that a manual `git commit` after a refresh is fine — the embedded versions move on a release cadence, not nightly.
+2. **The Worker** continues to read the embedded `reflections.json`, `never_stale_core.json`, `companions.json`, `ip_geo.json` from the repo as today. These are stable enough that a manual `git commit` after a refresh is fine — the embedded versions move on a release cadence, not nightly.
 3. **D1 `plays` table** — already populated (see existing `PLAN.md`). Live-sync continues on Workers, unchanged. The ETL container doesn't write to D1 in this design.
 
 **This is the key simplification:** the ETL container is a *batch processor*, not part of the request path. Workers don't depend on it being up. If grimmauldplace is offline for a week, derived files just don't refresh — the Worker keeps serving from the last-committed embedded versions. Acceptable.

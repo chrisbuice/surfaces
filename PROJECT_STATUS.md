@@ -451,7 +451,7 @@ Sent at 8pm ET via Resend. Light theme for mobile readability. Contains:
 | MCP endpoint | `https://spotify-agent.chrisbuice.workers.dev/mcp` |
 | Spotify Client ID | `1a78c31c5d7c40f7811ebd6577fc3b6a` |
 | Shortcut Token | `<redacted — rotated 2026-05-03>` |
-| Spotify User ID | `121776622` |
+| Spotify User ID | `<redacted>` |
 | D1 Database ID | `a639e396-3fb1-4db6-b5a5-ce61c60d5779` |
 | KV Namespace ID | `7055b925a6b74bd39150201370724eeb` |
 

@@ -173,7 +173,7 @@ Files copied (not symlinked) from `data/`:
 
 | File | Purpose | Size |
 |------|---------|------|
-| `eras.json` | 5 era definitions (name, years, artists, summary) | ~2 KB |
+| `reflections.json` | 5 reflection definitions (name, years, artists, summary) | ~2 KB |
 | `never_stale_core.json` | 14 artists + year counts | <1 KB |
 | `companions.json` | Top-25 artist co-listening graph | ~6 KB |
 | `ip_geo.json` | iOS IP → city/region/country/lat/lon cache (READ-ONLY at runtime) | ~1.7 MB |
@@ -182,7 +182,7 @@ Files copied (not symlinked) from `data/`:
 
 **ip_geo.json is a read-only static asset in the Worker bundle.** It covers the 4,745 distinct iOS IPs from the historical export. The live-sync write path for NEW IPs (when the daily sync encounters an IP not already in the embedded cache) writes to **KV** under the key prefix `geo:ip:{ip}`, not back to the embedded JSON. The `geolocate()` helper checks the embedded cache first, then falls back to KV. New IP lookups use a free IP geolocation API (e.g. ip-api.com), cache the result in KV, and never store the raw IP in D1 or any external service.
 
-The `eras.json` and `never_stale_core.json` are new files derived from `dashboard_data.json` — extracted once, committed.
+The `reflections.json` (reflection definitions) and `never_stale_core.json` are new files derived from `dashboard_data.json` — extracted once, committed.
 
 ---
 
@@ -283,8 +283,8 @@ export async function getSkipPenalizedTracks(
   "topArtists": [
     { "artist": "Zach Bryan", "plays": 120, "minutes": 380 }
   ],
-  "era": "Texas country + emotional indie",
-  "vibe": "... (optional 1-sentence summary if era data has it)"
+  "reflection": "Texas country + emotional indie",
+  "vibe": "... (optional 1-sentence summary if reflection data has it)"
 }
 ```
 
@@ -303,7 +303,7 @@ Surfaces tracks you used to love but haven't heard in 2+ years.
       min_years_gone: { type: "number", description: "Minimum years since last play. Default 2." },
       limit: { type: "number", description: "How many to return. Default 25." },
       artist: { type: "string", description: "Filter to a specific artist." },
-      era: { type: "string", description: "Filter to an era name (e.g. 'Pop maximalism')." },
+      reflection: { type: "string", description: "Filter to a reflection name (e.g. 'Pop maximalism')." },
     },
   },
 }
@@ -324,7 +324,7 @@ Surfaces tracks you used to love but haven't heard in 2+ years.
       "lastPlayed": "2023-07-15",
       "peakMonth": "2018-07",
       "peakPlays": 215,
-      "era": "Country/Americana ascendance"
+      "reflection": "Country/Americana ascendance"
     }
   ]
 }
@@ -382,8 +382,8 @@ Smart queue generation with skip-aware feedback and never-stale-core boost. This
     properties: {
       mode: {
         type: "string",
-        enum: ["rediscover", "era", "morning", "default"],
-        description: "Queue flavor. 'rediscover' mixes ~30% lost favorites. 'era' seeds from a named era. 'morning' weights by 6am-10am listening patterns. 'default' uses global affinity."
+        enum: ["rediscover", "reflection", "morning", "default"],
+        description: "Queue flavor. 'rediscover' mixes ~30% lost favorites. 'reflection' seeds from a named reflection. 'morning' weights by 6am-10am listening patterns. 'default' uses global affinity."
       },
       seed: {
         type: "string",
@@ -393,9 +393,9 @@ Smart queue generation with skip-aware feedback and never-stale-core boost. This
         type: "number",
         description: "Target queue length in minutes. Default 60."
       },
-      era_name: {
+      reflection_name: {
         type: "string",
-        description: "Era to seed from when mode='era'. One of the 5 named eras (e.g. 'Pop maximalism', 'Texas country + emotional indie')."
+        description: "Reflection to seed from when mode='reflection'. One of the 5 named reflections (e.g. 'Pop maximalism', 'Texas country + emotional indie')."
       },
     },
   },
@@ -441,7 +441,7 @@ Smart queue generation with skip-aware feedback and never-stale-core boost. This
 2. **Never-stale-core boost:** if the track's artist is one of the 14 evergreen artists from `never_stale_core.json`, multiply the base score by 1.15. Modest — enough to keep them surfaced when recency decay would have pruned them, not enough to dominate.
 3. **Skip penalty / exclusion:** any track with ≥3 `reason_end='fwdbtn'` events (where `ms_played < 30000`, i.e. skipped within 30s) in the past 30 days is excluded from the candidate pool entirely. Exception: if the track was explicitly passed as `seed`, it's included regardless.
 4. **Lost-favorites mix (mode='rediscover'):** ~30% of queue slots are filled from `getLostFavorites()`, weighted by lifetime plays. Remaining 70% from affinity-ranked candidates.
-5. **Era filter (mode='era'):** candidates are restricted to tracks with plays in the era's year range.
+5. **Reflection filter (mode='reflection'):** candidates are restricted to tracks with plays in the reflection's year range.
 6. **Morning filter (mode='morning'):** candidates are weighted by plays where `local_hour` is 6–10.
 7. **Dedup:** no artist appears more than 3 times in the queue (unless seeded by that artist).
 
@@ -449,7 +449,7 @@ Smart queue generation with skip-aware feedback and never-stale-core boost. This
 - `"high recent affinity"` — top affinity score, no special category
 - `"never-stale core (N yrs in top-50)"` — boosted by the 14-artist list
 - `"lost favorite, last heard YYYY-MM"` — from the lost_favorites pool
-- `"era match: [era name]"` — selected because it falls in the seeded era
+- `"reflection match: [reflection name]"` — selected because it falls in the seeded reflection
 - `"seed companion"` — from the companion graph of the seeded artist
 - `"morning pattern"` — weighted by morning listening history
 
@@ -489,13 +489,13 @@ Returns daily play counts for the given year (365/366 cells). Dashboard renders 
 
 **Query:** `SELECT date(ts, 'unixepoch') as day, COUNT(*) as plays FROM plays WHERE year = ? GROUP BY day`
 
-### 8b. Eras Filmstrip
+### 8b. Reflections Filmstrip
 
-**Endpoint:** `GET /api/listening/eras`
+**Endpoint:** `GET /api/listening/reflections`
 
-Returns the 5 eras from the embedded `eras.json` enriched with live stats from `plays` (total plays, unique tracks, top 3 artists by play count for each era's year range).
+Returns the 5 reflections from the embedded `reflections.json` enriched with live stats from `plays` (total plays, unique tracks, top 3 artists by play count for each reflection's year range).
 
-Dashboard renders a horizontal scrolling filmstrip — each era is a card with name, year range, top artists, and a mini spark-line of monthly plays. Clicking an era filters other views.
+Dashboard renders a horizontal scrolling filmstrip — each reflection is a card with name, year range, top artists, and a mini spark-line of monthly plays. Clicking a reflection filters other views.
 
 ### 8c. Time-Machine Month Picker
 
@@ -592,7 +592,7 @@ Four regression checks, run against the D1 `plays` table (populated in a `before
 | `src/listening/queries.ts` | D1 query builders: getTimeMachine, getLostFavorites, getArtistAffinity, getTrackAffinity, getSkipCount, getMonthlyTop, getSkipPenalizedTracks |
 | `src/listening/queue.ts` | Queue generation engine: generateQueue() — scoring, never-stale boost, skip exclusion, mode filtering |
 | `src/listening/sync.ts` | Live-sync: syncRecentPlays() |
-| `src/listening/data/eras.json` | 5 era definitions |
+| `src/listening/data/reflections.json` | 5 reflection definitions |
 | `src/listening/data/never_stale_core.json` | 14 always-boost artists |
 | `src/listening/data/companions.json` | Co-listening graph |
 | `src/listening/data/ip_geo.json` | iOS IP geolocation cache |
@@ -610,8 +610,8 @@ Four regression checks, run against the D1 `plays` table (populated in a `before
 |------|--------|
 | `src/db/schema.sql` | Add `CREATE TABLE plays` + indexes |
 | `src/mcp/tools.ts` | Add 4 tool definitions + handlers (time_machine, lost_favorites, skip_report, generate_queue) |
-| `src/index.ts` | Add 3 API routes (`/api/listening/heatmap`, `/api/listening/eras`, `/api/listening/month`). Add sync call to `0 5 * * *` cron. |
-| `dashboard/index.html` | Add calendar heatmap, eras filmstrip, time-machine picker sections |
+| `src/index.ts` | Add 3 API routes (`/api/listening/heatmap`, `/api/listening/reflections`, `/api/listening/month`). Add sync call to `0 5 * * *` cron. |
+| `dashboard/index.html` | Add calendar heatmap, reflections filmstrip, time-machine picker sections |
 | `package.json` | Add vitest + pool-workers devDeps, add test scripts |
 | `wrangler.toml` | No changes needed (existing D1 binding is reused) |
 | `.gitignore` | Add `data/plays.ndjson` |
@@ -643,7 +643,7 @@ Four regression checks, run against the D1 `plays` table (populated in a `before
 7. **MCP tools** — time_machine, lost_favorites, skip_report, generate_queue + handler tests
 8. **Live-sync** — `src/listening/sync.ts` + cron integration
 9. **API endpoints** — 3 new routes in index.ts
-10. **Dashboard views** — heatmap, eras filmstrip, time-machine picker
+10. **Dashboard views** — heatmap, reflections filmstrip, time-machine picker
 
 Each step ships with its tests. Tests run after every commit-worthy change.
 
@@ -659,5 +659,5 @@ Ideas spotted during discovery, not in scope for this plan:
 - **Workday-context queues** — weight recommendations by `local_hour` band, not just global affinity. 9am-5pm plays are a different taste profile than 10pm plays.
 - **Travel mode** — detect non-Georgia city from context snapshot, switch to lifetime-favorites-heavy mix. Uses `cities_ios.csv` as the "cities I've been" reference.
 - **Binge detector** — alert when a single track crosses 30 plays in a week. The `binges` data has 20 historical examples.
-- **Year-in-review generator** — structured summary of any year: top tracks, new discoveries, total hours, skip rate, obsessions, eras. Good Wrapped-style output.
+- **Year-in-review generator** — structured summary of any year: top tracks, new discoveries, total hours, skip rate, obsessions, reflections. Good Wrapped-style output.
 - **Never-stale core in startSession** — extend the 14-artist boost (already shipping in `generate_queue`) to the existing `startSession` curation agent's track selection.

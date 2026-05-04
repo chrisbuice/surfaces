@@ -39,7 +39,7 @@ Artists in the user's top-50 for 8+ different years:
 
 Things the live Web API can't answer:
 - **Time-machine memory queries** — "what was I listening to in March 2024?"
-- **Era-anchored seeds** — five named eras with 30–80 representative tracks each.
+- **Reflection-anchored seeds** — five named reflections with 30–80 representative tracks each.
 - **Lost-favorites rediscovery** — `lost_favorites.csv` as a candidate pool for "fresh" suggestions; mix ~30%.
 - **Workday-context queues** — weight by listening history in a specific hour band, not global affinity.
 - **Skip-aware refinement** — log `reason_end='fwdbtn'` within 30s of `reason_start` as a "no" on `(track, context)`. Penalize candidates with ≥3 such signals in past 30 days.

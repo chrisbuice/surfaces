@@ -351,11 +351,11 @@ export async function buildEdges(
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Phase 3 — era buckets
+// Phase 3 — reflection buckets
 // ──────────────────────────────────────────────────────────────────────
 
 /**
- * Compute five data-driven era boundaries from a list of peak years
+ * Compute five data-driven reflection boundaries from a list of peak years
  * (one per node). Each bucket holds roughly 20% of nodes; cuts are
  * chosen so populations balance, not by fixed calendar windows.
  *
@@ -365,7 +365,7 @@ export async function buildEdges(
  * on the lower end and inclusive on the upper end (each year belongs
  * to exactly one bucket).
  */
-export function computeEraBuckets(peakYears: number[]): Array<{ start_year: number; end_year: number }> {
+export function computeReflectionBuckets(peakYears: number[]): Array<{ start_year: number; end_year: number }> {
   if (peakYears.length === 0) return [];
   const sorted = [...peakYears].sort((a, b) => a - b);
   const n = sorted.length;
@@ -393,8 +393,8 @@ export function computeEraBuckets(peakYears: number[]): Array<{ start_year: numb
   return boundaries;
 }
 
-/** Index of which era bucket a given year falls in (0..4), or 0 if none match. */
-export function eraIndexFor(year: number, buckets: Array<{ start_year: number; end_year: number }>): number {
+/** Index of which reflection bucket a given year falls in (0..4), or 0 if none match. */
+export function reflectionIndexFor(year: number, buckets: Array<{ start_year: number; end_year: number }>): number {
   for (let i = 0; i < buckets.length; i++) {
     if (year >= buckets[i].start_year && year <= buckets[i].end_year) return i;
   }
@@ -405,7 +405,7 @@ export function eraIndexFor(year: number, buckets: Array<{ start_year: number; e
 }
 
 /** Render a bucket like {start:2011,end:2014} as the human-readable label "2011–2014". */
-export function eraLabel(b: { start_year: number; end_year: number }, isLatest: boolean): string {
+export function reflectionLabel(b: { start_year: number; end_year: number }, isLatest: boolean): string {
   if (isLatest) return `${b.start_year}–now`;
   if (b.start_year === b.end_year) return `${b.start_year}`;
   return `${b.start_year}–${b.end_year}`;

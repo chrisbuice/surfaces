@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { env } from "cloudflare:test";
 import {
-  buildNodes, buildEdges, computeEraBuckets, eraIndexFor, eraLabel,
+  buildNodes, buildEdges, computeReflectionBuckets, reflectionIndexFor, reflectionLabel,
   computeEdgeWeights, pairKey,
   MIN_PLAYS, SESSION_THRESHOLD, SEASONAL_PLAYLIST_BONUS, PLAYLIST_WEIGHT,
 } from "../../src/constellation/queries";
@@ -217,7 +217,7 @@ describe("constellation queries — edges + weights", () => {
   });
 });
 
-describe("constellation queries — era buckets", () => {
+describe("constellation queries — reflection buckets", () => {
   it("splits 100 evenly-spread peak years into roughly equal-population quintiles", () => {
     // 100 years from 2011..2025 with 20 each (uneven enough to test).
     const years: number[] = [];
@@ -225,7 +225,7 @@ describe("constellation queries — era buckets", () => {
       const reps = y >= 2018 ? 10 : 5;
       for (let i = 0; i < reps; i++) years.push(y);
     }
-    const buckets = computeEraBuckets(years);
+    const buckets = computeReflectionBuckets(years);
     expect(buckets).toHaveLength(5);
     expect(buckets[0].start_year).toBe(2011);
     expect(buckets[buckets.length - 1].end_year).toBe(2025);
@@ -236,14 +236,14 @@ describe("constellation queries — era buckets", () => {
   });
 
   it("handles the degenerate single-year case", () => {
-    const buckets = computeEraBuckets([2020, 2020, 2020]);
+    const buckets = computeReflectionBuckets([2020, 2020, 2020]);
     expect(buckets).toHaveLength(5);
     // The first and last bucket both cover the same single year.
     expect(buckets[0].start_year).toBe(2020);
     expect(buckets[buckets.length - 1].end_year).toBeGreaterThanOrEqual(2020);
   });
 
-  it("eraIndexFor maps a year to its bucket", () => {
+  it("reflectionIndexFor maps a year to its bucket", () => {
     const buckets = [
       { start_year: 2011, end_year: 2014 },
       { start_year: 2015, end_year: 2017 },
@@ -251,17 +251,17 @@ describe("constellation queries — era buckets", () => {
       { start_year: 2021, end_year: 2023 },
       { start_year: 2024, end_year: 2026 },
     ];
-    expect(eraIndexFor(2012, buckets)).toBe(0);
-    expect(eraIndexFor(2017, buckets)).toBe(1);
-    expect(eraIndexFor(2020, buckets)).toBe(2);
-    expect(eraIndexFor(2023, buckets)).toBe(3);
-    expect(eraIndexFor(2025, buckets)).toBe(4);
+    expect(reflectionIndexFor(2012, buckets)).toBe(0);
+    expect(reflectionIndexFor(2017, buckets)).toBe(1);
+    expect(reflectionIndexFor(2020, buckets)).toBe(2);
+    expect(reflectionIndexFor(2023, buckets)).toBe(3);
+    expect(reflectionIndexFor(2025, buckets)).toBe(4);
   });
 
-  it("eraLabel renders the latest bucket as 'YYYY–now'", () => {
-    expect(eraLabel({ start_year: 2024, end_year: 2026 }, true)).toBe("2024–now");
-    expect(eraLabel({ start_year: 2011, end_year: 2014 }, false)).toBe("2011–2014");
-    expect(eraLabel({ start_year: 2020, end_year: 2020 }, false)).toBe("2020");
+  it("reflectionLabel renders the latest bucket as 'YYYY–now'", () => {
+    expect(reflectionLabel({ start_year: 2024, end_year: 2026 }, true)).toBe("2024–now");
+    expect(reflectionLabel({ start_year: 2011, end_year: 2014 }, false)).toBe("2011–2014");
+    expect(reflectionLabel({ start_year: 2020, end_year: 2020 }, false)).toBe("2020");
   });
 });
 

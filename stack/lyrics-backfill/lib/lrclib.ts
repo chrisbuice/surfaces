@@ -5,7 +5,7 @@
  * - No authentication required
  * - Signature match: GET /api/get?track_name=&artist_name=&album_name=&duration=
  * - Search fallback: GET /api/search?track_name=&artist_name=
- * - Self-paced at 5 req/sec (200ms between calls)
+ * - Pacing is handled by the caller (bounded concurrency + jitter).
  */
 
 const LRCLIB_BASE = "https://lrclib.net";
@@ -34,17 +34,6 @@ interface LrclibResponse {
 }
 
 export class LrclibClient {
-  private lastRequestAt = 0;
-  private minIntervalMs = 200; // 5 req/sec
-
-  private async throttle(): Promise<void> {
-    const now = Date.now();
-    const elapsed = now - this.lastRequestAt;
-    if (elapsed < this.minIntervalMs) {
-      await new Promise(r => setTimeout(r, this.minIntervalMs - elapsed));
-    }
-    this.lastRequestAt = Date.now();
-  }
 
   /**
    * Fetch lyrics for a track. Tries signature match first, falls back to search.
@@ -79,8 +68,6 @@ export class LrclibClient {
     albumName: string | undefined,
     durationSec: number,
   ): Promise<LrclibMatch | null> {
-    await this.throttle();
-
     const params = new URLSearchParams({
       track_name: trackName,
       artist_name: artistName,
@@ -104,8 +91,6 @@ export class LrclibClient {
     artistName: string,
     durationMs: number | undefined,
   ): Promise<LrclibMatch | null> {
-    await this.throttle();
-
     const params = new URLSearchParams({
       track_name: trackName,
       artist_name: artistName,

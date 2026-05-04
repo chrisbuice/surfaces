@@ -8,7 +8,7 @@
 import type { QueueCandidate, QueueResult } from "./types";
 import { getTrackAffinity, getLostFavorites, getSkipPenalizedTracks } from "./queries";
 import neverStaleCoreData from "./data/never_stale_core.json";
-import erasData from "./data/eras.json";
+import reflectionsData from "./data/reflections.json";
 
 const NEVER_STALE_ARTISTS = new Set(neverStaleCoreData.map((a) => a.artist));
 const NEVER_STALE_BOOST = 1.15;
@@ -17,10 +17,12 @@ const LOST_FAVORITES_MIX = 0.3;
 const AVG_TRACK_MINUTES = 3.5;
 
 interface GenerateQueueOptions {
-  mode: "rediscover" | "era" | "morning" | "default";
+  mode: "rediscover" | "reflection" | "morning" | "default";
   seed?: string;
   lengthMin: number;
-  eraName?: string;
+  reflectionName?: string;
+  /** 0 = very fresh, 0.5 = balanced (default), 1 = very familiar */
+  familiarity?: number;
 }
 
 /**
@@ -30,7 +32,7 @@ export async function generateQueue(
   db: D1Database,
   options: GenerateQueueOptions,
 ): Promise<QueueResult> {
-  const { mode, seed, lengthMin, eraName } = options;
+  const { mode, seed, lengthMin, reflectionName, familiarity = 0.5 } = options;
   const targetTracks = Math.ceil(lengthMin / AVG_TRACK_MINUTES);
 
   // Get skip-penalized tracks (≥3 fwdbtn within 30s in past 30 days)
@@ -67,6 +69,15 @@ export async function generateQueue(
     const isCore = NEVER_STALE_ARTISTS.has(trackInfo.artist_name);
     const boostedAffinity = isCore ? c.affinity * NEVER_STALE_BOOST : c.affinity;
 
+    // Apply familiarity weight: use play count as a proxy for how "known" a track is.
+    // familiarity=1 (very familiar) boosts high-play tracks; familiarity=0 (very fresh) boosts low-play tracks.
+    // At familiarity=0.5 (balanced), the multiplier is ~1.0 for all tracks.
+    const logPlays = Math.log2(Math.max(c.plays, 1));
+    const familiarityMultiplier = familiarity > 0.5
+      ? 1 + (familiarity - 0.5) * 2 * logPlays * 0.05   // boost familiar tracks
+      : 1 + (0.5 - familiarity) * 2 * (1 / (1 + logPlays * 0.3)); // boost fresh tracks
+    const familiarityAdjusted = boostedAffinity * familiarityMultiplier;
+
     let reason = "high recent affinity";
     if (isCore) {
       const coreEntry = neverStaleCoreData.find((a) => a.artist === trackInfo.artist_name);
@@ -78,7 +89,7 @@ export async function generateQueue(
       track: c.name,
       artist: trackInfo.artist_name,
       reason,
-      affinityScore: Math.round(boostedAffinity * 100) / 100,
+      affinityScore: Math.round(familiarityAdjusted * 100) / 100,
       isNeverStaleCore: isCore,
       avgMinutes: trackInfo.avg_min ?? AVG_TRACK_MINUTES,
     });
@@ -87,21 +98,21 @@ export async function generateQueue(
   // Apply mode-specific filtering
   let filtered = enriched;
 
-  if (mode === "era" && eraName) {
-    const era = erasData.find((e) => e.name === eraName);
-    if (era) {
-      const eraYears = new Set(era.years);
-      // Filter to tracks that have plays in the era's year range
-      const eraUris = new Set<string>();
+  if (mode === "reflection" && reflectionName) {
+    const reflection = reflectionsData.find((e) => e.name === reflectionName);
+    if (reflection) {
+      const reflectionYears = new Set(reflection.years);
+      // Filter to tracks that have plays in the reflection's year range
+      const reflectionUris = new Set<string>();
       for (const c of filtered) {
-        const hasEraPlay = await db.prepare(
+        const hasReflectionPlay = await db.prepare(
           "SELECT 1 FROM plays WHERE spotify_track_uri = ? AND year IN (" +
-          era.years.map(() => "?").join(",") + ") LIMIT 1",
-        ).bind(c.uri, ...era.years).first();
-        if (hasEraPlay) eraUris.add(c.uri);
+          reflection.years.map(() => "?").join(",") + ") LIMIT 1",
+        ).bind(c.uri, ...reflection.years).first();
+        if (hasReflectionPlay) reflectionUris.add(c.uri);
       }
-      filtered = filtered.filter((c) => eraUris.has(c.uri));
-      filtered.forEach((c) => { if (c.reason === "high recent affinity") c.reason = `era match: ${eraName}`; });
+      filtered = filtered.filter((c) => reflectionUris.has(c.uri));
+      filtered.forEach((c) => { if (c.reason === "high recent affinity") c.reason = `reflection match: ${reflectionName}`; });
     }
   }
 
@@ -149,9 +160,13 @@ export async function generateQueue(
     }
   }
 
-  // Mix in lost favorites for rediscover mode
+  // Re-sort after familiarity adjustment
+  filtered.sort((a, b) => b.affinityScore - a.affinityScore);
+
+  // Mix in lost favorites for rediscover mode, or when familiarity is low
   let lostFavCandidates: QueueCandidate[] = [];
-  if (mode === "rediscover") {
+  const wantLostFavs = mode === "rediscover" || familiarity < 0.3;
+  if (wantLostFavs) {
     const lostFavs = await getLostFavorites(db, 20, 2, targetTracks);
     lostFavCandidates = lostFavs
       .filter((lf) => !penalized.has(lf.uri))
@@ -170,8 +185,8 @@ export async function generateQueue(
   const queue: QueueCandidate[] = [];
   let totalMinutes = 0;
 
-  // For rediscover mode, interleave lost favorites at ~30%
-  const lostSlots = mode === "rediscover"
+  // Interleave lost favorites at ~30% for rediscover or very-fresh
+  const lostSlots = wantLostFavs
     ? Math.round(targetTracks * LOST_FAVORITES_MIX)
     : 0;
   const regularSlots = targetTracks - lostSlots;

@@ -11,3 +11,6 @@ docs/experiments/lyric-analysis-2026-05/
 
 # Stack container secrets (live only on grimmauldplace)
 stack/**/.env
+repo_audit_report.txt
+repo_audit_v2.txt
+repo_audit_*.txt

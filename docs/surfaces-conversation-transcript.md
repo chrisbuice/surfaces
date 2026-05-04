@@ -108,7 +108,7 @@ Most "personal Spotify visualizations" are dashboards. What separates competent 
 
 Four concrete ideas, ranging from restrained to ambitious:
 
-**Idea 1 — The Listening Constellation.** Every artist played 10+ times rendered as a node, positioned by audio-feature similarity, sized by plays, colored by era of life. Force-directed, served as static JSON, painted client-side. Unique, beautiful at a glance, rewarding on inspection.
+**Idea 1 — The Listening Constellation.** Every artist played 10+ times rendered as a node, positioned by audio-feature similarity, sized by plays, colored by reflection of life. Force-directed, served as static JSON, painted client-side. Unique, beautiful at a glance, rewarding on inspection.
 
 **Idea 2 — The Decade Strip.** Horizontal time strip, every week colored by dominant audio feature. Painterly band ten years long, reads like an EKG of mood. Felton-style. But: this is the biographical-over-time chart we just discussed.
 
@@ -147,7 +147,7 @@ Three calls for the constellation:
 
 1. **Threshold:** aggressive (200-400 nodes), medium (1-2K), or permissive (5K+)?
 2. **Layout:** pure audio similarity, pure listening co-occurrence, or hybrid? Co-occurrence is the one nobody else's Spotify viz has — it's only available because Surfaces tracks sessions.
-3. **Era coloring:** first-play, peak-play, or skip era and use a different dimension?
+3. **Reflection coloring:** first-play, peak-play, or skip reflection and use a different dimension?
 
 ---
 
@@ -162,7 +162,7 @@ Three calls for the constellation:
 Locked. Three more concrete decisions:
 
 1. **What's a "session"?** Same Surfaces session (clean signal but recent only), same time window (works across full history), same playlist (strongest editorial signal but sparse), or hybrid?
-2. **How many era buckets for the color?** 3 (legible, crude), 5 (Felton-style), or 15 (gradient noise)?
+2. **How many reflection buckets for the color?** 3 (legible, crude), 5 (Felton-style), or 15 (gradient noise)?
 3. **What palette?** Monochromatic hunter green or bichromatic green-to-amber?
 4. **Size encoding?** Total plays (loud, immediate, skewed by binges), longevity-weighted (quieter, harder to read), or two-channel size + opacity (Felton's "every element encodes something")?
 
@@ -174,7 +174,7 @@ Leans: hybrid co-occurrence with playlist 2x weight, 5 buckets, bichromatic, two
 
 1. I'd like to utilize the context of music I played in the same window - the same session - over the full 15 year history but I want it to be a solid trend, and not just "spotify accidentally played something" there needs to be correlation. When an artist appears on a playlist, that should also factor into the equation but I've listened to a lot of music and made a relatively fewer number of playlists.
 
-2. Fine, 5 eras. I want more eras but I see your point about the gradients. Bichromatic.
+2. Fine, 5 reflections. I want more reflections but I see your point about the gradients. Bichromatic.
 
 3. Two-channel.
 
@@ -184,7 +184,7 @@ The noise-resistance instinct on #1 is exactly right. Locked spec:
 
 **Co-occurrence:** 30-minute window, minimum 3 sessions threshold (the noise filter), edge weight = `log(session_co) + 2 × log(playlist_co + 1)`, plus 1.5× bonus for seasonal playlists.
 
-**Color:** 5 data-driven era buckets (each holding ~20% of artists), bichromatic warm amber → cream → hunter green, peak-play year.
+**Color:** 5 data-driven reflection buckets (each holding ~20% of artists), bichromatic warm amber → cream → hunter green, peak-play year.
 
 **Size:** `sqrt(total_plays)` mapped to 3–24px range.
 

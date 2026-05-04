@@ -41,7 +41,7 @@ export interface TimeMachineResult {
   uniqueArtists: number;
   topTracks: { track: string; artist: string; plays: number; minutes: number }[];
   topArtists: { artist: string; plays: number; minutes: number }[];
-  era: string | null;
+  reflection: string | null;
   vibe: string | null;
 }
 
@@ -53,7 +53,7 @@ export interface LostFavorite {
   lastPlayed: string;
   peakMonth: string;
   peakPlays: number;
-  era: string | null;
+  reflection: string | null;
 }
 
 export interface AffinityRow {

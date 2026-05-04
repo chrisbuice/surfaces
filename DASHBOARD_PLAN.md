@@ -13,10 +13,10 @@ The Sonic Life dashboard is an earlier static visualization of this same dataset
 **CSS variables for accent palette.** Add supplementary accent colors alongside the existing `#1db954` primary:
 ```css
 --accent: #1db954;    /* existing Spotify green — primary */
---accent2: #ff6b9d;   /* pink — falling/negative deltas, era 4 */
---accent3: #ffb84d;   /* gold — lost favorites, era 3 */
---accent4: #5dd4ff;   /* blue — era 2, neutral indicators */
---accent5: #b794f6;   /* purple — discovery, era 5 */
+--accent2: #ff6b9d;   /* pink — falling/negative deltas, reflection 4 */
+--accent3: #ffb84d;   /* gold — lost favorites, reflection 3 */
+--accent4: #5dd4ff;   /* blue — reflection 2, neutral indicators */
+--accent5: #b794f6;   /* purple — discovery, reflection 5 */
 ```
 
 **Section header pattern.** Sonic Life uses a three-tier header: small green uppercase eyebrow label → large bold h2 → softer lede paragraph. Adopt for Trends charts and Detail panel headers:
@@ -30,7 +30,7 @@ The Sonic Life dashboard is an earlier static visualization of this same dataset
 
 **Artist card pattern.** Grid of cards with name, compact stats row, and year-indicator dots (green = was in top-50 that year, pink = current). Adopt for the artist detail view's "years in top-50" visualization.
 
-**Era border colors.** Sonic Life assigns a distinct accent color to each era's left border. Adopt for the Eras tab filmstrip cards: era 1 green, era 2 blue, era 3 gold, era 4 pink, era 5 purple.
+**Reflection border colors.** Sonic Life assigns a distinct accent color to each reflection's left border. Adopt for the Reflections tab filmstrip cards: reflection 1 green, reflection 2 blue, reflection 3 gold, reflection 4 pink, reflection 5 purple.
 
 **Tooltip.** Sonic Life uses a fixed-position `#tip` div that follows the mouse on hover — lightweight, no library. Adopt for chart hover values instead of SVG `<title>` elements (which don't style well).
 
@@ -71,7 +71,7 @@ Full-width input with placeholder "Search tracks or artists...". Always visible,
 Five tabs, rendered as pill buttons below the hero strip. Active tab has the existing `.mode-btn.active` styling (green fill). Default tab on page load is **Pulse**.
 
 ```
-[ Pulse ]  [ Detail ]  [ Eras ]  [ Calendar ]  [ Trends ]
+[ Pulse ]  [ Detail ]  [ Reflections ]  [ Calendar ]  [ Trends ]
 ```
 
 The Detail tab is hidden in the nav until a search result is selected — then it appears and auto-activates. When nothing is selected, the tab is absent and clicking a search result inserts it.
@@ -126,7 +126,7 @@ The "open it in the morning" view. Single fetch to `GET /api/listening/pulse` re
 - Each has a "Queue from this" button (pill style) that calls the queue builder with that track as seed
 
 **Queue Builder:**
-- Mode dropdown: rediscover / era / morning / default
+- Mode dropdown: rediscover / reflection / morning / default
 - Length slider: 30–120 min, default 60
 - "Generate" button (green pill)
 - Results render inline as a numbered row-list with reason tags (`.reason-tag` pills)
@@ -202,7 +202,7 @@ Activated by selecting a track from search, or clicking a track name anywhere in
 ```
 ┌──────────────┬──────────────┬──────────────┬──────────────┐
 │ 682.4        │ 31%          │ 39%          │ Pop          │
-│ MINUTES      │ SKIP RATE    │ COMPLETION   │ ERA          │
+│ MINUTES      │ SKIP RATE    │ COMPLETION   │ REFLECTION   │
 │              │ (avg 29.8%)  │ (avg 39.2%)  │ maximalism   │
 └──────────────┴──────────────┴──────────────┴──────────────┘
 ```
@@ -287,27 +287,27 @@ A row of year pills (2011–2026). Each pill is a small rounded rectangle:
 
 ---
 
-## 6. Eras Tab
+## 6. Reflections Tab
 
-Existing eras filmstrip and time-machine, combined into one tab.
+Existing reflections filmstrip and time-machine, combined into one tab.
 
-**Top section — Eras filmstrip** with Sonic Life era-color treatment:
-Each era card gets a distinct left-border color (matching Sonic Life's `.era:nth-child` pattern):
-- Era 1 (Indie folk + chart pop, 2012–14): `--accent` green
-- Era 2 (Pop maximalism, 2015–17): `--accent4` blue
-- Era 3 (Country/Americana, 2018–21): `--accent3` gold
-- Era 4 (Texas country + emotional indie, 2022–24): `--accent2` pink
-- Era 5 (Pop returns + female-fronted edge, 2025–26): `--accent5` purple
+**Top section — Reflections filmstrip** with Sonic Life reflection-color treatment:
+Each reflection card gets a distinct left-border color (matching Sonic Life's `.reflection:nth-child` pattern):
+- Reflection 1 (Indie folk + chart pop, 2012–14): `--accent` green
+- Reflection 2 (Pop maximalism, 2015–17): `--accent4` blue
+- Reflection 3 (Country/Americana, 2018–21): `--accent3` gold
+- Reflection 4 (Texas country + emotional indie, 2022–24): `--accent2` pink
+- Reflection 5 (Pop returns + female-fronted edge, 2025–26): `--accent5` purple
 
-Artist names within each era card rendered as pills (Sonic Life `.pill` pattern): small rounded-full chips in `#282828` background.
+Artist names within each reflection card rendered as pills (Sonic Life `.pill` pattern): small rounded-full chips in `#282828` background.
 
 Section header uses the eyebrow pattern:
 ```html
-<div class="eyebrow">THE FIVE ERAS</div>
+<div class="eyebrow">THE FIVE REFLECTIONS</div>
 <h2>How your taste moved.</h2>
 ```
 
-**Bottom section:** Calendar heatmap with year navigation + time-machine month picker. Clicking an era card sets the heatmap and time-machine year to the era's first year. Clicking a month in the heatmap opens the time-machine for that month.
+**Bottom section:** Calendar heatmap with year navigation + time-machine month picker. Clicking a reflection card sets the heatmap and time-machine year to the reflection's first year. Clicking a month in the heatmap opens the time-machine for that month.
 
 The time-machine becomes a sub-view of Calendar: the month grid is overlaid on the heatmap card. When a month cell in the heatmap is clicked, the time-machine panel expands below with the top tracks for that month (row-list pattern).
 
@@ -382,8 +382,8 @@ All under `/api/listening/`. Every endpoint returns `{ source: "local_history", 
 
 ### GET /api/listening/track?name={name}&artist={artist}
 - Song-level aggregation (COLLATE NOCASE, collapse URIs)
-- Returns: stats, monthly play counts (for sparkline), skip/completion rates, era, canonical URI
-- Response: `{ track, artist, canonicalUri, totalPlays, totalMinutes, firstPlayed, lastPlayed, peakMonth, peakPlays, skipRate, completionRate, era, monthlyPlays: [{month: "2018-07", plays: 215}, ...] }`
+- Returns: stats, monthly play counts (for sparkline), skip/completion rates, reflection, canonical URI
+- Response: `{ track, artist, canonicalUri, totalPlays, totalMinutes, firstPlayed, lastPlayed, peakMonth, peakPlays, skipRate, completionRate, reflection, monthlyPlays: [{month: "2018-07", plays: 215}, ...] }`
 
 ### GET /api/listening/artist?name={name}
 - Aggregated across all tracks by this artist (COLLATE NOCASE)
@@ -425,7 +425,7 @@ All under `/api/listening/`. Every endpoint returns `{ source: "local_history", 
 | Path | Change |
 |------|--------|
 | `src/index.ts` | Add 6 new API routes: search, track, artist, pulse, trends, queue |
-| `dashboard/index.html` | Complete overhaul: hero strip, tab nav, Pulse panel, Detail panels, Eras tab, Calendar tab, Trends tab |
+| `dashboard/index.html` | Complete overhaul: hero strip, tab nav, Pulse panel, Detail panels, Reflections tab, Calendar tab, Trends tab |
 
 ### NOT touched
 
@@ -468,8 +468,8 @@ All under `/api/listening/`. Every endpoint returns `{ source: "local_history", 
    - Concentration line chart
    - Hour-of-day polar chart
 
-6. **Eras + Calendar tabs** — relocate existing sections
-   - Move eras filmstrip into Eras tab
+6. **Reflections + Calendar tabs** — relocate existing sections
+   - Move reflections filmstrip into Reflections tab
    - Move heatmap + time-machine into Calendar tab
    - Wire heatmap month-click to time-machine expansion
    - Verify year navigation still works
@@ -503,7 +503,7 @@ If any endpoint exceeds its budget in testing, options in order of preference:
 Every track name in the dashboard is clickable → opens track detail. Every artist name is clickable → opens artist detail. This applies to:
 - Pulse: This Week tracks, This Month artists, Rising/Falling, New Entries, Lost Favorites, Queue results
 - Calendar: Time-machine track list
-- Eras: era card top artists
+- Reflections: reflection card top artists
 - Trends: no clickable items (charts only)
 
 Implementation: wrap names in `<a href="#" onclick="showTrackDetail('name', 'artist')">` or `showArtistDetail('name')`. These functions activate the Detail tab and fetch the appropriate data.
@@ -526,7 +526,7 @@ Used by: sparklines, bar charts, polar chart, heatmap cells. Activated via `onmo
 - Tab nav: horizontal scroll if tabs overflow
 - Stats grids: 2-column below 600px, 1-column below 400px
 - Sparklines/charts: full width, fixed height
-- Eras filmstrip: already horizontal-scrollable, works on mobile
+- Reflections filmstrip: already horizontal-scrollable, works on mobile
 
 ---
 

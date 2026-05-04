@@ -108,14 +108,14 @@ Two artists "co-occur" when they're played in the same listening window. Definit
   - The `+1` inside the playlist log handles the "no shared playlist" case gracefully.
 - **Seasonal playlist bonus: 1.5×** on top of the playlist co-occurrence weight. Decade-long ritual, brand asset, pulls harder.
 
-### 5.4 Color — peak-play era
+### 5.4 Color — peak-play reflection
 
 Each artist is colored by **peak play year** — the calendar year in which Chris played them most. Not first-played; not most-recent; *peak*. This captures "when this artist mattered to me" rather than "when I first heard them."
 
-- **5 buckets**, **data-driven boundaries**: cut points are chosen so each bucket holds roughly 20% of artists, not by fixed calendar years. Prevents the graph from being mostly one color in the era when listening volume was highest.
+- **5 buckets**, **data-driven boundaries**: cut points are chosen so each bucket holds roughly 20% of artists, not by fixed calendar years. Prevents the graph from being mostly one color in the reflection when listening volume was highest.
 - **Bichromatic palette: warm amber → cream → hunter green.**
-  - Earliest era: warm amber (e.g. `#c8956d`)
-  - Latest era: deep hunter green (matches `--accent: #2D5F3F`)
+  - Earliest reflection: warm amber (e.g. `#c8956d`)
+  - Latest reflection: deep hunter green (matches `--accent: #2D5F3F`)
   - Three intermediate stops interpolated between
   - Direction is deliberate: warm = past, cool = present. Eyes track from warm to cool naturally, which feels right for "past to present."
 
@@ -179,7 +179,7 @@ The breakpoint for switching modes: **768px**.
 
 - **No border, no background fill, no axis lines, no gridlines.** The constellation floats on the same background as the rest of the page. This is the single biggest move that separates "data art" from "dashboard chart."
 - **1px halo** in the page background color around each node (not white, not black — actually `var(--bg)`). Prevents nodes from visually merging in dense clusters. Felton-style.
-- **Era color legend** in the **bottom-left of the frame**, small. Five colored dots in a row with year ranges underneath. Inside the composition, not separate.
+- **Reflection color legend** in the **bottom-left of the frame**, small. Five colored dots in a row with year ranges underneath. Inside the composition, not separate.
 - **Loading state**: tracked-uppercase "Generating constellation…" centered in the frame while the JSON fetches. **No spinner.** Spinners on a Felton-register page look wrong.
 
 ### 5.13 Captions and metadata (below the SVG)
@@ -192,6 +192,48 @@ In order:
 4. The meaning sentence (§4), Fraunces, left-aligned (intentional asymmetry inside a centered stack)
 
 ---
+### 5.14 Motion
+
+The constellation is animate. Three layers of ambient motion always run, plus three deepening effects on hover. The motion budget is deliberate — three timescales, three roles, layered so they don't compete.
+
+**Engine.** SVG, with motion handled via `requestAnimationFrame` updating `transform` attributes on node groups. CSS handles the periodic effects (shimmer, twinkle) via `@keyframes` so they don't cost JS cycles. **No Canvas, no WebGL.** SVG keeps hover hit-testing free, accessibility intact, and complexity bounded.
+
+**Ambient motion (always on, no interaction needed):**
+
+1. **Drift.** Every node gets a per-frame offset of ±0.5px from its layout position, generated as a small two-axis sine wave with a random phase per node. Each node has its own slightly-different period (between 4 and 7 seconds) so the field never pulses in sync. Reads as the field being alive, not jittery. Implemented in JS via RAF; offset stored in `transform="translate(...)"` on the node group.
+
+2. **Cluster orbit.** Nodes belonging to a cluster rotate slowly around their cluster centroid at ~0.3°/second. Different clusters rotate at slightly different rates (vary ±20%) so the whole field doesn't look like a turntable. Cluster membership and centroid are precomputed by the Surfaces cron — see the JSON contract update in §6 (new `cluster_id` field per node, new `clusters` array at the top level with centroid coordinates and rotation rate). The drift and the orbit *compose* — drift is applied as offset, orbit is applied as rotation around centroid, the node's painted position is `centroid + rotate(offset_from_centroid, theta) + drift`.
+
+3. **Shimmer on labeled-8.** Opacity oscillates between 0.85 and 1.0 over a 4-second cycle, with a subtle SVG `<filter>` blur-glow that peaks at the brightest moment. CSS-only via `@keyframes` on a class applied to labeled nodes. Slow heartbeat. Each labeled node has a randomized animation-delay so they don't pulse in unison.
+
+4. **Twinkle.** A random non-labeled node briefly flickers brighter (opacity 1.0, 200ms) and returns to its base opacity. One twinkle every 2–3 seconds somewhere in the field. Sells the "star field" reading. Implemented via JS picking a random node from a weighted pool (weight by base opacity, so brighter nodes twinkle more often) and adding a CSS class for one cycle.
+
+**Hover-deepening (layered on top of existing hover behavior):**
+
+5. **Magnetic hover.** When a node is hovered, its top-3 neighbors physically lean toward it by 6px over 200ms (eased), and return to position over 250ms when hover ends. The lean is added to the drift offset — drift continues underneath. Makes the gravitational structure visceral.
+
+6. **Edge tracing.** When a node is hovered, a bright pulse travels along the edges from hovered node to top-3 neighbors over ~600ms. Implemented as an SVG `<animate>` on `stroke-dashoffset` along each edge path. Visualizes the connection as something flowing between artists.
+
+7. **Existing hover behavior** (from §5.9) all remains: 15% size growth on the hovered node, fixed-position tooltip, edges fade up to 0.6 / others to 0.03, neighbor nodes light up.
+
+**Reduced motion.** All ambient motion (drift, orbit, shimmer, twinkle) respects `prefers-reduced-motion: reduce`. When set, the constellation falls back to fully static — same render as the mobile version structurally (still interactive, still hover-able, just no ambient motion). Hover-deepening (magnetic, edge tracing) also disabled under reduced motion. The page never *forces* motion on a reader who's asked it not to.
+
+**Mobile.** No ambient motion on mobile (per §5.11 the mobile version is a 200-node still). Tap-to-reveal still works; that's interaction, not animation.
+
+### 5.15 Performance budget
+
+Motion adds real cost. Honest target:
+
+- **60fps on a 2020 MacBook Air with Chrome DevTools' 4× CPU throttle.**
+- If 60fps can't hold, drop in this order: (1) twinkle, (2) cluster orbit, (3) drift. Shimmer is CSS-only and effectively free. Hover-deepening is interaction-bounded and only runs while a node is hovered.
+- **First paint matters.** Render the static layout immediately; layer motion on after first paint via `requestIdleCallback` (or a small `setTimeout(0)` fallback).
+- **Tab visibility.** Pause RAF when the tab is backgrounded (`document.visibilityState !== 'visible'`). Resume on focus. Saves the reader's battery.
+
+**Implementation notes for the renderer:**
+- Group each node in its own `<g>` so transforms compose cleanly: outer `<g>` for centroid translation + orbit rotation, inner `<g>` for drift offset, then the `<circle>` itself with shimmer/twinkle classes.
+- Don't update transforms via React/Astro reactivity — direct DOM writes inside the RAF loop. Hydration is for setup; the loop is imperative.
+- Edge paths are static SVG `<line>` elements; they don't need per-frame updates except during hover-pulse.
+- Cluster centroids are computed once by the Surfaces cron and shipped in the JSON; the renderer never recomputes them.
 
 ## 6. The JSON contract
 
@@ -206,7 +248,7 @@ The Surfaces backend produces this blob nightly. The chrisbuice.com page fetches
     "total_seasons": 39,
     "data_starts": "2011-03-14"
   },
-  "era_buckets": [
+  "reflection_buckets": [
     { "label": "2011–2014", "color": "#c8956d" },
     { "label": "2015–2017", "color": "#b8a07a" },
     { "label": "2018–2020", "color": "#9ba588" },
@@ -214,6 +256,15 @@ The Surfaces backend produces this blob nightly. The chrisbuice.com page fetches
     { "label": "2024–now",  "color": "#3e5e3a" }
   ],
   "viewbox": { "width": 1000, "height": 1000 },
+  "clusters": [
+    {
+      "id": 0,
+      "centroid_x": 412.4,
+      "centroid_y": 588.7,
+      "rotation_rate_deg_per_sec": 0.31,
+      "node_count": 87
+    }
+  ],
   "nodes": [
     {
       "id": "spotify:artist:4Z8W4fKeB5YxbusRsdQVPb",
@@ -222,10 +273,11 @@ The Surfaces backend produces this blob nightly. The chrisbuice.com page fetches
       "y": 588.3,
       "r": 18.4,
       "opacity": 0.92,
-      "era": 3,
+      "reflection": 3,
       "plays": 4127,
       "peak_year": 2019,
       "years_active": 12,
+      "cluster_id": 0,
       "top_neighbors": ["Thom Yorke", "Atoms for Peace", "Aphex Twin"],
       "is_labeled": true
     }
@@ -240,9 +292,10 @@ Notes on the shape:
 
 - **Positions are precomputed and absolute.** The renderer does no layout math; it just paints dots where the JSON says. Force-directed layouts are non-deterministic — running d3-force in the browser would produce a subtly different shape every page load.
 - **Edges reference nodes by index, not by id.** Saves substantial bytes when edge count climbs into the thousands. The renderer builds the index map once on load.
-- **Era is an integer index** into `era_buckets`, not the color directly. Means the palette can be changed by editing one place.
+- **Reflection is an integer index** into `reflection_buckets`, not the color directly. Means the palette can be changed by editing one place.
 - **Viewbox is 1000×1000.** SVG handles all scaling. No DPI math anywhere.
 - **`generated_at`** powers the "Generated nightly · last updated 4 hours ago" line if desired.
+- **Clusters drive the orbit motion** (§5.14). Every node has a `cluster_id` referencing into the `clusters` array. Each cluster has a centroid, a node count, and its own rotation rate so orbits don't sync. Centroids are computed once by the cron; the renderer never recomputes them.
 
 ---
 
@@ -256,15 +309,16 @@ Three SQL phases:
 
 1. **Build node list.** All artists with ≥10 plays. Compute total plays, peak year (year with most plays for that artist), years active (count of distinct years with ≥5 plays).
 2. **Build edges.** Self-join `plays` to find artist pairs within 30-minute windows; count distinct sessions. Join against playlist tracks to count playlist co-occurrences. Apply the threshold (3+ co-occurrences) and the weight formula. Apply the seasonal-playlist 1.5× bonus.
-3. **Determine era bucket boundaries.** Sort all peak years; find the four cut points that split into five equal-population buckets. Output human-readable labels.
+3. **Determine reflection bucket boundaries.** Sort all peak years; find the four cut points that split into five equal-population buckets. Output human-readable labels.
 
 Then:
 
 4. **Compute layout.** `d3-force` server-side (importable into a Worker via npm). Edges as links, small repulsion force between nodes, run for ~300 ticks until settled. Normalize coordinates into a 1000×1000 box with a small inset margin so nothing touches the edge.
-5. **Compute labeled-8.** Algorithmic 6 by composite score; merge in 2 from `manual_labels.ts`; flag those nodes with `is_labeled: true`.
-6. **Write to KV** with a 26-hour TTL.
+5. **Detect clusters.** Run a community-detection pass on the node-edge graph after layout settles. Louvain modularity is the right algorithm — fast, deterministic enough for our purposes, produces 5–15 clusters for graphs of this density. For each cluster: compute the centroid (mean of member node positions), count members, and assign a rotation rate sampled from a uniform distribution of `0.25–0.36 deg/sec` (small variance so cluster orbits don't sync but stay in the "slow" range). Singleton nodes get `cluster_id: -1` and don't orbit. Output to the `clusters` array in the JSON.
+6. **Compute labeled-8.** Algorithmic 6 by composite score; merge in 2 from `manual_labels.ts`; flag those nodes with `is_labeled: true`.
+7. **Write to KV** with a 26-hour TTL.
 
-The expensive step is the edges query. D1 has a 30-second wall clock per query — chain multiple if necessary. Budget ~30 seconds of CPU on the full history.
+The expensive step is the edges query. D1 has a 30-second wall clock per query — chain multiple if necessary. Budget ~30 seconds of CPU on the full history. Cluster detection is fast (sub-second) once the graph is in memory.
 
 ### 7.2 New public endpoint
 
@@ -379,15 +433,19 @@ Suggested order, working from highest-dependency to lowest:
 - The locked prose in §4. Voice took multiple iterations.
 - The page structure in §3. Sequence is deliberate.
 - The constellation spec in §5. Every parameter has reasoning behind it. Tune within (e.g., the noise threshold could move from 3 to 5 if real data demands it), but don't redesign (e.g., don't replace co-occurrence with audio similarity).
+- The motion spec in §5.14. The three ambient layers (drift, cluster orbit, shimmer) plus twinkle plus the two hover-deepening effects (magnetic, edge tracing) are the agreed budget. Don't add more (no breathe, no edge pulse beyond hover, no parallax). Don't drop any without flagging — each has a specific job. Tuning the *parameters* (drift amplitude, orbit rate, shimmer period, twinkle frequency) is the right kind of iteration.
 - The JSON contract in §6. Both halves of the system depend on it.
+- The choice of SVG over Canvas/WebGL. Decided deliberately for accessibility, hover hit-testing, and dev complexity — not as a default.
 
 ## 11. Things to feel free to tune
 
 - Visual details inside the renderer once real data is rendering — exact stroke widths, exact tooltip layout, exact label positions, hover transition timings.
+- Motion *parameters*: drift amplitude (target ±0.5px but can range 0.3–0.8), orbit rate (target 0.3°/sec but can range 0.2–0.4), shimmer period (target 4s), twinkle frequency (target 2–3s between events). Iterate until the field "feels alive but not nervous."
+- Cluster detection algorithm choice. Louvain is the recommendation but other community-detection algorithms are fine if Louvain produces awkward results on real data.
 - SQL query optimization. The cron job needs to fit in the Worker time budget.
 - Mobile rendering approach (separate render path vs. CSS-driven simplification).
 - The exact look of the loading state — as long as it isn't a spinner.
-- The exact look of the era legend — five dots with year ranges, but the geometry is open.
+- The exact look of the reflection legend — five dots with year ranges, but the geometry is open.
 
 ---
 
@@ -397,6 +455,7 @@ In the **Surfaces** repo:
 - `src/constellation/cron.ts` — the nightly job
 - `src/constellation/queries.ts` — the three SQL queries
 - `src/constellation/layout.ts` — the d3-force run
+- `src/constellation/clusters.ts` — the Louvain community-detection pass and centroid/rotation-rate computation
 - `src/constellation/manual_labels.ts` — the override list
 - `src/db/migrations/00X_submissions.sql` — the new table
 - New routes added to `src/index.ts` for `/api/constellation` and `/api/submit-track`
@@ -404,7 +463,8 @@ In the **Surfaces** repo:
 
 In the **chrisbuice.com** repo:
 - `src/pages/surfaces.astro` — drafted, drop in
-- `src/components/Constellation.astro` (or `.tsx`/`.svelte` depending on framework choice for the island) — the renderer
+- `src/components/Constellation.astro` (or `.tsx`/`.svelte` depending on framework choice for the island) — the renderer, including the RAF animation loop
+- `src/components/ConstellationMotion.ts` — the animation logic separated out (drift, orbit, twinkle), tested independently of the SVG rendering
 - `src/components/SubmitTrack.astro` — the submission form
 - `functions/api/spotify-search.ts` — the search proxy
 - `functions/api/submit-track.ts` — the submission proxy
@@ -419,5 +479,6 @@ In the **chrisbuice.com** repo:
 - Short sentences > long sentences
 - Self-deprecation only when the underlying claim is competent
 - The page voice deliberately uses Fraunces for body type instead of Inter, marking `/surfaces` as a more editorial register than the homepage. This is intentional and the body-class font swap lives in the drafted file.
-- The visual register is "data as art, in the Felton/Mandy Brown tradition." Refined-minimalist, not maximalist. Restraint and precision over density and motion.
+- The visual register everywhere *except* the constellation is "data as art, in the Felton/Mandy Brown tradition." Refined-minimalist. Restraint and precision.
+- The constellation itself is the one place on the page where the register tilts toward awe rather than restraint. Motion budget is deliberate — three ambient layers, three hover-deepening effects. The rest of the page's quiet earns the constellation's permission to be alive.
 - No emoji, no AI imagery, no decorative icons, no stock illustrations. Every visual element on the page must be either prose, a real chart of real data, or a typographic mark.

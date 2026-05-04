@@ -7,7 +7,7 @@
 
 import type { LostFavorite } from "./types";
 import { getLostFavorites } from "./queries";
-import erasData from "./data/eras.json";
+import reflectionsData from "./data/reflections.json";
 import neverStaleCoreData from "./data/never_stale_core.json";
 import companionsData from "./data/companions.json";
 
@@ -79,7 +79,7 @@ export interface TrackDetail {
   completionRate: number;
   avgSkipRate: number;
   avgCompletionRate: number;
-  era: string | null;
+  reflection: string | null;
   monthlyPlays: { month: string; plays: number }[];
 }
 
@@ -144,8 +144,8 @@ export async function getTrackDetail(
   `;
   const avg = await db.prepare(avgSQL).first<{ avg_skip: number; avg_completion: number }>();
 
-  // Era
-  const era = erasData.find((e) => e.years.includes(stats.first_year));
+  // Reflection
+  const reflection = reflectionsData.find((e) => e.years.includes(stats.first_year));
 
   return {
     track: trackName,
@@ -161,7 +161,7 @@ export async function getTrackDetail(
     completionRate: Math.round((stats.completions / stats.total_plays) * 1000) / 10,
     avgSkipRate: Math.round((avg?.avg_skip ?? 0) * 1000) / 10,
     avgCompletionRate: Math.round((avg?.avg_completion ?? 0) * 1000) / 10,
-    era: era?.name ?? null,
+    reflection: reflection?.name ?? null,
     monthlyPlays: monthly.results.map((m) => ({
       month: `${m.year}-${String(m.month).padStart(2, "0")}`,
       plays: m.plays,
