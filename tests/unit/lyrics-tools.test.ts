@@ -285,6 +285,44 @@ describe("lyrics MCP tools", () => {
       const twins = result.twins as Array<unknown>;
       expect(twins).toHaveLength(1);
     });
+
+    it("resolves currently-playing when seed_uri is omitted", async () => {
+      vi.mocked(resolveCurrentlyPlaying).mockResolvedValue({
+        uri: URIS.analyzed,
+        track_name: "Leaving Home",
+        artist_name: "The Wanderers",
+      });
+
+      const result = (await callTool("find_similar_lyrics", {}, testEnv())) as Record<string, unknown>;
+      expect(result.source).toBe("local-history-derived");
+      expect(result.seed_uri).toBe(URIS.analyzed);
+      expect(result.seed_track_name).toBe("Leaving Home");
+      expect(result.seed_artist_name).toBe("The Wanderers");
+      expect(result.twins).toBeDefined();
+    });
+
+    it("returns clear message when nothing is playing and no seed_uri", async () => {
+      vi.mocked(resolveCurrentlyPlaying).mockResolvedValue(null);
+
+      const result = (await callTool("find_similar_lyrics", {}, testEnv())) as Record<string, unknown>;
+      expect(result.error).toContain("Nothing is currently playing");
+    });
+
+    it("returns clear message when Spotify fails and no seed_uri", async () => {
+      vi.mocked(resolveCurrentlyPlaying).mockRejectedValue(new Error("fetch failed"));
+
+      const result = (await callTool("find_similar_lyrics", {}, testEnv())) as Record<string, unknown>;
+      expect(result.error).toContain("Couldn't reach Spotify");
+    });
+
+    it("returns auth error when tokens missing and no seed_uri", async () => {
+      vi.mocked(resolveCurrentlyPlaying).mockRejectedValue(
+        new Error("No Spotify tokens found. Visit /auth/login first."),
+      );
+
+      const result = (await callTool("find_similar_lyrics", {}, testEnv())) as Record<string, unknown>;
+      expect(result.error).toContain("isn't configured");
+    });
   });
 
   // ── lyric_search ──

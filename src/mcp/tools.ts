@@ -165,14 +165,13 @@ export function getToolDefinitions(): McpToolDefinition[] {
     },
     {
       name: "find_similar_lyrics",
-      description: "Find tracks with similar lyric themes, tone, and narrative feel to a seed track. Uses embedding cosine similarity on structured analysis vectors. Returns 'lyric vibe twins' — tracks that feel alike lyrically even if they sound different musically.",
+      description: "Find tracks with similar lyric themes, tone, and narrative feel to a seed track. Uses embedding cosine similarity on structured analysis vectors. Returns 'lyric vibe twins' — tracks that feel alike lyrically even if they sound different musically. If no seed_uri is provided, uses whatever is currently playing.",
       inputSchema: {
         type: "object",
         properties: {
-          seed_uri: { type: "string", description: "Spotify track URI to find twins for." },
+          seed_uri: { type: "string", description: "Spotify track URI to find twins for. If omitted, uses the currently playing track." },
           count: { type: "number", description: "Number of similar tracks to return. Default 5." },
         },
-        required: ["seed_uri"],
       },
     },
     {
@@ -739,8 +738,37 @@ export async function callTool(
     }
 
     case "find_similar_lyrics": {
-      const seedUri = args.seed_uri as string;
-      if (!seedUri) return { error: "seed_uri is required." };
+      let seedUri = args.seed_uri as string | undefined;
+      let resolvedSeedName: string | undefined;
+      let resolvedSeedArtist: string | undefined;
+
+      if (!seedUri) {
+        try {
+          const resolved = await resolveCurrentlyPlaying(env);
+          if (!resolved) {
+            return {
+              source: "local-history-derived",
+              error: "Nothing is currently playing — provide a seed_uri or start playback.",
+            };
+          }
+          seedUri = resolved.uri;
+          resolvedSeedName = resolved.track_name;
+          resolvedSeedArtist = resolved.artist_name;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg.includes("No Spotify tokens") || msg.includes("/auth/login")) {
+            return {
+              source: "local-history-derived",
+              error: "Spotify integration isn't configured — provide a seed_uri directly.",
+            };
+          }
+          return {
+            source: "local-history-derived",
+            error: "Couldn't reach Spotify — provide a seed_uri directly.",
+          };
+        }
+      }
+
       const count = (args.count as number) ?? 5;
 
       // Load seed embedding
@@ -754,6 +782,7 @@ export async function callTool(
           source: "local-history-derived",
           status: "pending",
           message: "Seed track not yet analyzed — queued for analysis (~10 minutes).",
+          ...(resolvedSeedName && { track_name: resolvedSeedName, artist_name: resolvedSeedArtist }),
         };
       }
 
@@ -802,7 +831,12 @@ export async function callTool(
         }),
       );
 
-      return { source: "local-history-derived", seed_uri: seedUri, twins };
+      return {
+        source: "local-history-derived",
+        seed_uri: seedUri,
+        ...(resolvedSeedName && { seed_track_name: resolvedSeedName, seed_artist_name: resolvedSeedArtist }),
+        twins,
+      };
     }
 
     case "lyric_search": {
