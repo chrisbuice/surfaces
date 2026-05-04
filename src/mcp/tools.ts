@@ -155,7 +155,7 @@ export function getToolDefinitions(): McpToolDefinition[] {
     },
     {
       name: "explain_song",
-      description: "Get a structured lyric analysis for a track: what it's about, its tones, narrative perspective, and how it might make you feel. If no URI is provided, analyzes whatever is currently playing. If the track hasn't been analyzed yet, queues it for analysis (~10 minute turnaround).",
+      description: "Get a structured lyric analysis for a track. The subject_paragraph field describes what the song is about in plain language — perspective, setting, and emotional arc. Tones, narrative POV, and emotional reaction are additional structured fields. If no URI is provided, analyzes whatever is currently playing. If the track hasn't been analyzed yet, queues it for analysis (~10 minute turnaround).",
       inputSchema: {
         type: "object",
         properties: {
@@ -187,7 +187,55 @@ export function getToolDefinitions(): McpToolDefinition[] {
         required: ["query"],
       },
     },
+    {
+      name: "play_track",
+      description: "Play a track immediately, replacing current playback. Takes a Spotify track URI and starts it on the active device.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          uri: { type: "string", description: "Spotify track URI, e.g. spotify:track:abc123." },
+          device_id: { type: "string", description: "Target device ID. If omitted, uses the currently active device." },
+        },
+        required: ["uri"],
+      },
+    },
+    {
+      name: "queue_track",
+      description: "Add a track to the end of the playback queue without interrupting what's currently playing. Takes a Spotify track URI.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          uri: { type: "string", description: "Spotify track URI, e.g. spotify:track:abc123." },
+          device_id: { type: "string", description: "Target device ID. If omitted, uses the currently active device." },
+        },
+        required: ["uri"],
+      },
+    },
   ];
+}
+
+/** Extract the bare track ID from a spotify:track:XXX URI. */
+function extractTrackId(uri: string): string | null {
+  const match = uri.match(/^spotify:track:([a-zA-Z0-9]{22})$/);
+  return match ? match[1] : null;
+}
+
+/** Look up track name and artist from Spotify. */
+async function resolveTrackMeta(spotify: SpotifyClient, trackId: string): Promise<{ name: string; artist: string }> {
+  try {
+    const track = await spotify.get<{ name: string; artists: Array<{ name: string }> }>(`/v1/tracks/${trackId}`);
+    return { name: track.name, artist: track.artists.map(a => a.name).join(", ") };
+  } catch {
+    return { name: trackId, artist: "Unknown" };
+  }
+}
+
+/** Classify a SpotifyClient error into a user-friendly message. */
+function classifySpotifyError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes("(404)")) return "No active Spotify device — open Spotify on a device first.";
+  if (msg.includes("(401)") || msg.includes("(403)")) return "Spotify authorization issue — the app may need the 'user-modify-playback-state' scope.";
+  return `Spotify error: ${msg}`;
 }
 
 export async function callTool(
@@ -806,6 +854,45 @@ export async function callTool(
       );
 
       return { source: "local-history-derived", query, results };
+    }
+
+    case "play_track": {
+      const uri = args.uri as string;
+      if (!uri) return { ok: false, error: "uri is required." };
+      const trackId = extractTrackId(uri);
+      if (!trackId) return { ok: false, error: "Invalid Spotify track URI. Expected format: spotify:track:<22-char-id>" };
+      const deviceId = args.device_id as string | undefined;
+
+      const spotify = new SpotifyClient(env);
+      const meta = await resolveTrackMeta(spotify, trackId);
+
+      try {
+        await spotify.put("/v1/me/player/play", { uris: [uri] }, deviceId ? { device_id: deviceId } : undefined);
+      } catch (err) {
+        return { ok: false, error: classifySpotifyError(err), track: meta.name, artist: meta.artist };
+      }
+      return { ok: true, track: meta.name, artist: meta.artist, source: "spotify_live" };
+    }
+
+    case "queue_track": {
+      const uri = args.uri as string;
+      if (!uri) return { ok: false, error: "uri is required." };
+      const trackId = extractTrackId(uri);
+      if (!trackId) return { ok: false, error: "Invalid Spotify track URI. Expected format: spotify:track:<22-char-id>" };
+      const deviceId = args.device_id as string | undefined;
+
+      const spotify = new SpotifyClient(env);
+      const meta = await resolveTrackMeta(spotify, trackId);
+
+      const params: Record<string, string> = { uri };
+      if (deviceId) params.device_id = deviceId;
+
+      try {
+        await spotify.post("/v1/me/player/queue", undefined, params);
+      } catch (err) {
+        return { ok: false, error: classifySpotifyError(err), track: meta.name, artist: meta.artist };
+      }
+      return { ok: true, track: meta.name, artist: meta.artist, source: "spotify_live" };
     }
 
     default:
