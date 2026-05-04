@@ -74,6 +74,21 @@ npx wrangler d1 execute spotify-agent-db --remote --json \
   --command "SELECT COUNT(*) as total, status FROM track_lyric_analysis_status GROUP BY status"
 ```
 
+## Recovering a batch (--collect-only)
+
+If the container crashes or disconnects during result collection for a completed batch, use `--collect-only` to re-collect without resubmitting:
+
+```bash
+# Find the batch ID from the log file in inputs/
+cat inputs/batch-1-msgbatch_*.json | jq .batch_id
+
+# Collect results into D1
+docker compose run --rm lyrics-analysis analyze \
+  --collect-only msgbatch_XXXXXXXXXXXXXXXXXXXX
+```
+
+Anthropic retains batch results for 29 days. The `--collect-only` flag skips the candidate query, URI filter, submission, and polling — it goes straight to streaming results and writing them to D1.
+
 ## Step 7: Seed the obsession tier + set up the chained cron
 
 > **Post-experiment pivot (2026-05-04):** The full 47K-track batch is not justified — see `docs/PLAN_LYRICS_TRANSPARENCY_PIVOT.md`. Instead: eager-batch the ~800 most-queried tracks, then let a chained cron handle on-demand analysis.
