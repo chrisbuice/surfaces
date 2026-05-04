@@ -42,7 +42,7 @@ export function getToolDefinitions(): McpToolDefinition[] {
     },
     {
       name: "current_session_status",
-      description: "Get the status of the most recent curation session: what's playing, which tracks are in the queue, mode, and context biases applied.",
+      description: "Get the status of the most recent curation session: what's playing, which tracks are in the queue (with URIs), mode, and context biases applied.",
       inputSchema: { type: "object", properties: {} },
     },
     {
@@ -326,6 +326,7 @@ export async function callTool(
       const trackList = tracks.results.map(t => ({
         position: t.position + 1,
         name: t.track_name ?? t.track_id,
+        uri: t.track_id.startsWith("spotify:track:") ? t.track_id : `spotify:track:${t.track_id}`,
         source: t.source,
         outcome: t.outcome,
       }));
@@ -339,6 +340,7 @@ export async function callTool(
         trackCount: tracks.results.length,
         currentlyPlaying: nowPlaying ? {
           ...nowPlaying,
+          uri: `spotify:track:${nowPlaying.trackId}`,
           sessionPosition: currentPosition != null ? currentPosition + 1 : null,
         } : null,
         upcoming: currentPosition != null
