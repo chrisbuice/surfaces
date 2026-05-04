@@ -74,12 +74,35 @@ npx wrangler d1 execute spotify-agent-db --remote --json \
   --command "SELECT COUNT(*) as total, status FROM track_lyric_analysis_status GROUP BY status"
 ```
 
-## Step 7: Full catalog run (later)
+## Step 7: Seed the obsession tier + set up the chained cron
 
-For the full 47K-track run, use the batch API:
+> **Post-experiment pivot (2026-05-04):** The full 47K-track batch is not justified — see `docs/PLAN_LYRICS_TRANSPARENCY_PIVOT.md`. Instead: eager-batch the ~800 most-queried tracks, then let a chained cron handle on-demand analysis.
+
+### 7a: Eager batch (~800 tracks)
+
+Run a one-time batch on the obsession tier (top tracks by affinity) plus any tracks with ≥10 lifetime plays. These are the tracks most likely to appear in "Why this song?" and "vibe twins" queries.
 
 ```bash
-docker compose run --rm lyrics-analysis analyze --batch
+docker compose run --rm lyrics-analysis analyze \
+  --uris-file /app/obsession-tier.csv --batch
 ```
 
-This submits to Anthropic's Message Batches API (50% cheaper, up to 24h turnaround per 10K-track batch).
+Follow with embeddings:
+
+```bash
+docker compose run --rm lyrics-analysis embed --limit 1000
+```
+
+### 7b: Chained cron (every 10 minutes)
+
+Set up a single crontab entry on grimmauldplace that chains lyrics fetch → analysis → embedding. This handles on-demand requests triggered by the Worker writing `pending` rows to `track_lyric_analysis_status`.
+
+```bash
+# grimmauldplace crontab
+*/10 * * * * cd ~/stack && \
+  docker compose -f lyrics-backfill/docker-compose.yml run --rm lyrics-backfill lyrics --limit 20 && \
+  docker compose -f lyrics-analysis/docker-compose.yml run --rm lyrics-analysis analyze --limit 50 && \
+  docker compose -f lyrics-analysis/docker-compose.yml run --rm lyrics-analysis embed --limit 50
+```
+
+This is a no-op when there are no pending tracks. At ~2 req/sec synchronous for analysis, a batch of 50 takes ~25 seconds. Worst-case panel latency for a never-before-seen track (with available lyrics) is 10 minutes.
