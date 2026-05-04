@@ -1,0 +1,5 @@
+services:
+  lyrics-analysis:
+    build: .
+    env_file: .env
+    tty: true
