@@ -9,6 +9,7 @@
  *   --uris-file path   Only process URIs listed in this file (one per line, or CSV with uri in first column)
  *   --dry-run          Print what would be processed without calling the API
  *   --batch            Use Anthropic Message Batches API (for large runs)
+ *   --collect-only ID  Skip submit/poll, collect results from an already-completed batch
  *
  * Default (no --batch): synchronous calls, good for validation runs of <200 tracks.
  * With --batch: submits to the Batches API for async processing (up to 10K per batch).
@@ -34,6 +35,7 @@ const limit = getArg("--limit") ? parseInt(getArg("--limit")!, 10) : Infinity;
 const urisFile = getArg("--uris-file");
 const dryRun = hasFlag("--dry-run");
 const useBatch = hasFlag("--batch");
+const collectOnly = getArg("--collect-only");
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const PROGRESS_INTERVAL = 10;
@@ -284,6 +286,55 @@ async function analyzeSynchronous(client: Anthropic, tracks: TrackWithLyrics[]):
   console.log(`\nDone: ok=${stats.ok} error=${stats.error} skipped=${stats.skipped} total=${tracks.length}`);
 }
 
+// ─── Collect results from a completed batch ────────────────────────────────
+async function collectBatchResults(
+  client: Anthropic,
+  batchId: string,
+  lyricsHashMap: Map<string, string> | null,
+): Promise<{ ok: number; errors: number }> {
+  let ok = 0;
+  let errors = 0;
+
+  const resultsStream = await client.messages.batches.results(batchId);
+  for await (const result of resultsStream) {
+    const uri = `spotify:track:${result.custom_id}`;
+    const hash = lyricsHashMap?.get(uri) ?? "";
+
+    if (!result.result) {
+      console.warn(`  SKIP ${uri}: missing result field`);
+      await writeError(uri, "missing result field in batch response", 1);
+      errors++;
+      continue;
+    }
+
+    if (result.result.type === "succeeded") {
+      const msg = result.result.message;
+      const textBlock = msg.content?.find((b: { type: string }) => b.type === "text") as { type: "text"; text: string } | undefined;
+      if (!textBlock) {
+        await writeError(uri, "succeeded but no text content block", 1);
+        errors++;
+        continue;
+      }
+      try {
+        const cleaned = textBlock.text.replace(/^```json\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+        const parsed = JSON.parse(cleaned);
+        if (!validateAnalysis(parsed)) throw new Error("Schema validation failed");
+        await writeAnalysis(uri, parsed, hash);
+        ok++;
+        if (ok % 100 === 0) console.log(`  collected ${ok} results...`);
+      } catch (err) {
+        await writeError(uri, (err as Error).message.slice(0, 500), 1);
+        errors++;
+      }
+    } else {
+      await writeError(uri, `Batch result type: ${result.result.type}`, 1);
+      errors++;
+    }
+  }
+
+  return { ok, errors };
+}
+
 // ─── Batch analysis (large runs via Anthropic Message Batches API) ──────────
 async function analyzeBatch(client: Anthropic, tracks: TrackWithLyrics[]): Promise<void> {
   console.log(`Submitting ${tracks.length} tracks to Message Batches API...`);
@@ -354,33 +405,7 @@ async function analyzeBatch(client: Anthropic, tracks: TrackWithLyrics[]): Promi
     // Collect results
     console.log(`  Collecting results...`);
     const lyricsHashMap = new Map(chunk.map((t) => [t.spotify_track_uri, sha256(t.lyrics_plain)]));
-    let ok = 0;
-    let errors = 0;
-
-    const resultsStream = await client.messages.batches.results(batch.id);
-    for await (const result of resultsStream) {
-      const uri = `spotify:track:${result.custom_id}`;
-      const hash = lyricsHashMap.get(uri) ?? "";
-
-      if (result.result.type === "succeeded") {
-        const msg = result.result.message;
-        const text = msg.content[0].type === "text" ? msg.content[0].text : "";
-        try {
-          const cleaned = text.replace(/^```json\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-          const parsed = JSON.parse(cleaned);
-          if (!validateAnalysis(parsed)) throw new Error("Schema validation failed");
-          await writeAnalysis(uri, parsed, hash);
-          ok++;
-        } catch (err) {
-          await writeError(uri, (err as Error).message.slice(0, 500), 1);
-          errors++;
-        }
-      } else {
-        await writeError(uri, `Batch result type: ${result.result.type}`, 1);
-        errors++;
-      }
-    }
-
+    const { ok, errors } = await collectBatchResults(client, batch.id, lyricsHashMap);
     console.log(`  Batch ${c + 1} results: ok=${ok} errors=${errors}`);
   }
 }
@@ -388,6 +413,20 @@ async function analyzeBatch(client: Anthropic, tracks: TrackWithLyrics[]): Promi
 // ─── Main ───────────────────────────────────────────────────────────────────
 async function main() {
   console.log("=== Lyrics Analysis (Sonnet 4.6) ===\n");
+
+  // --collect-only: skip query/submit/poll, go straight to result collection
+  if (collectOnly) {
+    console.log(`Collecting results for batch: ${collectOnly}\n`);
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      console.error("Missing env: ANTHROPIC_API_KEY");
+      process.exit(1);
+    }
+    const client = new Anthropic({ apiKey });
+    const { ok, errors } = await collectBatchResults(client, collectOnly, null);
+    console.log(`\nDone: ok=${ok} errors=${errors}`);
+    return;
+  }
 
   // Build URI filter if provided
   let uriFilter: Set<string> | null = null;
