@@ -1,0 +1,31 @@
+-- Migration 010: Deprecation notes for lyrics analysis columns
+--
+-- Post-experiment pivot (2026-05-04): the lyric-analysis experiment showed
+-- lyric similarity does not predict taste (H2: ρ=0.034, H3: Δ=-0.07).
+-- The recommender, Phase 1.5, and related columns are struck.
+-- See docs/PLAN_LYRICS_TRANSPARENCY_PIVOT.md for full rationale.
+--
+-- DEPRECATED COLUMNS (in track_lyric_analysis):
+--
+--   listener_feel_chris  — Was Phase 1.5 (predicted personalized emotion).
+--                          Killed: depended on centroid infrastructure that
+--                          no longer exists. Text-profile alternative rejected
+--                          as paraphrasing theater. Ship listener_feel_generic;
+--                          revisit personalization with evidence later.
+--
+--   activity_fit         — Was recommender mode-aware filtering
+--                          (§6.2: "activity_fit[mode] > 0.3").
+--                          Killed: recommender is dead, no other consumer.
+--
+-- RETAINED (was considered for deprecation but has a consumer):
+--
+--   lyric_intrusion      — Consumer: focus-block cold-start rule in
+--                          src/context/rules.ts (lines 172-181). Currently
+--                          uses completion rate as a proxy; lyric_intrusion
+--                          is the direct signal for "how much lyrics demand
+--                          attention during focus blocks."
+--
+-- No DDL changes — SQLite/D1 doesn't cleanly drop columns.
+-- Columns remain in schema; code stops writing to them.
+
+SELECT 1; -- no-op migration (comment-only, required for migration runner)
