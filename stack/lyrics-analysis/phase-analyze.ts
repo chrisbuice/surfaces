@@ -298,8 +298,9 @@ async function analyzeBatch(client: Anthropic, tracks: TrackWithLyrics[]): Promi
     const chunk = chunks[c];
     console.log(`\nBatch ${c + 1}/${chunks.length} (${chunk.length} tracks)`);
 
+    // Batch API custom_id must match ^[a-zA-Z0-9_-]{1,64}$ — strip the URI prefix
     const requests = chunk.map((track) => ({
-      custom_id: track.spotify_track_uri,
+      custom_id: track.spotify_track_uri.replace("spotify:track:", ""),
       params: {
         model: MODEL_ID,
         max_tokens: 2000,
@@ -357,7 +358,7 @@ async function analyzeBatch(client: Anthropic, tracks: TrackWithLyrics[]): Promi
     let errors = 0;
 
     for await (const result of client.messages.batches.results(batch.id)) {
-      const uri = result.custom_id;
+      const uri = `spotify:track:${result.custom_id}`;
       const hash = lyricsHashMap.get(uri) ?? "";
 
       if (result.result.type === "succeeded") {
