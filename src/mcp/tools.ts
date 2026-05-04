@@ -210,6 +210,18 @@ export function getToolDefinitions(): McpToolDefinition[] {
         required: ["uri"],
       },
     },
+    {
+      name: "search_tracks",
+      description: "Search Spotify's catalog for tracks by name, artist, or any natural language query. Returns real Spotify URIs that can be passed to play_track or queue_track.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search query — track name, artist name, or both. E.g. 'choosin texas', 'Beyoncé Crazy in Love'." },
+          limit: { type: "number", description: "Number of results to return. Default 5, max 20." },
+        },
+        required: ["query"],
+      },
+    },
   ];
 }
 
@@ -234,6 +246,7 @@ function classifySpotifyError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   if (msg.includes("(404)")) return "No active Spotify device — open Spotify on a device first.";
   if (msg.includes("(401)") || msg.includes("(403)")) return "Spotify authorization issue — the app may need the 'user-modify-playback-state' scope.";
+  if (msg.includes("(429)")) return "Spotify rate limit hit — try again in a few seconds.";
   return `Spotify error: ${msg}`;
 }
 
@@ -929,6 +942,41 @@ export async function callTool(
         return { ok: false, error: classifySpotifyError(err), track: meta.name, artist: meta.artist };
       }
       return { ok: true, track: meta.name, artist: meta.artist, source: "spotify_live" };
+    }
+
+    case "search_tracks": {
+      const query = args.query as string;
+      if (!query) return { ok: false, error: "query is required." };
+      const limit = Math.min(Math.max((args.limit as number) ?? 5, 1), 20);
+
+      const spotify = new SpotifyClient(env);
+      try {
+        const result = await spotify.get<{
+          tracks: {
+            items: Array<{
+              uri: string;
+              name: string;
+              artists: Array<{ name: string }>;
+              album: { name: string };
+              duration_ms: number;
+            }>;
+          };
+        }>("/v1/search", { q: query, type: "track", limit: String(limit) });
+
+        return {
+          source: "spotify_live",
+          query,
+          results: result.tracks.items.map(t => ({
+            uri: t.uri,
+            track_name: t.name,
+            artist_name: t.artists.map(a => a.name).join(", "),
+            album_name: t.album.name,
+            duration_ms: t.duration_ms,
+          })),
+        };
+      } catch (err) {
+        return { ok: false, error: classifySpotifyError(err) };
+      }
     }
 
     default:
