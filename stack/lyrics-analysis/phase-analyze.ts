@@ -316,8 +316,8 @@ async function analyzeBatch(client: Anthropic, tracks: TrackWithLyrics[]): Promi
     const batch = await client.messages.batches.create({ requests });
     console.log(`  Batch submitted: ${batch.id} — status: ${batch.processing_status}`);
 
-    // Write batch ID to a file so we can resume result collection later
-    const batchLogPath = `batch-${c + 1}-${batch.id}.json`;
+    // Write batch ID to a host-mounted path so it survives container exit
+    const batchLogPath = `/app/inputs/batch-${c + 1}-${batch.id}.json`;
     writeFileSync(
       batchLogPath,
       JSON.stringify({

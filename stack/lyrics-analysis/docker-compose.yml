@@ -3,3 +3,5 @@ services:
     build: .
     env_file: .env
     tty: true
+    volumes:
+      - ./inputs:/app/inputs
