@@ -357,7 +357,8 @@ async function analyzeBatch(client: Anthropic, tracks: TrackWithLyrics[]): Promi
     let ok = 0;
     let errors = 0;
 
-    for await (const result of client.messages.batches.results(batch.id)) {
+    const resultsStream = await client.messages.batches.results(batch.id);
+    for await (const result of resultsStream) {
       const uri = `spotify:track:${result.custom_id}`;
       const hash = lyricsHashMap.get(uri) ?? "";
 
