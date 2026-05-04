@@ -9,6 +9,9 @@ import { getTopFresh } from "../discovery/pool";
 import { getTimeMachine, getLostFavorites, getLostFavoritesCount, getSkipPenalizedTracks, getArtistAffinity } from "../listening/queries";
 import { generateQueue } from "../listening/queue";
 import { isSkip } from "../listening/helpers";
+import { ensureAnalysisPending } from "../lyrics_analysis/pending";
+import { cosineSimilarity } from "../lyrics_analysis/cosine";
+import { embedQuery } from "../lyrics_analysis/voyage";
 
 export interface McpToolDefinition {
   name: string;
@@ -147,6 +150,41 @@ export function getToolDefinitions(): McpToolDefinition[] {
           length_min: { type: "number", description: "Target queue length in minutes. Default 60." },
           reflection_name: { type: "string", description: "Reflection to seed from when mode='reflection'. E.g. 'Pop maximalism', 'Texas country + emotional indie'." },
         },
+      },
+    },
+    {
+      name: "explain_song",
+      description: "Get a structured lyric analysis for a track: what it's about, its tones, narrative perspective, and how it might make you feel. If the track hasn't been analyzed yet, queues it for analysis (~10 minute turnaround).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          uri: { type: "string", description: "Spotify track URI, e.g. spotify:track:abc123." },
+        },
+        required: ["uri"],
+      },
+    },
+    {
+      name: "find_similar_lyrics",
+      description: "Find tracks with similar lyric themes, tone, and narrative feel to a seed track. Uses embedding cosine similarity on structured analysis vectors. Returns 'lyric vibe twins' — tracks that feel alike lyrically even if they sound different musically.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          seed_uri: { type: "string", description: "Spotify track URI to find twins for." },
+          count: { type: "number", description: "Number of similar tracks to return. Default 5." },
+        },
+        required: ["seed_uri"],
+      },
+    },
+    {
+      name: "lyric_search",
+      description: "Search your analyzed tracks by lyric content using natural language. Describe a theme, mood, or subject and get tracks whose lyrics match. E.g. 'songs about leaving a small town' or 'defiant breakup anthems'.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Natural language description of the lyric content you're looking for." },
+          count: { type: "number", description: "Number of results to return. Default 10." },
+        },
+        required: ["query"],
       },
     },
   ];
@@ -571,6 +609,173 @@ export async function callTool(
       const lengthMin = (args.length_min as number) ?? 60;
       const reflectionName = args.reflection_name as string | undefined;
       return await generateQueue(env.DB, { mode, seed, lengthMin, reflectionName });
+    }
+
+    case "explain_song": {
+      const uri = args.uri as string;
+      if (!uri) return { error: "uri is required." };
+
+      const row = await env.DB.prepare(
+        `SELECT tla.*
+         FROM track_lyric_analysis tla
+         JOIN track_lyric_analysis_status tas
+           ON tla.spotify_track_uri = tas.spotify_track_uri
+         WHERE tla.spotify_track_uri = ? AND tas.status = 'ok'`,
+      ).bind(uri).first<Record<string, unknown>>();
+
+      if (!row) {
+        await ensureAnalysisPending(env.DB, uri);
+        return {
+          source: "local-history-derived",
+          status: "pending",
+          message: "Analysis queued — check back in ~10 minutes.",
+        };
+      }
+
+      // Parse JSON fields for structured output
+      const parseJson = (val: unknown) => {
+        if (typeof val !== "string") return val;
+        try { return JSON.parse(val); } catch { return val; }
+      };
+
+      return {
+        source: "local-history-derived",
+        uri,
+        subject_paragraph: row.subject_paragraph,
+        subject_tags: parseJson(row.subject_tags),
+        tones: parseJson(row.tones),
+        listener_feel: parseJson(row.listener_feel_generic),
+        language: row.language,
+        narrative: {
+          pov: row.narrative_pov,
+          addressed_to: row.addressed_to,
+          time_frame: row.time_frame,
+          story_arc: row.story_arc,
+          narrator_reliability: row.narrator_reliability,
+        },
+        lyric_intrusion: row.lyric_intrusion,
+        vocab_level: row.vocab_level,
+        explicitness: row.explicitness,
+        analysis_version: row.analysis_version,
+      };
+    }
+
+    case "find_similar_lyrics": {
+      const seedUri = args.seed_uri as string;
+      if (!seedUri) return { error: "seed_uri is required." };
+      const count = (args.count as number) ?? 5;
+
+      // Load seed embedding
+      const seedRow = await env.DB.prepare(
+        "SELECT vector FROM track_lyric_embedding WHERE spotify_track_uri = ? AND kind = 'analysis'",
+      ).bind(seedUri).first<{ vector: ArrayBuffer }>();
+
+      if (!seedRow) {
+        await ensureAnalysisPending(env.DB, seedUri);
+        return {
+          source: "local-history-derived",
+          status: "pending",
+          message: "Seed track not yet analyzed — queued for analysis (~10 minutes).",
+        };
+      }
+
+      const seedVec = new Float32Array(seedRow.vector);
+
+      // Load all other analysis embeddings
+      const corpus = await env.DB.prepare(
+        "SELECT spotify_track_uri, vector FROM track_lyric_embedding WHERE kind = 'analysis' AND spotify_track_uri != ?",
+      ).bind(seedUri).all<{ spotify_track_uri: string; vector: ArrayBuffer }>();
+
+      // Rank by cosine similarity
+      const ranked = corpus.results
+        .map((r) => ({
+          uri: r.spotify_track_uri,
+          similarity: cosineSimilarity(seedVec, new Float32Array(r.vector)),
+        }))
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, count);
+
+      // Enrich with metadata from track_lyrics and analysis
+      const twins = await Promise.all(
+        ranked.map(async (r) => {
+          const meta = await env.DB.prepare(
+            `SELECT tl.track_name, tl.artist_name, tla.subject_paragraph, tla.tones
+             FROM track_lyrics tl
+             LEFT JOIN track_lyric_analysis tla ON tl.spotify_track_uri = tla.spotify_track_uri
+             WHERE tl.spotify_track_uri = ?`,
+          ).bind(r.uri).first<{
+            track_name: string; artist_name: string;
+            subject_paragraph: string | null; tones: string | null;
+          }>();
+
+          let tones: unknown = meta?.tones;
+          if (typeof tones === "string") {
+            try { tones = JSON.parse(tones); } catch { /* keep string */ }
+          }
+
+          return {
+            uri: r.uri,
+            track_name: meta?.track_name ?? r.uri,
+            artist_name: meta?.artist_name ?? "Unknown",
+            similarity: Math.round(r.similarity * 1000) / 1000,
+            subject_paragraph: meta?.subject_paragraph ?? null,
+            tones,
+          };
+        }),
+      );
+
+      return { source: "local-history-derived", seed_uri: seedUri, twins };
+    }
+
+    case "lyric_search": {
+      const query = args.query as string;
+      if (!query) return { error: "query is required." };
+      const count = (args.count as number) ?? 10;
+
+      if (!env.VOYAGE_API_KEY) {
+        return { error: "VOYAGE_API_KEY not configured — lyric_search unavailable." };
+      }
+
+      const queryVec = await embedQuery(query, env.VOYAGE_API_KEY);
+
+      // Load all lyrics embeddings
+      const corpus = await env.DB.prepare(
+        "SELECT spotify_track_uri, vector FROM track_lyric_embedding WHERE kind = 'lyrics'",
+      ).all<{ spotify_track_uri: string; vector: ArrayBuffer }>();
+
+      // Rank by cosine similarity
+      const ranked = corpus.results
+        .map((r) => ({
+          uri: r.spotify_track_uri,
+          similarity: cosineSimilarity(queryVec, new Float32Array(r.vector)),
+        }))
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, count);
+
+      // Enrich with metadata
+      const results = await Promise.all(
+        ranked.map(async (r) => {
+          const meta = await env.DB.prepare(
+            `SELECT tl.track_name, tl.artist_name, tla.subject_paragraph
+             FROM track_lyrics tl
+             LEFT JOIN track_lyric_analysis tla ON tl.spotify_track_uri = tla.spotify_track_uri
+             WHERE tl.spotify_track_uri = ?`,
+          ).bind(r.uri).first<{
+            track_name: string; artist_name: string;
+            subject_paragraph: string | null;
+          }>();
+
+          return {
+            uri: r.uri,
+            track_name: meta?.track_name ?? r.uri,
+            artist_name: meta?.artist_name ?? "Unknown",
+            similarity: Math.round(r.similarity * 1000) / 1000,
+            subject_paragraph: meta?.subject_paragraph ?? null,
+          };
+        }),
+      );
+
+      return { source: "local-history-derived", query, results };
     }
 
     default:

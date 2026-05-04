@@ -64,7 +64,7 @@ CREATE INDEX IF NOT EXISTS idx_lyric_analysis_version ON track_lyric_analysis(an
 CREATE TABLE IF NOT EXISTS track_lyric_embedding (
   spotify_track_uri TEXT NOT NULL,
   kind TEXT NOT NULL,                         -- 'lyrics' | 'analysis'
-  vector BLOB NOT NULL,                       -- Float32Array(512)
+  vector BLOB NOT NULL,                       -- Float32Array(1024)
   model TEXT NOT NULL,
   embedded_at INTEGER NOT NULL,
   PRIMARY KEY (spotify_track_uri, kind)

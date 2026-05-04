@@ -32,6 +32,7 @@ export interface Env {
   // verifies it before accepting a submission. Optional in dev — when
   // unset, the endpoint refuses submissions outright.
   SURFACES_SECRET?: string;
+  VOYAGE_API_KEY?: string;
 }
 
 export default {
