@@ -1,3 +1,5 @@
+import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { handleLogin, handleCallback, refreshAccessToken } from "./auth/spotify-oauth";
 import { getTokens, saveTokens } from "./auth/tokens";
 import { verifyAccessJwt } from "./auth/access-jwt";
@@ -33,30 +35,16 @@ export interface Env {
   // unset, the endpoint refuses submissions outright.
   SURFACES_SECRET?: string;
   VOYAGE_API_KEY?: string;
+  // OAuth token storage — bound to a separate KV namespace
+  OAUTH_KV: KVNamespace;
+  // Injected at runtime by OAuthProvider (not a real binding)
+  OAUTH_PROVIDER: OAuthHelpers;
 }
 
-export default {
+// ── Default handler: serves all routes except OAuth-protected /mcp ──
+const defaultHandler: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-
-    // CORS preflight
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        },
-      });
-    }
-
-    const addCors = (resp: Response): Response => {
-      const headers = new Headers(resp.headers);
-      headers.set("Access-Control-Allow-Origin", "*");
-      return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers });
-    };
-
-    const response = await (async (): Promise<Response> => {
     try {
       switch (url.pathname) {
         case "/":
@@ -1468,9 +1456,14 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
           return Response.json(pls.map(p => ({ id: p.id, name: p.name, tracks: p.items?.total ?? p.tracks?.total ?? 0 })));
         }
 
-        case "/mcp": {
-          const { handleMcp } = await import("./mcp/server");
-          return await handleMcp(request, env);
+        case "/oauth/authorize": {
+          const { handleAuthorize } = await import("./oauth/authorize");
+          return handleAuthorize(request, env);
+        }
+
+        case "/shortcut/mcp": {
+          const { handleMcpShortcut } = await import("./mcp/shortcut");
+          return handleMcpShortcut(request, env);
         }
 
         // ── Listening History API ──
@@ -1953,8 +1946,51 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
       const message = err instanceof Error ? err.message : "Unknown error";
       return new Response(message, { status: 500 });
     }
-    })();
-    return addCors(response);
+  },
+};
+
+// ── OAuth 2.1 provider wrapping the MCP endpoint ──
+const WORKER_URL = "https://spotify-agent.chrisbuice.workers.dev";
+
+const oauthProvider = new OAuthProvider<Env>({
+  apiRoute: "/mcp",
+  apiHandler: {
+    async fetch(request: Request, env: Env): Promise<Response> {
+      const { handleMcp } = await import("./mcp/server");
+      return handleMcp(request, env);
+    },
+  },
+  defaultHandler,
+  authorizeEndpoint: "/oauth/authorize",
+  tokenEndpoint: "/oauth/token",
+  clientRegistrationEndpoint: "/oauth/register",
+  scopesSupported: ["mcp"],
+  accessTokenTTL: 3600,          // 1 hour
+  refreshTokenTTL: 2592000,      // 30 days
+  allowPlainPKCE: false,
+  resourceMetadata: {
+    resource: `${WORKER_URL}/mcp`,
+    authorization_servers: [WORKER_URL],
+    scopes_supported: ["mcp"],
+  },
+});
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // CORS preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        },
+      });
+    }
+    const response = await oauthProvider.fetch(request, env, ctx);
+    const headers = new Headers(response.headers);
+    headers.set("Access-Control-Allow-Origin", "*");
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
@@ -2030,6 +2066,10 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
       }
 
       await pruneOldObservations(env.DB, 30 * 24 * 60 * 60);
+
+      // OAuth KV cleanup: all keys (token:, refresh:, grant:, code:) are
+      // stored with KV TTLs by the library, so Cloudflare auto-expires them.
+      // No manual cleanup needed. Grants get TTL from refreshTokenTTL (30d).
     }
 
     if (cron === "0 10 * * *") {

@@ -7,7 +7,7 @@ export default defineConfig({
       wrangler: { configPath: "./wrangler.toml" },
       miniflare: {
         d1Databases: ["DB"],
-        kvNamespaces: ["KV"],
+        kvNamespaces: ["KV", "OAUTH_KV"],
       },
     }),
   ],

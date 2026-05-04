@@ -2,7 +2,9 @@
  * server.ts — MCP (Model Context Protocol) JSON-RPC 2.0 dispatcher.
  *
  * Handles: initialize, notifications/initialized, tools/list, tools/call.
- * Auth: Bearer SHORTCUT_TOKEN required on every request.
+ * Auth is handled externally:
+ *   - /mcp: OAuthProvider validates the OAuth bearer token
+ *   - /mcp-shortcut: shortcut.ts validates SHORTCUT_TOKEN
  */
 
 import type { Env } from "../index";
@@ -31,11 +33,6 @@ function jsonRpcError(id: string | number | null, code: number, message: string)
 }
 
 export async function handleMcp(request: Request, env: Env): Promise<Response> {
-  const authHeader = request.headers.get("Authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ") || authHeader.slice(7) !== env.SHORTCUT_TOKEN) {
-    return jsonRpcError(null, -32001, "Unauthorized");
-  }
-
   if (request.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }

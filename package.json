@@ -10,6 +10,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@cloudflare/workers-oauth-provider": "^0.4.0",
     "d3-force": "^3.0.0"
   },
   "devDependencies": {

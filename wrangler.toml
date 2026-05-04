@@ -14,6 +14,13 @@ migrations_dir = "src/db/migrations"
 binding = "KV"
 id = "7055b925a6b74bd39150201370724eeb"
 
+# OAuth 2.1 token storage (used by @cloudflare/workers-oauth-provider)
+# Create with: wrangler kv:namespace create OAUTH_KV
+# ⚠ Deploy will fail until the id below is replaced with the real namespace ID.
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "8074b84461bd42d498eeba4cad171d39"
+
 # ── Cron triggers ──
 [triggers]
 crons = [
