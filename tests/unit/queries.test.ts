@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { env } from "cloudflare:test";
-import { getTimeMachine, getLostFavorites, getMonthlyTop, getSkipCount, getSkipPenalizedTracks } from "../../src/listening/queries";
+import { getTimeMachine, getLostFavorites, getMonthlyTop, getSkipCount, getSkipPenalizedTracks, getOnThisDay } from "../../src/listening/queries";
 
 // Seed a small test dataset into the D1 plays table
 async function seedTestData(db: D1Database) {
@@ -114,6 +114,60 @@ async function seedTestData(db: D1Database) {
         'spotify:track:skip1', 'clickrow', 'fwdbtn', 0, 0, 2026, 4, 10, 5, 0.25)
     `).bind(nowTs - i * 86400).run();
   }
+
+  // On-this-day test data: plays on July 4 across multiple years
+  // Use noon UTC = 7am ET — safely on the same date in Eastern time
+  const july4_2020 = Math.floor(new Date("2020-07-04T17:00:00Z").getTime() / 1000); // noon ET
+  const july4_2021 = Math.floor(new Date("2021-07-04T17:00:00Z").getTime() / 1000);
+  const july4_2023 = Math.floor(new Date("2023-07-04T17:00:00Z").getTime() / 1000);
+
+  // "Firework" by Katy Perry — 3 plays in 2020, 2 in 2021, 1 in 2023 on July 4
+  for (let i = 0; i < 3; i++) {
+    await db.prepare(
+      "INSERT INTO plays (ts, platform, ms_played, conn_country, track_name, artist_name, " +
+      "album_name, spotify_track_uri, reason_start, reason_end, shuffle, offline, " +
+      "year, month, hour, local_hour, minutes) " +
+      "VALUES (?, 'iOS', 210000, 'US', 'Firework', 'Katy Perry', 'Teenage Dream', " +
+      "'spotify:track:firework1', 'clickrow', 'trackdone', 0, 0, 2020, 7, 17, 12, 3.5)"
+    ).bind(july4_2020 + i * 3600).run();
+  }
+  for (let i = 0; i < 2; i++) {
+    await db.prepare(
+      "INSERT INTO plays (ts, platform, ms_played, conn_country, track_name, artist_name, " +
+      "album_name, spotify_track_uri, reason_start, reason_end, shuffle, offline, " +
+      "year, month, hour, local_hour, minutes) " +
+      "VALUES (?, 'iOS', 210000, 'US', 'Firework', 'Katy Perry', 'Teenage Dream', " +
+      "'spotify:track:firework1', 'clickrow', 'trackdone', 0, 0, 2021, 7, 17, 12, 3.5)"
+    ).bind(july4_2021 + i * 3600).run();
+  }
+  // Same song, different URI (re-release) in 2023
+  await db.prepare(
+    "INSERT INTO plays (ts, platform, ms_played, conn_country, track_name, artist_name, " +
+    "album_name, spotify_track_uri, reason_start, reason_end, shuffle, offline, " +
+    "year, month, hour, local_hour, minutes) " +
+    "VALUES (?, 'iOS', 210000, 'US', 'Firework', 'Katy Perry', 'Teenage Dream Complete', " +
+    "'spotify:track:firework2', 'clickrow', 'trackdone', 0, 0, 2023, 7, 17, 12, 3.5)"
+  ).bind(july4_2023).run();
+
+  // "Party in the USA" — 1 play on July 4, 2021 only
+  await db.prepare(
+    "INSERT INTO plays (ts, platform, ms_played, conn_country, track_name, artist_name, " +
+    "album_name, spotify_track_uri, reason_start, reason_end, shuffle, offline, " +
+    "year, month, hour, local_hour, minutes) " +
+    "VALUES (?, 'iOS', 195000, 'US', 'Party in the USA', 'Miley Cyrus', 'Breakout', " +
+    "'spotify:track:partyusa', 'clickrow', 'trackdone', 0, 0, 2021, 7, 17, 12, 3.25)"
+  ).bind(july4_2021 + 7200).run();
+
+  // A play on July 3 (should NOT appear in July 4 results)
+  // Use 4am UTC = 11pm ET July 3
+  const july3_late = Math.floor(new Date("2020-07-04T04:00:00Z").getTime() / 1000); // 11pm ET July 3
+  await db.prepare(
+    "INSERT INTO plays (ts, platform, ms_played, conn_country, track_name, artist_name, " +
+    "album_name, spotify_track_uri, reason_start, reason_end, shuffle, offline, " +
+    "year, month, hour, local_hour, minutes) " +
+    "VALUES (?, 'iOS', 200000, 'US', 'Wrong Day Song', 'Wrong Artist', 'Wrong Album', " +
+    "'spotify:track:wrongday', 'clickrow', 'trackdone', 0, 0, 2020, 7, 4, 23, 3.3)"
+  ).bind(july3_late).run();
 }
 
 describe("query helpers", () => {
@@ -226,6 +280,68 @@ describe("query helpers", () => {
     it("excludes tracks below threshold", async () => {
       const penalized = await getSkipPenalizedTracks(env.DB, 5, 30);
       expect(penalized.has("spotify:track:skip1")).toBe(false);
+    });
+  });
+
+  describe("getOnThisDay", () => {
+    it("returns plays from multiple years on the same MM-DD", async () => {
+      const result = await getOnThisDay(env.DB, 7, 4);
+      expect(result.source).toBe("local_history");
+      expect(result.date).toBe("07-04");
+      expect(result.yearsCovered).toContain(2020);
+      expect(result.yearsCovered).toContain(2021);
+      expect(result.yearsCovered).toContain(2023);
+      expect(result.totalPlaysAcrossYears).toBe(7); // 3+2+1 firework + 1 party
+    });
+
+    it("excludes plays from other dates (Eastern time boundary)", async () => {
+      // "Wrong Day Song" is at 4am UTC July 4 = 11pm ET July 3 — should NOT appear
+      const result = await getOnThisDay(env.DB, 7, 4);
+      const wrongDay = result.topTracks.find(t => t.track === "Wrong Day Song");
+      expect(wrongDay, "Play at 11pm ET July 3 should not appear in July 4 results").toBeUndefined();
+    });
+
+    it("aggregates at song level, collapsing URIs", async () => {
+      const result = await getOnThisDay(env.DB, 7, 4);
+      // "Firework" has plays on firework1 (5 plays) and firework2 (1 play) = 6 total
+      const firework = result.topTracks.find(t => t.track === "Firework");
+      expect(firework).toBeDefined();
+      expect(firework!.totalPlays).toBe(6);
+    });
+
+    it("canonical URI is the most-played one", async () => {
+      const result = await getOnThisDay(env.DB, 7, 4);
+      const firework = result.topTracks.find(t => t.track === "Firework");
+      expect(firework).toBeDefined();
+      // firework1 has 5 plays total (3 in 2020 + 2 in 2021), firework2 has 1
+      expect(firework!.uri).toBe("spotify:track:firework1");
+    });
+
+    it("peakYear and yearsPlayed are correct for a multi-year track", async () => {
+      const result = await getOnThisDay(env.DB, 7, 4);
+      const firework = result.topTracks.find(t => t.track === "Firework");
+      expect(firework).toBeDefined();
+      expect(firework!.peakYear).toBe(2020); // 3 plays in 2020
+      expect(firework!.peakYearPlays).toBe(3);
+      expect(firework!.yearsPlayed).toEqual([2020, 2021, 2023]);
+    });
+
+    it("returns correct shape for a date with no plays", async () => {
+      const result = await getOnThisDay(env.DB, 12, 25); // Christmas — no seed data
+      expect(result.source).toBe("local_history");
+      expect(result.date).toBe("12-25");
+      expect(result.yearsCovered).toEqual([]);
+      expect(result.totalPlaysAcrossYears).toBe(0);
+      expect(result.totalHoursAcrossYears).toBe(0);
+      expect(result.uniqueTracks).toBe(0);
+      expect(result.uniqueArtists).toBe(0);
+      expect(result.topTracks).toEqual([]);
+    });
+
+    it("respects the limit parameter", async () => {
+      const result = await getOnThisDay(env.DB, 7, 4, 1);
+      expect(result.topTracks).toHaveLength(1);
+      expect(result.topTracks[0].track).toBe("Firework"); // most plays
     });
   });
 });

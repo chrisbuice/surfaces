@@ -6,7 +6,7 @@ import type { Env } from "../index";
 import { SpotifyClient } from "../spotify/client";
 import { startSession } from "../curation/agent";
 import { getTopFresh } from "../discovery/pool";
-import { getTimeMachine, getLostFavorites, getLostFavoritesCount, getSkipPenalizedTracks, getArtistAffinity } from "../listening/queries";
+import { getTimeMachine, getLostFavorites, getLostFavoritesCount, getSkipPenalizedTracks, getArtistAffinity, getOnThisDay } from "../listening/queries";
 import { generateQueue } from "../listening/queue";
 import { isSkip } from "../listening/helpers";
 import { ensureAnalysisPending } from "../lyrics_analysis/pending";
@@ -113,6 +113,19 @@ export function getToolDefinitions(): McpToolDefinition[] {
           limit: { type: "number", description: "Number of top tracks/artists to return. Default 15." },
         },
         required: ["year"],
+      },
+    },
+    {
+      name: "on_this_day",
+      description: "Top tracks you've played on a specific calendar date (month + day) across all years of your listening history. Useful for 'what was I listening to on this date in past years' queries. For a specific month or year (without a day), use time_machine instead.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          month: { type: "number", description: "Month (1-12). Required." },
+          day: { type: "number", description: "Day of month (1-31). Required." },
+          limit: { type: "number", description: "Number of top tracks to return. Default 25." },
+        },
+        required: ["month", "day"],
       },
     },
     {
@@ -542,6 +555,14 @@ export async function callTool(
       const limit = (args.limit as number) ?? 15;
       const result = await getTimeMachine(env.DB, year, month, limit);
       return { source: "local_history", ...result };
+    }
+
+    case "on_this_day": {
+      const otdMonth = args.month as number;
+      const otdDay = args.day as number;
+      if (!otdMonth || !otdDay) return { error: "month and day are required." };
+      const otdLimit = (args.limit as number) ?? 25;
+      return await getOnThisDay(env.DB, otdMonth, otdDay, otdLimit);
     }
 
     case "lost_favorites": {

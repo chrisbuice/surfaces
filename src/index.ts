@@ -58,6 +58,131 @@ const defaultHandler: ExportedHandler<Env> = {
           });
         }
 
+        case "/app/highlight":
+        case "/app/highlight/": {
+          const highlightHtml = (await import("./highlight-html")).default;
+          return new Response(highlightHtml, {
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          });
+        }
+
+        case "/api/highlight/tracks": {
+          // Top 50 tracks by play_count that have lyrics
+          const { results: trackRows } = await env.DB.prepare(`
+            SELECT p.spotify_track_uri AS uri, p.track_name, p.artist_name,
+                   COUNT(*) AS play_count, tl.lyrics_plain
+            FROM plays p
+            JOIN track_lyrics tl ON tl.spotify_track_uri = p.spotify_track_uri
+            WHERE tl.status = 'ok' AND tl.instrumental = 0 AND tl.lyrics_length > 100
+            GROUP BY p.spotify_track_uri
+            ORDER BY play_count DESC
+            LIMIT 50
+          `).all<{
+            uri: string; track_name: string; artist_name: string;
+            play_count: number; lyrics_plain: string;
+          }>();
+
+          // Batch-fetch existing passages
+          const uris = trackRows.map(t => t.uri);
+          let passageMap: Record<string, Array<{ start_line: number; end_line: number; text: string }>> = {};
+          if (uris.length > 0) {
+            const placeholders = uris.map(() => "?").join(",");
+            const { results: passageRows } = await env.DB.prepare(
+              `SELECT spotify_track_uri, start_line, end_line, passage_text
+               FROM loved_passages
+               WHERE spotify_track_uri IN (${placeholders})
+               ORDER BY spotify_track_uri, passage_index`
+            ).bind(...uris).all<{
+              spotify_track_uri: string; start_line: number; end_line: number; passage_text: string;
+            }>();
+            for (const row of passageRows) {
+              if (!passageMap[row.spotify_track_uri]) passageMap[row.spotify_track_uri] = [];
+              passageMap[row.spotify_track_uri].push({
+                start_line: row.start_line,
+                end_line: row.end_line,
+                text: row.passage_text,
+              });
+            }
+          }
+
+          const response = trackRows.map(t => ({
+            uri: t.uri,
+            track_name: t.track_name,
+            artist_name: t.artist_name,
+            play_count: t.play_count,
+            lyrics_plain: t.lyrics_plain,
+            existing_passages: passageMap[t.uri] || [],
+          }));
+          return Response.json(response);
+        }
+
+        case "/api/highlight/save": {
+          if (request.method !== "POST") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          const body = await request.json<{
+            uri: string;
+            passages: Array<{ start_line: number; end_line: number; text: string }>;
+          }>();
+          if (!body.uri) {
+            return new Response("Missing uri", { status: 400 });
+          }
+
+          // Delete existing passages for this URI, then insert new ones
+          await env.DB.prepare(
+            "DELETE FROM loved_passages WHERE spotify_track_uri = ?"
+          ).bind(body.uri).run();
+
+          const now = Date.now();
+          for (let i = 0; i < (body.passages || []).length; i++) {
+            const p = body.passages[i];
+            await env.DB.prepare(
+              `INSERT INTO loved_passages (spotify_track_uri, passage_index, start_line, end_line, passage_text, marked_at)
+               VALUES (?, ?, ?, ?, ?, ?)`
+            ).bind(body.uri, i, p.start_line, p.end_line, p.text, now).run();
+          }
+
+          return Response.json({ ok: true, saved: (body.passages || []).length });
+        }
+
+        case "/api/loved-passages": {
+          // Showcase: top 5 tracks by play count, first passage only
+          const { results: showcase } = await env.DB.prepare(`
+            SELECT lp.spotify_track_uri AS uri, p.track_name, p.artist_name,
+                   lp.passage_text, COUNT(*) AS play_count
+            FROM loved_passages lp
+            JOIN plays p ON p.spotify_track_uri = lp.spotify_track_uri
+            WHERE lp.passage_index = 0
+            GROUP BY lp.spotify_track_uri
+            ORDER BY play_count DESC
+            LIMIT 5
+          `).all<{
+            uri: string; track_name: string; artist_name: string;
+            passage_text: string; play_count: number;
+          }>();
+
+          const showcaseUris = showcase.map(s => s.uri);
+
+          // Depth: next 30 by earliest first-play, excluding showcase tracks
+          const excludePlaceholders = showcaseUris.map(() => "?").join(",");
+          const { results: depth } = await env.DB.prepare(`
+            SELECT lp.spotify_track_uri AS uri, p.track_name, p.artist_name,
+                   lp.passage_text, MIN(p.ts) AS first_play
+            FROM loved_passages lp
+            JOIN plays p ON p.spotify_track_uri = lp.spotify_track_uri
+            WHERE lp.passage_index = 0
+              AND lp.spotify_track_uri NOT IN (${excludePlaceholders})
+            GROUP BY lp.spotify_track_uri
+            ORDER BY first_play ASC
+            LIMIT 30
+          `).bind(...showcaseUris).all<{
+            uri: string; track_name: string; artist_name: string;
+            passage_text: string; first_play: number;
+          }>();
+
+          return Response.json({ showcase, depth });
+        }
+
         case "/manifest.json": {
           return Response.json({
             name: "Surfaces",
@@ -1535,6 +1660,16 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
           const { getTimeMachine } = await import("./listening/queries");
           const result = await getTimeMachine(env.DB, y, m, 15);
           return Response.json({ source: "local_history", ...result });
+        }
+
+        case "/api/listening/on-this-day": {
+          const otdMonth = parseInt(url.searchParams.get("month") ?? "");
+          const otdDay = parseInt(url.searchParams.get("day") ?? "");
+          if (!otdMonth || !otdDay) return Response.json({ error: "month and day required" }, { status: 400 });
+          const otdLimit = parseInt(url.searchParams.get("limit") ?? "25");
+          const { getOnThisDay } = await import("./listening/queries");
+          const otdResult = await getOnThisDay(env.DB, otdMonth, otdDay, otdLimit);
+          return Response.json(otdResult);
         }
 
         case "/api/listening/intelligence": {

@@ -16,7 +16,7 @@
  *   See LISTENING_HISTORY.md "URI vs. song-level queries" for the full rule.
  */
 
-import type { TimeMachineResult, LostFavorite, AffinityRow } from "./types";
+import type { TimeMachineResult, LostFavorite, AffinityRow, OnThisDayResult } from "./types";
 import reflectionsData from "./data/reflections.json";
 
 const SNAPSHOT_DATE = "2026-04-29";
@@ -445,4 +445,112 @@ export async function getMonthlyTop(
   const rows = await db.prepare(sql).bind(year, month, limit)
     .all<{ track_name: string; artist_name: string; plays: number }>();
   return rows.results;
+}
+
+/**
+ * On This Day: top tracks played on a specific calendar date (MM-DD) across all years.
+ *
+ * Aggregates at song level (track_name COLLATE NOCASE, artist_name COLLATE NOCASE),
+ * same as time_machine and lost_favorites. Returns the canonical URI (most-played
+ * URI for the song) for each result.
+ *
+ * Day boundary uses US Eastern time: datetime(ts, 'unixepoch', '-5 hours').
+ * This is a fixed UTC-5 offset — the half-hour edge case around DST transitions
+ * (March/November only) is acceptable and documented. Never affects May dates.
+ */
+export async function getOnThisDay(
+  db: D1Database,
+  month: number,
+  day: number,
+  limit: number = 25,
+): Promise<OnThisDayResult> {
+  const mmdd = `${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+  // Filter plays to the target MM-DD in Eastern time
+  const dateFilter = `strftime('%m-%d', datetime(ts, 'unixepoch', '-5 hours')) = ?`;
+
+  // Aggregate stats
+  const statsSQL = `
+    SELECT COUNT(*) as total_plays,
+           SUM(minutes) as total_minutes,
+           (SELECT COUNT(*) FROM (
+             SELECT 1 FROM plays WHERE ${dateFilter}
+             GROUP BY track_name COLLATE NOCASE, artist_name COLLATE NOCASE
+           )) as unique_tracks,
+           COUNT(DISTINCT artist_name) as unique_artists
+    FROM plays WHERE ${dateFilter}
+  `;
+  const stats = await db.prepare(statsSQL).bind(mmdd, mmdd)
+    .first<{ total_plays: number; total_minutes: number; unique_tracks: number; unique_artists: number }>();
+
+  // Years covered: which years have at least one play on this date
+  const yearsSQL = `
+    SELECT DISTINCT CAST(strftime('%Y', datetime(ts, 'unixepoch', '-5 hours')) AS INTEGER) as y
+    FROM plays WHERE ${dateFilter}
+    ORDER BY y
+  `;
+  const yearsRows = await db.prepare(yearsSQL).bind(mmdd)
+    .all<{ y: number }>();
+  const yearsCovered = yearsRows.results.map(r => r.y);
+
+  // Top tracks — song-level aggregation with per-year breakdown
+  const topTracksSQL = `
+    SELECT track_name, artist_name, COUNT(*) as plays
+    FROM plays WHERE ${dateFilter}
+    GROUP BY track_name COLLATE NOCASE, artist_name COLLATE NOCASE
+    ORDER BY plays DESC
+    LIMIT ?
+  `;
+  const topTracks = await db.prepare(topTracksSQL).bind(mmdd, limit)
+    .all<{ track_name: string; artist_name: string; plays: number }>();
+
+  // For each top track, get canonical URI, peak year, and years played
+  const enrichedTracks = await Promise.all(
+    topTracks.results.map(async (t) => {
+      // Canonical URI: most-played URI for this song
+      const canonicalSQL = `
+        SELECT spotify_track_uri, COUNT(*) as plays
+        FROM plays WHERE track_name = ? COLLATE NOCASE AND artist_name = ? COLLATE NOCASE
+        GROUP BY spotify_track_uri ORDER BY plays DESC LIMIT 1
+      `;
+      const canonical = await db.prepare(canonicalSQL).bind(t.track_name, t.artist_name)
+        .first<{ spotify_track_uri: string; plays: number }>();
+
+      // Peak year and years played on this specific date
+      const yearBreakdownSQL = `
+        SELECT CAST(strftime('%Y', datetime(ts, 'unixepoch', '-5 hours')) AS INTEGER) as y,
+               COUNT(*) as plays
+        FROM plays
+        WHERE ${dateFilter}
+          AND track_name = ? COLLATE NOCASE AND artist_name = ? COLLATE NOCASE
+        GROUP BY y ORDER BY plays DESC, y DESC
+      `;
+      const yearBreakdown = await db.prepare(yearBreakdownSQL).bind(mmdd, t.track_name, t.artist_name)
+        .all<{ y: number; plays: number }>();
+
+      const peakRow = yearBreakdown.results[0];
+      const yearsPlayed = yearBreakdown.results.map(r => r.y).sort((a, b) => a - b);
+
+      return {
+        track: t.track_name,
+        artist: t.artist_name,
+        uri: canonical?.spotify_track_uri ?? "",
+        totalPlays: t.plays,
+        peakYear: peakRow?.y ?? 0,
+        peakYearPlays: peakRow?.plays ?? 0,
+        yearsPlayed,
+      };
+    }),
+  );
+
+  return {
+    source: "local_history",
+    date: mmdd,
+    yearsCovered,
+    totalPlaysAcrossYears: stats?.total_plays ?? 0,
+    totalHoursAcrossYears: Math.round(((stats?.total_minutes ?? 0) / 60) * 10) / 10,
+    uniqueTracks: stats?.unique_tracks ?? 0,
+    uniqueArtists: stats?.unique_artists ?? 0,
+    topTracks: enrichedTracks,
+  };
 }

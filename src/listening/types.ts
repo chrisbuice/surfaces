@@ -64,6 +64,27 @@ export interface AffinityRow {
   lastPlayed: string;
 }
 
+export interface OnThisDayTrack {
+  track: string;
+  artist: string;
+  uri: string;
+  totalPlays: number;
+  peakYear: number;
+  peakYearPlays: number;
+  yearsPlayed: number[];
+}
+
+export interface OnThisDayResult {
+  source: "local_history";
+  date: string;
+  yearsCovered: number[];
+  totalPlaysAcrossYears: number;
+  totalHoursAcrossYears: number;
+  uniqueTracks: number;
+  uniqueArtists: number;
+  topTracks: OnThisDayTrack[];
+}
+
 export interface QueueCandidate {
   uri: string;
   track: string;
