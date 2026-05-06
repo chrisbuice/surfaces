@@ -261,6 +261,26 @@ const defaultHandler: ExportedHandler<Env> = {
           return Response.json({ access_token: tokens.accessToken, expires_at: tokens.expiresAt });
         }
 
+        // One-shot constellation rebuild (bypasses the nightly cron schedule).
+        // Same Cloudflare Access gate as /admin/spotify-token.
+        case "/admin/rebuild-constellation": {
+          if (request.method !== "POST") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          const rebuildEmail = request.headers.get("Cf-Access-Authenticated-User-Email");
+          if (!rebuildEmail || rebuildEmail !== env.ACCESS_ALLOWED_EMAIL) {
+            return new Response("Unauthorized", { status: 401 });
+          }
+          const { runConstellationCron } = await import("./constellation/cron");
+          const spotify = new SpotifyClient(env);
+          const summary = await runConstellationCron(env.DB, spotify, env.KV, env.SPOTIFY_USER_ID);
+          return Response.json({
+            nodes: summary.nodes,
+            edges: summary.edges,
+            generated_at: new Date().toISOString(),
+          });
+        }
+
         case "/me": {
           const spotify = new SpotifyClient(env);
           const profile = await spotify.get<{ display_name: string; id: string }>("/v1/me");
