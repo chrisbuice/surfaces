@@ -233,6 +233,10 @@ const defaultHandler: ExportedHandler<Env> = {
           return Response.json({ display_name: profile.display_name, id: profile.id });
         }
 
+        // Now-playing fallback: when Spotify returns no current item (paused/inactive),
+        // fall back to the most recent track from poll_observations (D1). This makes the
+        // "last-known track" guarantee survive page reloads, not just in-session polling.
+        // See docs/surfaces-v2-decisions.md, decision D1.
         case "/api/now-playing": {
           const spotify = new SpotifyClient(env);
           try {
@@ -243,6 +247,35 @@ const defaultHandler: ExportedHandler<Env> = {
               device?: { name: string; type: string } | null;
             }>("/v1/me/player/currently-playing");
             if (!playing || !playing.item) {
+              // Fallback: show last-known track from poll_observations
+              try {
+                const row = await env.DB.prepare(
+                  `SELECT track_id, track_name, artist_name, progress_ms, duration_ms, observed_at
+                   FROM poll_observations
+                   WHERE track_name IS NOT NULL
+                   ORDER BY observed_at DESC LIMIT 1`
+                ).first<{
+                  track_id: string;
+                  track_name: string;
+                  artist_name: string;
+                  progress_ms: number;
+                  duration_ms: number;
+                  observed_at: string;
+                }>();
+                if (row) {
+                  return Response.json({
+                    is_playing: false,
+                    track_id: row.track_id,
+                    track_name: row.track_name,
+                    artist_name: row.artist_name,
+                    progress_ms: row.progress_ms,
+                    duration_ms: row.duration_ms,
+                    last_observed_at: row.observed_at,
+                  });
+                }
+              } catch (e) {
+                console.error("D1 fallback for now-playing failed:", e);
+              }
               return Response.json({ is_playing: false });
             }
             // Check if this track is in the most recent active session
