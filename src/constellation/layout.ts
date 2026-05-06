@@ -44,6 +44,7 @@ export const FORCE_TICKS = 500;
 export interface LayoutNode {
   artist_name: string;
   artist_id: ArtistIdResolution;
+  top_track_id: string | null;
   total_plays: number;
   peak_year: number;
   years_active: number;
@@ -163,6 +164,7 @@ export function runForceLayout(
     return nodes.map((n, i) => ({
       artist_name: n.artist_name,
       artist_id: n.artist_id,
+      top_track_id: n.top_track_id,
       total_plays: n.total_plays,
       peak_year: n.peak_year,
       years_active: n.years_active,

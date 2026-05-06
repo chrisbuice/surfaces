@@ -346,3 +346,75 @@ describe("constellation queries — playlist co-occurrence", () => {
     expect(ab!.playlist_co).toBeCloseTo(2.5);
   });
 });
+
+describe("constellation queries — top track per artist", () => {
+  it("picks the most-played track for an artist", async () => {
+    await resetTables(env.DB);
+    const ts = Math.floor(new Date("2020-06-15T12:00:00Z").getTime() / 1000);
+    const winner = "spotify:track:winner";
+    const loser = "spotify:track:loser";
+    // 200 plays of winner, 100 of loser → winner has higher count.
+    for (let i = 0; i < 200; i++) {
+      await insertPlay(env.DB, "TopTrackArtist", ts + i * 60, winner, 2020);
+    }
+    for (let i = 0; i < 100; i++) {
+      await insertPlay(env.DB, "TopTrackArtist", ts + (200 + i) * 60, loser, 2020);
+    }
+
+    const nodes = await buildNodes(env.DB);
+    const node = nodes.find(n => n.artist_name === "TopTrackArtist");
+    expect(node).toBeDefined();
+    expect(node!.top_track_id).toBe("winner");
+  });
+
+  it("tie-breaks by most recent play when counts are equal", async () => {
+    await resetTables(env.DB);
+    const ts = Math.floor(new Date("2020-06-15T12:00:00Z").getTime() / 1000);
+    const older = "spotify:track:older";
+    const newer = "spotify:track:newer";
+    const half = Math.ceil(MIN_PLAYS / 2);
+    // Equal play counts, but "newer" has the most recent play.
+    for (let i = 0; i < half; i++) {
+      await insertPlay(env.DB, "TieArtist", ts + i * 60, older, 2020);
+    }
+    for (let i = 0; i < half; i++) {
+      await insertPlay(env.DB, "TieArtist", ts + (half + i) * 60, newer, 2020);
+    }
+
+    const nodes = await buildNodes(env.DB);
+    const node = nodes.find(n => n.artist_name === "TieArtist");
+    expect(node).toBeDefined();
+    expect(node!.top_track_id).toBe("newer");
+  });
+
+  it("returns null when all track URIs are empty", async () => {
+    await resetTables(env.DB);
+    const ts = Math.floor(new Date("2020-06-15T12:00:00Z").getTime() / 1000);
+    for (let i = 0; i < MIN_PLAYS; i++) {
+      await insertPlay(env.DB, "NullArtist", ts + i * 60, "", 2020);
+    }
+
+    const nodes = await buildNodes(env.DB);
+    const node = nodes.find(n => n.artist_name === "NullArtist");
+    expect(node).toBeDefined();
+    expect(node!.top_track_id).toBeNull();
+  });
+
+  it("ignores empty URIs and picks from non-empty ones", async () => {
+    await resetTables(env.DB);
+    const ts = Math.floor(new Date("2020-06-15T12:00:00Z").getTime() / 1000);
+    const valid = "spotify:track:validone";
+    // Most plays have empty URI; a few have a real one.
+    for (let i = 0; i < MIN_PLAYS - 10; i++) {
+      await insertPlay(env.DB, "MixArtist", ts + i * 60, "", 2020);
+    }
+    for (let i = 0; i < 10; i++) {
+      await insertPlay(env.DB, "MixArtist", ts + (MIN_PLAYS - 10 + i) * 60, valid, 2020);
+    }
+
+    const nodes = await buildNodes(env.DB);
+    const node = nodes.find(n => n.artist_name === "MixArtist");
+    expect(node).toBeDefined();
+    expect(node!.top_track_id).toBe("validone");
+  });
+});

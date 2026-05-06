@@ -45,6 +45,7 @@ export interface ConstellationNode {
   peak_year: number;
   years_active: number;
   cluster_id: number;             // index into clusters, or -1 for singletons
+  top_track_id?: string;           // bare Spotify track ID (most-played by user)
   top_neighbors: string[];        // up to 3, by edge weight
   is_labeled: boolean;
 }
@@ -85,6 +86,7 @@ export interface NodeRow {
   //   { kind: "ambiguous" }      — name appears with multiple distinct ids
   //   { kind: "unresolved" }     — name not in artist_taste at all
   artist_id: ArtistIdResolution;
+  top_track_id: string | null;
   total_plays: number;
   peak_year: number;
   years_active: number;

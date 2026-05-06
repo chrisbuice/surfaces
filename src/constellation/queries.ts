@@ -109,11 +109,12 @@ export async function buildNodes(db: D1Database): Promise<NodeRow[]> {
   }
   baseRows.sort((a, b) => b.total_plays - a.total_plays);
 
-  // Resolve artist IDs (resolved / ambiguous / unresolved per spec §5.10).
-  const idMap = await loadArtistIdMap(db);
+  // Resolve artist IDs and top tracks in parallel.
+  const [idMap, topTrackMap] = await Promise.all([loadArtistIdMap(db), loadTopTrackMap(db)]);
   return baseRows.map(r => ({
     artist_name: r.artist_name,
     artist_id: idMap.get(r.artist_name) ?? { kind: "unresolved" as const },
+    top_track_id: topTrackMap.get(r.artist_name) ?? null,
     total_plays: r.total_plays,
     peak_year: r.peak_year,
     years_active: r.years_active,
@@ -150,6 +151,48 @@ async function loadArtistIdMap(db: D1Database): Promise<Map<string, ArtistIdReso
     } else {
       map.set(r.artist_name, { kind: "ambiguous" });
     }
+  }
+  return map;
+}
+
+/**
+ * Load a name → bare-track-ID map: each artist's most-played track.
+ * Tie-break: highest play_count → most recent play → lexicographic URI.
+ * Artists with no non-null spotify_track_uri are absent from the map.
+ */
+async function loadTopTrackMap(db: D1Database): Promise<Map<string, string>> {
+  const sql = `
+    SELECT artist_name, spotify_track_uri, COUNT(*) AS play_count, MAX(ts) AS latest_ts
+    FROM plays
+    WHERE spotify_track_uri IS NOT NULL AND spotify_track_uri != ''
+    GROUP BY artist_name, spotify_track_uri
+  `;
+  let rows: Array<{ artist_name: string; spotify_track_uri: string; play_count: number; latest_ts: number }> = [];
+  try {
+    const r = await db.prepare(sql)
+      .all<{ artist_name: string; spotify_track_uri: string; play_count: number; latest_ts: number }>();
+    rows = r.results ?? [];
+  } catch {
+    return new Map();
+  }
+
+  const best = new Map<string, { uri: string; play_count: number; latest_ts: number }>();
+  for (const r of rows) {
+    const cur = best.get(r.artist_name);
+    if (
+      !cur ||
+      r.play_count > cur.play_count ||
+      (r.play_count === cur.play_count && r.latest_ts > cur.latest_ts) ||
+      (r.play_count === cur.play_count && r.latest_ts === cur.latest_ts && r.spotify_track_uri < cur.uri)
+    ) {
+      best.set(r.artist_name, { uri: r.spotify_track_uri, play_count: r.play_count, latest_ts: r.latest_ts });
+    }
+  }
+
+  const map = new Map<string, string>();
+  for (const [name, b] of best) {
+    const id = b.uri.startsWith("spotify:track:") ? b.uri.slice("spotify:track:".length) : b.uri;
+    map.set(name, id);
   }
   return map;
 }

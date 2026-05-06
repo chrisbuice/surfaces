@@ -150,6 +150,7 @@ export async function buildConstellation(
       plays: n.total_plays,
       peak_year: n.peak_year,
       years_active: n.years_active,
+      ...(n.top_track_id ? { top_track_id: n.top_track_id } : {}),
       cluster_id: clusterResult.assignments[i],
       top_neighbors: neighbors,
       is_labeled: labeledNames.has(n.artist_name),
