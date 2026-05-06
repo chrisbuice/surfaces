@@ -262,13 +262,13 @@ const defaultHandler: ExportedHandler<Env> = {
         }
 
         // One-shot constellation rebuild (bypasses the nightly cron schedule).
-        // Same Cloudflare Access gate as /admin/spotify-token.
+        // Gated by Cloudflare Access JWT, same as other /api POST endpoints.
         case "/admin/rebuild-constellation": {
           if (request.method !== "POST") {
             return new Response("Method not allowed", { status: 405 });
           }
-          const rebuildEmail = request.headers.get("Cf-Access-Authenticated-User-Email");
-          if (!rebuildEmail || rebuildEmail !== env.ACCESS_ALLOWED_EMAIL) {
+          const rebuildAuth = await verifyAccessJwt(request, env);
+          if (!rebuildAuth.ok || rebuildAuth.email !== env.ACCESS_ALLOWED_EMAIL) {
             return new Response("Unauthorized", { status: 401 });
           }
           const { runConstellationCron } = await import("./constellation/cron");
