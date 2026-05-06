@@ -270,6 +270,16 @@ const defaultHandler: ExportedHandler<Env> = {
           }
           const rebuildBearer = request.headers.get("Authorization")?.replace("Bearer ", "");
           const rebuildAuth = await verifyAccessJwt(request, env);
+          // DEBUG — remove after diagnosing 401
+          console.log("DEBUG rebuild-constellation auth", JSON.stringify({
+            ok: rebuildAuth.ok,
+            email: rebuildAuth.email,
+            common_name: rebuildAuth.common_name,
+            reason: rebuildAuth.reason,
+            env_service_token: env.ACCESS_ALLOWED_SERVICE_TOKEN,
+            jwt_payload: rebuildAuth._debug_payload,
+          }));
+          // END DEBUG
           const hasJwt = rebuildAuth.ok && (
             rebuildAuth.email === env.ACCESS_ALLOWED_EMAIL ||
             rebuildAuth.common_name === env.ACCESS_ALLOWED_SERVICE_TOKEN
