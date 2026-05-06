@@ -26,6 +26,7 @@ export interface Env {
   NOTIFICATION_EMAIL: string;
   SPOTIFY_USER_ID: string;
   ACCESS_ALLOWED_EMAIL: string;
+  ACCESS_ALLOWED_SERVICE_TOKEN: string;
   ACCESS_TEAM_NAME: string;
   ACCESS_AUD: string;
   LASTFM_API_KEY?: string;
@@ -269,7 +270,10 @@ const defaultHandler: ExportedHandler<Env> = {
           }
           const rebuildBearer = request.headers.get("Authorization")?.replace("Bearer ", "");
           const rebuildAuth = await verifyAccessJwt(request, env);
-          const hasJwt = rebuildAuth.ok && rebuildAuth.email === env.ACCESS_ALLOWED_EMAIL;
+          const hasJwt = rebuildAuth.ok && (
+            rebuildAuth.email === env.ACCESS_ALLOWED_EMAIL ||
+            rebuildAuth.common_name === env.ACCESS_ALLOWED_SERVICE_TOKEN
+          );
           const hasToken = rebuildBearer === env.SHORTCUT_TOKEN;
           if (!hasJwt && !hasToken) {
             return new Response("Unauthorized", { status: 401 });

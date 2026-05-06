@@ -14,6 +14,7 @@ interface Env {
 interface VerifyResult {
   ok: boolean;
   email?: string;
+  common_name?: string;
   reason?: string;
 }
 
@@ -186,5 +187,5 @@ export async function verifyAccessJwt(request: Request, env: Env): Promise<Verif
     return { ok: false, reason: "verification_error" };
   }
 
-  return { ok: true, email: payload.email };
+  return { ok: true, email: payload.email, common_name: payload.common_name as string | undefined };
 }
