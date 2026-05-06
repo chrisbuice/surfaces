@@ -4,6 +4,12 @@ A personal Spotify automation tool, single-user (Chris). The agent has two surfa
 
 The agent already has a working Spotify Web API integration (OAuth in place, can fetch playlists, tracks, recently-played, etc.). It also has a 15-year local listening-history dataset and several pre-derived files. See `LISTENING_HISTORY.md` for the schema, file inventory, and load-bearing quirks of that dataset.
 
+## Deployment
+
+This repo auto-deploys to Cloudflare Workers on push to `main` via Workers Builds (configured in the CF dashboard, not in-repo). Manual deploys via `npx wrangler deploy` still work and target the same worker. If a "did my fix deploy?" question comes up, check `npx wrangler deployments list` and compare timestamps to the commit, or check the CF dashboard's build log.
+
+`chrisbuice-site` is a separate repo with its own deploy model (Workers Static Assets, also auto-deploy on push). The two repos are independent — pushing one does not deploy the other.
+
 ## Architecture: discover, don't assume
 
 The language and runtime aren't stated here on purpose — read the project files first. Before making any change:
