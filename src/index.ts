@@ -41,6 +41,40 @@ export interface Env {
   OAUTH_PROVIDER: OAuthHelpers;
 }
 
+// D1 fallback for /api/now-playing: returns the most recent track from
+// poll_observations when Spotify has no current item (paused, idle, 204, etc.)
+async function nowPlayingFallback(db: D1Database): Promise<Response> {
+  try {
+    const row = await db.prepare(
+      `SELECT track_id, track_name, artist_name, progress_ms, duration_ms, observed_at
+       FROM poll_observations
+       WHERE track_name IS NOT NULL
+       ORDER BY observed_at DESC LIMIT 1`
+    ).first<{
+      track_id: string;
+      track_name: string;
+      artist_name: string;
+      progress_ms: number;
+      duration_ms: number;
+      observed_at: number;
+    }>();
+    if (row) {
+      return Response.json({
+        is_playing: false,
+        track_id: row.track_id,
+        track_name: row.track_name,
+        artist_name: row.artist_name,
+        progress_ms: row.progress_ms,
+        duration_ms: row.duration_ms,
+        last_observed_at: row.observed_at,
+      });
+    }
+  } catch (e) {
+    console.error("D1 fallback for now-playing failed:", e);
+  }
+  return Response.json({ is_playing: false });
+}
+
 // ── Default handler: serves all routes except OAuth-protected /mcp ──
 const defaultHandler: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -247,36 +281,7 @@ const defaultHandler: ExportedHandler<Env> = {
               device?: { name: string; type: string } | null;
             }>("/v1/me/player/currently-playing");
             if (!playing || !playing.item) {
-              // Fallback: show last-known track from poll_observations
-              try {
-                const row = await env.DB.prepare(
-                  `SELECT track_id, track_name, artist_name, progress_ms, duration_ms, observed_at
-                   FROM poll_observations
-                   WHERE track_name IS NOT NULL
-                   ORDER BY observed_at DESC LIMIT 1`
-                ).first<{
-                  track_id: string;
-                  track_name: string;
-                  artist_name: string;
-                  progress_ms: number;
-                  duration_ms: number;
-                  observed_at: string;
-                }>();
-                if (row) {
-                  return Response.json({
-                    is_playing: false,
-                    track_id: row.track_id,
-                    track_name: row.track_name,
-                    artist_name: row.artist_name,
-                    progress_ms: row.progress_ms,
-                    duration_ms: row.duration_ms,
-                    last_observed_at: row.observed_at,
-                  });
-                }
-              } catch (e) {
-                console.error("D1 fallback for now-playing failed:", e);
-              }
-              return Response.json({ is_playing: false });
+              return await nowPlayingFallback(env.DB);
             }
             // Check if this track is in the most recent active session
             let playContext: { inSession: boolean; mode?: string; source?: string; sourceDetail?: string; reasons?: string[] } = { inSession: false };
@@ -377,7 +382,7 @@ const defaultHandler: ExportedHandler<Env> = {
               up_next: upNext,
             });
           } catch {
-            return Response.json({ is_playing: false });
+            return await nowPlayingFallback(env.DB);
           }
         }
 
