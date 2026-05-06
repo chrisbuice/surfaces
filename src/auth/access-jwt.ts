@@ -16,7 +16,6 @@ interface VerifyResult {
   email?: string;
   common_name?: string;
   reason?: string;
-  _debug_payload?: Record<string, unknown>; // TEMPORARY — remove after debugging
 }
 
 interface JwksKey {
@@ -188,5 +187,5 @@ export async function verifyAccessJwt(request: Request, env: Env): Promise<Verif
     return { ok: false, reason: "verification_error" };
   }
 
-  return { ok: true, email: payload.email, common_name: payload.common_name as string | undefined, _debug_payload: payload as unknown as Record<string, unknown> };
+  return { ok: true, email: payload.email, common_name: payload.common_name as string | undefined };
 }
