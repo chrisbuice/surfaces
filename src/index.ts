@@ -262,13 +262,16 @@ const defaultHandler: ExportedHandler<Env> = {
         }
 
         // One-shot constellation rebuild (bypasses the nightly cron schedule).
-        // Gated by Cloudflare Access JWT, same as other /api POST endpoints.
+        // Accepts either Cloudflare Access JWT or Bearer SHORTCUT_TOKEN.
         case "/admin/rebuild-constellation": {
           if (request.method !== "POST") {
             return new Response("Method not allowed", { status: 405 });
           }
+          const rebuildBearer = request.headers.get("Authorization")?.replace("Bearer ", "");
           const rebuildAuth = await verifyAccessJwt(request, env);
-          if (!rebuildAuth.ok || rebuildAuth.email !== env.ACCESS_ALLOWED_EMAIL) {
+          const hasJwt = rebuildAuth.ok && rebuildAuth.email === env.ACCESS_ALLOWED_EMAIL;
+          const hasToken = rebuildBearer === env.SHORTCUT_TOKEN;
+          if (!hasJwt && !hasToken) {
             return new Response("Unauthorized", { status: 401 });
           }
           const { runConstellationCron } = await import("./constellation/cron");
