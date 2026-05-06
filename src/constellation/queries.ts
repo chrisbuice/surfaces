@@ -423,6 +423,7 @@ export function reflectionLabel(b: { start_year: number; end_year: number }, isL
 export async function buildStats(db: D1Database): Promise<{
   total_plays: number;
   total_artists: number;
+  total_tracks: number;
   total_seasons: number;
   data_starts: string;
 }> {
@@ -433,6 +434,10 @@ export async function buildStats(db: D1Database): Promise<{
   const artistsRow = await db.prepare(
     `SELECT COUNT(DISTINCT artist_name) AS total_artists FROM plays`
   ).first<{ total_artists: number }>();
+
+  const tracksRow = await db.prepare(
+    `SELECT COUNT(DISTINCT spotify_track_uri) AS total_tracks FROM plays`
+  ).first<{ total_tracks: number }>();
 
   let total_seasons = 0;
   try {
@@ -449,6 +454,7 @@ export async function buildStats(db: D1Database): Promise<{
   return {
     total_plays: playsRow?.total_plays ?? 0,
     total_artists: artistsRow?.total_artists ?? 0,
+    total_tracks: tracksRow?.total_tracks ?? 0,
     total_seasons,
     data_starts,
   };

@@ -25,7 +25,7 @@ describe("/api/constellation endpoint", () => {
   it("returns the cached JSON with public,max-age=3600 cache headers", async () => {
     const fakePayload = {
       generated_at: "2026-05-02T08:00:00Z",
-      stats: { total_plays: 42, total_artists: 3, total_seasons: 0, data_starts: "2011-12-10" },
+      stats: { total_plays: 42, total_artists: 3, total_tracks: 10, total_seasons: 0, data_starts: "2011-12-10" },
       era_buckets: [
         { label: "2011–2014", color: "#c8956d" },
       ],

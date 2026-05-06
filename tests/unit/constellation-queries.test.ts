@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { env } from "cloudflare:test";
 import {
-  buildNodes, buildEdges, computeReflectionBuckets, reflectionIndexFor, reflectionLabel,
+  buildNodes, buildEdges, buildStats, computeReflectionBuckets, reflectionIndexFor, reflectionLabel,
   computeEdgeWeights, pairKey,
   MIN_PLAYS, SESSION_THRESHOLD, SEASONAL_PLAYLIST_BONUS, PLAYLIST_WEIGHT,
 } from "../../src/constellation/queries";
@@ -294,6 +294,25 @@ describe("constellation queries — artist-id resolution", () => {
     expect(byName.get("Resolved")!.artist_id).toEqual({ kind: "resolved", id: "rid_1" });
     expect(byName.get("Ambiguous")!.artist_id).toEqual({ kind: "ambiguous" });
     expect(byName.get("Unresolved")!.artist_id).toEqual({ kind: "unresolved" });
+  });
+});
+
+describe("constellation queries — stats", () => {
+  it("total_tracks counts distinct URIs, not total plays", async () => {
+    await resetTables(env.DB);
+    const ts = Math.floor(new Date("2020-06-15T12:00:00Z").getTime() / 1000);
+    const trackA = "spotify:track:aaa";
+    const trackB = "spotify:track:bbb";
+    // 3 plays of track A, 2 plays of track B → 5 rows but only 2 distinct URIs.
+    await insertPlay(env.DB, "Artist", ts + 0,   trackA, 2020);
+    await insertPlay(env.DB, "Artist", ts + 60,  trackA, 2020);
+    await insertPlay(env.DB, "Artist", ts + 120, trackA, 2020);
+    await insertPlay(env.DB, "Artist", ts + 180, trackB, 2020);
+    await insertPlay(env.DB, "Artist", ts + 240, trackB, 2020);
+
+    const stats = await buildStats(env.DB);
+    expect(stats.total_tracks).toBe(2);
+    expect(stats.total_plays).toBe(5);
   });
 });
 

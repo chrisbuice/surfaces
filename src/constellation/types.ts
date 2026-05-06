@@ -12,6 +12,7 @@
 export interface ConstellationStats {
   total_plays: number;
   total_artists: number;
+  total_tracks: number;
   total_seasons: number;
   data_starts: string;            // ISO date, e.g. "2011-12-10"
 }
