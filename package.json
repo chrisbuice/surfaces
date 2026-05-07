@@ -14,7 +14,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.0",
     "@cloudflare/workers-oauth-provider": "^0.4.0",
-    "d3-force": "^3.0.0"
+    "d3-force": "^3.0.0",
+    "fuzzball": "^2.2.6"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.15.2",
