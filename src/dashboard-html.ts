@@ -306,6 +306,7 @@ export default `<!DOCTYPE html>
     <button class="tab-btn" data-tab="discover">Discover</button>
     <button class="tab-btn" data-tab="intelligence">Intelligence</button>
     <button class="tab-btn" data-tab="trends">Trends</button>
+    <button class="tab-btn hidden" data-tab="apple" id="apple-tab-btn">Apple</button>
   </div>
 
   <!-- Now Playing (persistent, visible on all tabs) -->
@@ -667,6 +668,18 @@ export default `<!DOCTYPE html>
     </div>
   </div>
 
+  <div class="tab-content" id="tab-apple">
+    <div class="eyebrow">Apple Music Import</div>
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:6px;">Tracks needing review</h2>
+    <p id="apple-lede" style="color:var(--ink2);font-size:14px;margin-bottom:16px;">Loading...</p>
+    <div id="apple-cards">
+      <div class="status-msg">Loading...</div>
+    </div>
+    <div id="apple-pagination" style="display:none;margin-top:16px;text-align:center;">
+      <button class="mode-btn" id="apple-load-more">Load more</button>
+    </div>
+  </div>
+
   <!-- ════ Shared Tooltip ════ -->
   <div id="tip"></div>
 
@@ -909,6 +922,7 @@ export default `<!DOCTYPE html>
       if (name === 'calendar' && !calendarLoaded) { loadHeatmap(); renderTmMonths(); calendarLoaded = true; }
       if (name === 'discover' && !discoverLoaded) loadDiscover();
       if (name === 'intelligence' && !intelligenceLoaded) loadIntelligence();
+      if (name === 'apple' && !appleLoaded) loadAppleMatches();
     }
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -920,6 +934,7 @@ export default `<!DOCTYPE html>
     let calendarLoaded = false;
     let discoverLoaded = false;
     let intelligenceLoaded = false;
+    let appleLoaded = false;
 
     // ── Hero ──
     async function loadHero() {
@@ -2522,6 +2537,168 @@ export default `<!DOCTYPE html>
       loadAffinities();
       loadFreshPool();
     }, 1000);
+
+    // ── Apple Music match review ──
+    let appleOffset = 0;
+    const APPLE_PAGE_SIZE = 10;
+
+    // On init: check if there are matches to review, show tab if so
+    (async function checkAppleTab() {
+      try {
+        const data = await api('/api/listening/apple-matches/count?status=review');
+        if (data.count > 0) {
+          document.getElementById('apple-tab-btn').classList.remove('hidden');
+        }
+      } catch {}
+    })();
+
+    async function loadAppleMatches() {
+      appleLoaded = true;
+      const container = document.getElementById('apple-cards');
+      const lede = document.getElementById('apple-lede');
+      try {
+        const data = await api(\`/api/listening/apple-matches?status=review&limit=\${APPLE_PAGE_SIZE}&offset=\${appleOffset}\`);
+        lede.textContent = \`\${data.total} tracks in the review queue.\`;
+        if (data.items.length === 0) {
+          container.innerHTML = '<div class="status-msg">No tracks to review.</div>';
+          return;
+        }
+        if (appleOffset === 0) container.innerHTML = '';
+        for (const item of data.items) {
+          container.appendChild(buildAppleCard(item));
+        }
+        const pagination = document.getElementById('apple-pagination');
+        pagination.style.display = data.hasMore ? 'block' : 'none';
+      } catch (e) {
+        container.innerHTML = '<div class="status-msg">Error loading matches.</div>';
+      }
+    }
+
+    function buildAppleCard(item) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.id = \`apple-card-\${item.cache_key}\`;
+      card.style.marginBottom = '12px';
+
+      // Apple metadata section
+      const appleMeta = \`
+        <div class="eyebrow" style="margin-bottom:4px;">APPLE MUSIC</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:2px;">\${esc(item.original_song_name)}</div>
+        <div style="font-size:13px;color:var(--ink2);margin-bottom:2px;">
+          \${esc(item.itunes_artist_name || item.original_artist_name || 'Unknown artist')}
+        </div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">
+          \${esc(item.itunes_album_name || item.original_album_name || '')}
+          \${item.itunes_duration_ms ? ' · ' + formatDuration(item.itunes_duration_ms) : ''}
+          \${item.itunes_genre ? ' · ' + esc(item.itunes_genre) : ''}
+        </div>
+      \`;
+
+      // Spotify candidate section (if we have one)
+      let spotifySection = '';
+      if (item.spotify_track_uri) {
+        const trackId = item.spotify_track_uri.replace('spotify:track:', '');
+        spotifySection = \`
+          <div style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px;">
+            <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;">
+              BEST MATCH · \${(item.match_confidence * 100).toFixed(0)}% · \${item.match_method || 'text'}
+            </div>
+            <div style="font-size:14px;font-weight:500;">\${esc(item.spotify_track_name)}</div>
+            <div style="font-size:12px;color:var(--ink2);margin-bottom:6px;">\${esc(item.spotify_artist_name)} · \${esc(item.spotify_album_name)}</div>
+            <iframe src="https://open.spotify.com/embed/track/\${trackId}" width="100%" height="80" frameborder="0" style="border-radius:8px;" allow="encrypted-media"></iframe>
+          </div>
+        \`;
+      }
+
+      // Action buttons
+      const actions = \`
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+          \${item.spotify_track_uri ? \`<button class="mode-btn" style="flex:1;border-color:var(--accent);" onclick="appleAction('\${item.cache_key}', 'match', '\${item.spotify_track_uri}')">Match this</button>\` : ''}
+          <button class="mode-btn" style="flex:1;" onclick="appleSearch('\${item.cache_key}')">Search</button>
+          <button class="mode-btn" style="flex:0 0 auto;" onclick="appleAction('\${item.cache_key}', 'skip')">Skip</button>
+          <button class="mode-btn" style="flex:0 0 auto;border-color:var(--accent2);" onclick="appleAction('\${item.cache_key}', 'unmatchable')">Unmatchable</button>
+        </div>
+        <div id="apple-search-\${item.cache_key}" style="display:none;margin-top:8px;">
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="apple-query-\${item.cache_key}" placeholder="Search Spotify..." style="flex:1;background:var(--card);border:1px solid var(--border);color:var(--ink);padding:8px 12px;border-radius:6px;font-size:14px;" value="\${esc(item.itunes_track_name || item.original_song_name)} \${esc(item.itunes_artist_name || '')}">
+            <button class="mode-btn" onclick="appleRunSearch('\${item.cache_key}')">Go</button>
+          </div>
+          <div id="apple-results-\${item.cache_key}" style="margin-top:6px;"></div>
+        </div>
+      \`;
+
+      card.innerHTML = appleMeta + spotifySection + actions;
+      return card;
+    }
+
+    function formatDuration(ms) {
+      const m = Math.floor(ms / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      return m + ':' + String(s).padStart(2, '0');
+    }
+
+    function esc(s) {
+      if (!s) return '';
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    async function appleAction(cacheKey, action, spotifyUri) {
+      try {
+        const body = { action };
+        if (spotifyUri) body.spotify_track_uri = spotifyUri;
+        await apiPost(\`/api/listening/apple-matches/\${encodeURIComponent(cacheKey)}\`, body);
+        // Slide up the card
+        const card = document.getElementById(\`apple-card-\${cacheKey}\`);
+        if (card) {
+          card.style.transition = 'opacity 0.3s, max-height 0.3s';
+          card.style.opacity = '0';
+          card.style.maxHeight = '0';
+          card.style.overflow = 'hidden';
+          setTimeout(() => card.remove(), 300);
+        }
+        showToast(action === 'match' ? 'Matched!' : action === 'skip' ? 'Skipped' : 'Marked unmatchable');
+      } catch (e) {
+        showToast('Error: ' + e.message);
+      }
+    }
+
+    function appleSearch(cacheKey) {
+      const el = document.getElementById(\`apple-search-\${cacheKey}\`);
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function appleRunSearch(cacheKey) {
+      const query = document.getElementById(\`apple-query-\${cacheKey}\`).value;
+      const resultsEl = document.getElementById(\`apple-results-\${cacheKey}\`);
+      resultsEl.innerHTML = '<div class="status-msg">Searching...</div>';
+      try {
+        const data = await apiPost(\`/api/listening/apple-matches/\${encodeURIComponent(cacheKey)}\`, { action: 'search', query });
+        if (!data.candidates || data.candidates.length === 0) {
+          resultsEl.innerHTML = '<div class="status-msg">No results.</div>';
+          return;
+        }
+        resultsEl.innerHTML = data.candidates.map(c => {
+          const trackId = c.spotify_track_uri.replace('spotify:track:', '');
+          return \`
+            <div style="padding:8px 0;border-bottom:1px solid var(--border);">
+              <div style="font-size:14px;font-weight:500;">\${esc(c.track_name)}</div>
+              <div style="font-size:12px;color:var(--ink2);">\${esc(c.artist_name)} · \${esc(c.album_name)}</div>
+              <iframe src="https://open.spotify.com/embed/track/\${trackId}" width="100%" height="80" frameborder="0" style="border-radius:8px;margin-top:4px;" allow="encrypted-media"></iframe>
+              <button class="mode-btn" style="margin-top:4px;border-color:var(--accent);" onclick="appleAction('\${cacheKey}', 'match', '\${c.spotify_track_uri}')">Match this</button>
+            </div>
+          \`;
+        }).join('');
+      } catch (e) {
+        resultsEl.innerHTML = '<div class="status-msg">Error: ' + e.message + '</div>';
+      }
+    }
+
+    document.getElementById('apple-load-more').addEventListener('click', () => {
+      appleOffset += APPLE_PAGE_SIZE;
+      loadAppleMatches();
+    });
 
     // Background: sync recent plays, then refresh hero
     setTimeout(() => {
