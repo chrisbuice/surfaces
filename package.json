@@ -7,9 +7,12 @@
     "deploy": "wrangler deploy",
     "db:migrate": "wrangler d1 execute spotify-agent-db --file=src/db/schema.sql",
     "test": "vitest run",
+    "test:scripts": "vitest run --config vitest.scripts.config.mts",
+    "test:all": "vitest run && vitest run --config vitest.scripts.config.mts",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.0",
     "@cloudflare/workers-oauth-provider": "^0.4.0",
     "d3-force": "^3.0.0"
   },
