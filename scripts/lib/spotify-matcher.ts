@@ -37,13 +37,29 @@ interface SpotifySearchResponse {
   };
 }
 
-// ── Rate limiter ──
+// ── Rate limiting ──
 
-const limiter = new RateLimiter(25); // 25 req/sec
+/**
+ * Thrown when Spotify returns 429 with a Retry-After header.
+ * The caller (ingest script) uses this to drive the global circuit breaker.
+ */
+export class SpotifyRateLimitError extends Error {
+  retryAfterSeconds: number;
+  constructor(retryAfter: number) {
+    super(`Spotify 429: retry after ${retryAfter}s (~${(retryAfter / 3600).toFixed(1)}h)`);
+    this.name = "SpotifyRateLimitError";
+    this.retryAfterSeconds = retryAfter;
+  }
+}
+
+const limiter = new RateLimiter(10); // 10 req/sec (reduced from 25 to avoid tripping per-hour ceiling)
 
 const SPOTIFY_API = "https://api.spotify.com/v1";
 const MAX_RETRIES = 3;
 const FETCH_TIMEOUT_MS = 30_000;
+// Don't wait more than 30s on a single retry — if Retry-After is longer,
+// throw SpotifyRateLimitError and let the caller decide.
+const MAX_RETRY_WAIT_MS = 30_000;
 
 // ── ISRC search ──
 
@@ -120,6 +136,35 @@ export async function searchByText(
   }).sort((a, b) => b.confidence - a.confidence);
 }
 
+// ── Pre-flight rate limit check ──
+
+/**
+ * Make a single cheap Spotify API call to check if we're rate-limited.
+ * Throws SpotifyRateLimitError if 429, returns normally otherwise.
+ */
+export async function checkSpotifyRateLimit(
+  token: string,
+  fetchFn: typeof fetch = fetch,
+): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetchFn(`${SPOTIFY_API}/search?q=test&type=track&limit=1`, {
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    clearTimeout(timer);
+    if (res.status === 429) {
+      const retryAfter = parseInt(res.headers.get("retry-after") ?? "0", 10);
+      throw new SpotifyRateLimitError(retryAfter || 3600);
+    }
+  } catch (err) {
+    clearTimeout(timer);
+    if (err instanceof SpotifyRateLimitError) throw err;
+    // Network error on pre-flight is not fatal — let the main loop handle it
+  }
+}
+
 // ── Scoring ──
 
 /**
@@ -185,9 +230,23 @@ async function spotifyFetch<T>(
     }
 
     if (res.status === 429) {
-      const retryAfter = res.headers.get("retry-after");
-      const waitMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 2000 * Math.pow(2, attempt);
-      if (attempt === MAX_RETRIES) return null;
+      const retryAfterRaw = res.headers.get("retry-after");
+      const retryAfterSec = retryAfterRaw ? parseInt(retryAfterRaw, 10) : 0;
+      const waitMs = retryAfterSec > 0
+        ? retryAfterSec * 1000
+        : 2000 * Math.pow(2, attempt);
+
+      // If Retry-After is longer than we're willing to wait per-request,
+      // throw so the caller's circuit breaker can handle it globally.
+      if (waitMs > MAX_RETRY_WAIT_MS) {
+        throw new SpotifyRateLimitError(retryAfterSec || Math.ceil(waitMs / 1000));
+      }
+
+      if (attempt === MAX_RETRIES) {
+        throw new SpotifyRateLimitError(retryAfterSec || 60);
+      }
+
+      console.log(`    Spotify 429 — waiting ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/${MAX_RETRIES})`);
       await sleep(waitMs);
       continue;
     }

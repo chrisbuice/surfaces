@@ -26,7 +26,7 @@ import {
 } from "./lib/apple-csv-parser";
 import { lookupTrack, type ItunesTrack } from "./lib/itunes-lookup";
 import { findIsrc } from "./lib/musicbrainz-isrc";
-import { searchByIsrc, searchByText, type SpotifyMatchCandidate } from "./lib/spotify-matcher";
+import { searchByIsrc, searchByText, checkSpotifyRateLimit, SpotifyRateLimitError, type SpotifyMatchCandidate } from "./lib/spotify-matcher";
 import { getSpotifyToken } from "./lib/spotify-auth";
 import { queryD1, writeD1 } from "../stack/lyrics-backfill/lib/d1";
 
@@ -247,9 +247,29 @@ async function main() {
     console.log("[Step 6] Acquiring Spotify token...");
     const initialToken = await getSpotifyToken();
     console.log(`  ✓ Token acquired (${initialToken.slice(0, 8)}...)`);
+
+    // Pre-flight: check if Spotify is currently rate-limiting us
+    console.log("[Step 6] Checking Spotify rate limit status...");
+    try {
+      await checkSpotifyRateLimit(initialToken);
+      console.log("  ✓ Spotify API responding normally");
+    } catch (err) {
+      if (err instanceof SpotifyRateLimitError) {
+        const hrs = (err.retryAfterSeconds / 3600).toFixed(1);
+        console.error(`\n❌ Spotify rate-limited; retry after ${err.retryAfterSeconds}s (~${hrs}h)`);
+        console.error("   Exiting. Re-run after the rate limit expires.\n");
+        process.exit(1);
+      }
+      throw err;
+    }
+
     console.log(`[Step 6] Matching ${tracksToProcess.length} tracks to Spotify...`);
     let loopIter = 0;
     let timedOut = 0;
+    let consecutive429s = 0;
+    const CIRCUIT_BREAKER_THRESHOLD = 5;
+    const CIRCUIT_BREAKER_PAUSE_MS = 5 * 60 * 1000; // 5 minutes
+
     for (const [cacheKey, events] of tracksToProcess) {
       loopIter++;
 
@@ -277,37 +297,30 @@ async function main() {
             setTimeout(() => reject(new Error("TRACK_TIMEOUT")), TRACK_TIMEOUT_MS),
           ),
         ]);
+        consecutive429s = 0; // reset on success
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (msg === "TRACK_TIMEOUT") {
+
+        if (err instanceof SpotifyRateLimitError) {
+          consecutive429s++;
+          console.log(`  ⚠ RATE LIMITED (${consecutive429s}/${CIRCUIT_BREAKER_THRESHOLD}): ${msg}`);
+
+          if (consecutive429s >= CIRCUIT_BREAKER_THRESHOLD) {
+            console.log(`  🛑 Circuit breaker: ${CIRCUIT_BREAKER_THRESHOLD} consecutive 429s. Pausing ${CIRCUIT_BREAKER_PAUSE_MS / 60000} min...`);
+            await new Promise((r) => setTimeout(r, CIRCUIT_BREAKER_PAUSE_MS));
+            consecutive429s = 0;
+            console.log("  ✓ Resuming after circuit breaker pause");
+          }
+
+          // Mark track as unmatched and continue
+          result = makeUnmatchedResult(firstEvent);
+        } else if (msg === "TRACK_TIMEOUT") {
           console.log(`  ⚠ TRACK TIMEOUT: "${firstEvent.row.songName}" (${cacheKey}) — skipping`);
           timedOut++;
-          result = {
-            cacheKey,
-            appleTrackId: firstEvent.appleTrackId,
-            bestCandidate: null,
-            allCandidates: [],
-            itunesData: null,
-            isrc: null,
-            matchStatus: "unmatched",
-            originalSongName: firstEvent.row.songName,
-            originalArtistName: firstEvent.row.artistName,
-            originalAlbumName: firstEvent.row.albumName,
-          };
+          result = makeUnmatchedResult(firstEvent);
         } else {
           console.log(`  ⚠ TRACK ERROR: "${firstEvent.row.songName}" — ${msg}`);
-          result = {
-            cacheKey,
-            appleTrackId: firstEvent.appleTrackId,
-            bestCandidate: null,
-            allCandidates: [],
-            itunesData: null,
-            isrc: null,
-            matchStatus: "unmatched",
-            originalSongName: firstEvent.row.songName,
-            originalArtistName: firstEvent.row.artistName,
-            originalAlbumName: firstEvent.row.albumName,
-          };
+          result = makeUnmatchedResult(firstEvent);
         }
       }
 
@@ -463,6 +476,23 @@ async function main() {
   console.log("║  ────────────────────────────────────────");
   console.log(`║  Plays ${DRY_RUN ? "would write" : "written"} to D1:  ${finalPlayCount.toString().padStart(8)}`);
   console.log("╚══════════════════════════════════════════╝");
+}
+
+// ── Helpers ──
+
+function makeUnmatchedResult(event: PlayEvent): MatchResult {
+  return {
+    cacheKey: event.cacheKey,
+    appleTrackId: event.appleTrackId,
+    bestCandidate: null,
+    allCandidates: [],
+    itunesData: null,
+    isrc: null,
+    matchStatus: "unmatched",
+    originalSongName: event.row.songName,
+    originalArtistName: event.row.artistName,
+    originalAlbumName: event.row.albumName,
+  };
 }
 
 // ── Track matching ──

@@ -60,6 +60,17 @@ export async function lookupTrack(
 
     if (res.status === 404) return null;
 
+    if (res.status === 429) {
+      const retryAfter = res.headers.get("retry-after");
+      const waitMs = retryAfter
+        ? Math.min(parseInt(retryAfter, 10) * 1000, 30_000)
+        : 2000 * Math.pow(2, attempt);
+      if (attempt === MAX_RETRIES) return null;
+      console.log(`    iTunes 429 — waiting ${Math.round(waitMs / 1000)}s`);
+      await sleep(waitMs);
+      continue;
+    }
+
     if (res.status >= 500) {
       if (attempt === MAX_RETRIES) return null;
       await sleep(1000 * Math.pow(2, attempt));

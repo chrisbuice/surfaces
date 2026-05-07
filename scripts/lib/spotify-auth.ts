@@ -56,6 +56,13 @@ export async function getSpotifyToken(
   }
   clearTimeout(timer);
 
+  if (res.status === 429) {
+    const retryAfter = parseInt(res.headers.get("retry-after") ?? "0", 10);
+    throw new Error(
+      `Spotify token endpoint 429: retry after ${retryAfter}s (~${(retryAfter / 3600).toFixed(1)}h)`,
+    );
+  }
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Spotify token error ${res.status}: ${text}`);
