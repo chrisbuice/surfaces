@@ -19,6 +19,7 @@ import {
   parsePlayActivity,
   buildDailyTracksLookup,
   buildArtistRecoveryLookup,
+  buildAlbumLookup,
   recoverAppleTrackId,
   makeCacheKey,
   type PlayActivityRow,
@@ -110,13 +111,15 @@ async function main() {
   const dailyMap = await buildDailyTracksLookup(DAILY_TRACKS_PATH);
   console.log(`  ✓ ${dailyMap.size} unique (date, song) keys`);
 
-  // ── Step 2: Build artist-recovery lookup ──
-  console.log("[Step 2] Building artist-recovery lookup...");
+  // ── Step 2: Build artist-recovery + album lookups ──
+  console.log("[Step 2] Building artist-recovery and album lookups...");
   const artistRecovery = await buildArtistRecoveryLookup(
     TRACK_PLAY_HISTORY_PATH,
     LIBRARY_TRACKS_PATH,
   );
+  const albumLookup = await buildAlbumLookup(LIBRARY_TRACKS_PATH);
   console.log(`  ✓ ${artistRecovery.size} songs with artist data`);
+  console.log(`  ✓ ${albumLookup.size} tracks with album data (for disambiguation)`);
 
   // ── Step 3: Parse Play Activity with Option B filter + recover track IDs ──
   console.log("[Step 3] Parsing Play Activity (Option B filter)...");
@@ -127,7 +130,7 @@ async function main() {
 
   for await (const row of parsePlayActivity(PLAY_ACTIVITY_PATH)) {
     totalParsed++;
-    const { trackId, ambiguous } = recoverAppleTrackId(row, dailyMap, artistRecovery);
+    const { trackId, ambiguous } = recoverAppleTrackId(row, dailyMap, albumLookup);
     const cacheKey = makeCacheKey(trackId, row.songName, row.artistName, row.albumName);
 
     if (trackId) recovered++;

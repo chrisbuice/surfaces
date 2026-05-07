@@ -1,5 +1,7 @@
 [
-  { "Title": "Dreams", "Artist": "Fleetwood Mac" },
-  { "Title": "Anti-Hero", "Artist": "Taylor Swift" },
-  { "Title": "TEXAS HOLD 'EM", "Artist": "Beyoncé" }
+  { "Title": "Dreams", "Artist": "Fleetwood Mac", "Album": "Rumours", "Purchased Track Identifier": 1234567890 },
+  { "Title": "Anti-Hero", "Artist": "Taylor Swift", "Album": "Midnights", "Purchased Track Identifier": 9876543210 },
+  { "Title": "TEXAS HOLD 'EM", "Artist": "Beyoncé", "Album": "COWBOY CARTER", "Purchased Track Identifier": 1111111111 },
+  { "Title": "Same Song", "Artist": "Ambiguous Artist", "Album": "Album A", "Purchased Track Identifier": 4444444444 },
+  { "Title": "Same Song", "Artist": "Different Artist", "Album": "Album B", "Purchased Track Identifier": 5555555555 }
 ]

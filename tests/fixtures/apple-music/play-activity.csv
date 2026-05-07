@@ -1,8 +1,8 @@
-Event Type,Artist Name,Build Version,End Reason Type,Event End Timestamp,Feature Name,Media Type,Play Duration Milliseconds,Song Name,Source Type,Album Name,Offline
-PLAY_END,Fleetwood Mac,iPhone14,NATURAL_END_OF_TRACK,2023-07-15T14:30:00Z,,AUDIO,245000,Dreams,library,Rumours,false
-PLAY_END,Taylor Swift,iPhone14,TRACK_SKIPPED_FORWARDS,2023-07-15T15:00:00Z,,AUDIO,35000,Anti-Hero,library,Midnights,false
-PLAY_END,Beyoncé,iPhone14,NATURAL_END_OF_TRACK,2023-07-15T15:30:00Z,shuffle,AUDIO,200000,TEXAS HOLD 'EM,library,COWBOY CARTER,true
-PLAY_END,Lana Del Rey,iPhone14,TRACK_SKIPPED_FORWARDS,2023-07-15T16:00:00Z,,AUDIO,10000,Video Games,library,Born to Die,false
-LYRIC_DISPLAY,Some Artist,,,,,,0,Some Song,,Some Album,false
-PLAY_END,Podcast Host,,NATURAL_END_OF_TRACK,2023-07-15T17:00:00Z,,PODCAST,1800000,Episode Title,library,,false
-PLAY_END,Short Play,iPhone14,TRACK_SKIPPED_FORWARDS,2023-07-15T17:30:00Z,,AUDIO,5000,Quick Skip,library,Album X,false
+Event Type,Container Artist Name,Device Type,End Reason Type,Event End Timestamp,Feature Name,Media Type,Play Duration Milliseconds,Song Name,Source Type,Album Name,Offline,Shuffle Play
+PLAY_END,Fleetwood Mac,iPhone14,NATURAL_END_OF_TRACK,2023-07-15T14:30:00Z,,AUDIO,245000,Dreams,library,Rumours,false,false
+PLAY_END,Taylor Swift,iPhone14,TRACK_SKIPPED_FORWARDS,2023-07-15T15:00:00Z,,AUDIO,35000,Anti-Hero,library,Midnights,false,false
+PLAY_END,Beyoncé,iPhone14,NATURAL_END_OF_TRACK,2023-07-15T15:30:00Z,shuffle,AUDIO,200000,TEXAS HOLD 'EM,library,COWBOY CARTER,true,true
+PLAY_END,Lana Del Rey,iPhone14,TRACK_SKIPPED_FORWARDS,2023-07-15T16:00:00Z,,AUDIO,10000,Video Games,library,Born to Die,false,false
+LYRIC_DISPLAY,Some Artist,,,,,,0,Some Song,,Some Album,false,false
+PLAY_END,Podcast Host,,NATURAL_END_OF_TRACK,2023-07-15T17:00:00Z,,PODCAST,1800000,Episode Title,library,,false,false
+PLAY_END,Short Play,iPhone14,TRACK_SKIPPED_FORWARDS,2023-07-15T17:30:00Z,,AUDIO,5000,Quick Skip,library,Album X,false,false

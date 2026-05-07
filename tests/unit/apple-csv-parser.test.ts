@@ -4,6 +4,7 @@ import {
   parsePlayActivity,
   buildDailyTracksLookup,
   buildArtistRecoveryLookup,
+  buildAlbumLookup,
   recoverAppleTrackId,
   makeCacheKey,
   HeaderMismatchError,
@@ -49,6 +50,8 @@ describe("parsePlayActivity", () => {
     expect(dreams.shuffle).toBe(false);
     expect(dreams.offline).toBe(false);
 
+    expect(dreams.deviceType).toBe("iPhone14");
+
     const texas = rows[2];
     expect(texas.shuffle).toBe(true);
     expect(texas.offline).toBe(true);
@@ -69,6 +72,21 @@ describe("parsePlayActivity", () => {
     } finally {
       unlinkSync(tmpPath);
     }
+  });
+});
+
+describe("parsePlayActivity — real header validation", () => {
+  it("accepts the real Apple Music Play Activity CSV header", async () => {
+    // play-activity-real-header.csv contains the actual 176-column header
+    // from Apple's export. The parser should accept it without throwing,
+    // even though it only uses ~10 of those columns.
+    const rows: PlayActivityRow[] = [];
+    // No data rows — just validates the header doesn't throw
+    for await (const row of parsePlayActivity(`${FIXTURES}/play-activity-real-header.csv`)) {
+      rows.push(row);
+    }
+    // No data rows in the fixture, so no results — but no HeaderMismatchError either
+    expect(rows).toHaveLength(0);
   });
 });
 
@@ -137,7 +155,7 @@ describe("recoverAppleTrackId", () => {
     expect(result.ambiguous).toBe(false);
   });
 
-  it("returns ambiguous=true when multiple track IDs match", async () => {
+  it("returns ambiguous=true when multiple track IDs match and no album to disambiguate", async () => {
     const dailyMap = await buildDailyTracksLookup(`${FIXTURES}/daily-tracks.csv`);
     const row: PlayActivityRow = {
       eventType: "PLAY_END",
@@ -157,6 +175,29 @@ describe("recoverAppleTrackId", () => {
     const result = recoverAppleTrackId(row, dailyMap);
     expect(result.trackId).toBeNull();
     expect(result.ambiguous).toBe(true);
+  });
+
+  it("disambiguates by album via Library Tracks when multiple track IDs match", async () => {
+    const dailyMap = await buildDailyTracksLookup(`${FIXTURES}/daily-tracks.csv`);
+    const albumLookup = await buildAlbumLookup(`${FIXTURES}/library-tracks.json`);
+    const row: PlayActivityRow = {
+      eventType: "PLAY_END",
+      mediaType: "AUDIO",
+      songName: "Same Song",
+      artistName: "",
+      albumName: "Album B",
+      eventEndTimestamp: "2023-07-15T12:00:00Z",
+      playDurationMs: 200000,
+      endReasonType: "NATURAL_END_OF_TRACK",
+      sourceType: "library",
+      shuffle: false,
+      offline: false,
+      deviceType: "iPhone14",
+    };
+
+    const result = recoverAppleTrackId(row, dailyMap, albumLookup);
+    expect(result.trackId).toBe("5555555555");
+    expect(result.ambiguous).toBe(false);
   });
 
   it("recovers via ±1 day window", async () => {

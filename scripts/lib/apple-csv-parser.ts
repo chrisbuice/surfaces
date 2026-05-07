@@ -44,14 +44,20 @@ export interface TrackIdRecoveryResult {
 
 // ── Expected headers ──
 
+// Note: Play Activity has NO per-track "Artist Name" column.
+// Artist comes from cross-reference (Daily Tracks, Library Tracks, iTunes Lookup).
+// "Container Artist Name" is the container/playlist artist, not the track artist.
 const PLAY_ACTIVITY_REQUIRED = [
   "Event Type",
   "Media Type",
   "Song Name",
+  "Album Name",
   "Event End Timestamp",
   "Play Duration Milliseconds",
   "End Reason Type",
   "Source Type",
+  "Shuffle Play",
+  "Offline",
 ];
 
 const DAILY_TRACKS_REQUIRED = [
@@ -200,15 +206,17 @@ export async function* parsePlayActivity(
       eventType,
       mediaType,
       songName: obj["Song Name"] ?? "",
-      artistName: obj["Artist Name"] ?? "",
+      // Play Activity has no per-track artist. Use Container Artist Name
+      // as a fallback hint; real artist comes from cross-reference pipeline.
+      artistName: obj["Container Artist Name"] ?? "",
       albumName: obj["Album Name"] ?? "",
       eventEndTimestamp: obj["Event End Timestamp"] ?? "",
       playDurationMs,
       endReasonType,
       sourceType: obj["Source Type"] ?? "",
-      shuffle: (obj["Feature Name"] ?? "").toLowerCase() === "shuffle",
+      shuffle: (obj["Shuffle Play"] ?? "").toLowerCase() === "true",
       offline: (obj["Offline"] ?? "").toLowerCase() === "true",
-      deviceType: obj["Build Version"] ?? "",
+      deviceType: obj["Device Type"] ?? "",
     };
   }
 }
@@ -336,20 +344,54 @@ export async function buildArtistRecoveryLookup(
   return map;
 }
 
+// ── Library album lookup ──
+
+/**
+ * Build a trackId → albumName map from Library Tracks JSON.
+ * Used by disambiguate() to resolve ambiguous Daily Tracks matches
+ * when the Play Activity row has an album name.
+ */
+export async function buildAlbumLookup(
+  libPath: string,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  try {
+    const fs = await import("node:fs/promises");
+    const raw = await fs.readFile(libPath, "utf-8");
+    const tracks = JSON.parse(raw) as Array<{
+      "Purchased Track Identifier"?: number;
+      Title?: string;
+      Album?: string;
+      Artist?: string;
+    }>;
+    for (const t of tracks) {
+      const id = t["Purchased Track Identifier"];
+      const album = t.Album;
+      if (id && album) {
+        map.set(String(id), album);
+      }
+    }
+  } catch {
+    // Library Tracks is optional
+    console.warn(`Warning: could not read Library Tracks at ${libPath} for album lookup`);
+  }
+  return map;
+}
+
 // ── Track ID recovery ──
 
 /**
  * Recover an Apple track ID for a Play Activity row by joining to the Daily Tracks map.
  * Per decisions doc §D6:
  *   1. Exact date + song match → assign if 1 unique track ID
- *   2. Multiple track IDs → attempt album disambiguation
+ *   2. Multiple track IDs → disambiguate by album via Library Tracks
  *   3. No match → try ±1 day window (timezone shifts)
  *   4. Still no match → trackId remains null
  */
 export function recoverAppleTrackId(
   row: PlayActivityRow,
   dailyMap: Map<string, DailyTrackEntry[]>,
-  artistRecovery?: Map<string, Set<string>>,
+  albumLookup?: Map<string, string>,
 ): TrackIdRecoveryResult {
   const songKey = row.songName.toLowerCase().trim();
   const date = row.eventEndTimestamp.slice(0, 10); // YYYY-MM-DD
@@ -359,7 +401,7 @@ export function recoverAppleTrackId(
   const exactCandidates = dailyMap.get(exactKey);
 
   if (exactCandidates) {
-    const result = disambiguate(exactCandidates, row);
+    const result = disambiguate(exactCandidates, row, albumLookup);
     if (result.trackId || result.ambiguous) return result;
   }
 
@@ -369,7 +411,7 @@ export function recoverAppleTrackId(
     const adjKey = `${adjDate}\t${songKey}`;
     const adjCandidates = dailyMap.get(adjKey);
     if (adjCandidates) {
-      const result = disambiguate(adjCandidates, row);
+      const result = disambiguate(adjCandidates, row, albumLookup);
       if (result.trackId || result.ambiguous) return result;
     }
   }
@@ -379,7 +421,8 @@ export function recoverAppleTrackId(
 
 function disambiguate(
   candidates: DailyTrackEntry[],
-  _row: PlayActivityRow,
+  row: PlayActivityRow,
+  albumLookup?: Map<string, string>,
 ): TrackIdRecoveryResult {
   // Collect unique track IDs
   const uniqueIds = [...new Set(candidates.map((c) => c.trackIdentifier))];
@@ -388,10 +431,20 @@ function disambiguate(
     return { trackId: uniqueIds[0], ambiguous: false };
   }
 
-  // Multiple track IDs — mark as ambiguous.
-  // Daily Tracks doesn't include album info, so we can't disambiguate
-  // further here. The ingest script can attempt album-based disambiguation
-  // via the Library Tracks lookup at a higher level.
+  // Multiple track IDs — attempt album disambiguation via Library Tracks.
+  // If the Play Activity row has an album name and the albumLookup maps
+  // a candidate's track ID to a matching album, pick that candidate.
+  if (row.albumName && albumLookup && albumLookup.size > 0) {
+    const rowAlbumLower = row.albumName.toLowerCase().trim();
+    const albumMatches = uniqueIds.filter((id) => {
+      const libAlbum = albumLookup.get(id);
+      return libAlbum && libAlbum.toLowerCase().trim() === rowAlbumLower;
+    });
+    if (albumMatches.length === 1) {
+      return { trackId: albumMatches[0], ambiguous: false };
+    }
+  }
+
   return { trackId: null, ambiguous: true };
 }
 
