@@ -13,7 +13,9 @@ import type { PlayRow, GeoResult, IpGeoCache } from "./types";
  * (effectively always false). `reason_end == 'fwdbtn'` is the truth.
  */
 export function isSkip(reasonEnd: string): boolean {
-  return reasonEnd === "fwdbtn";
+  return reasonEnd === "fwdbtn"
+    || reasonEnd === "track_skipped_forwards"
+    || reasonEnd === "track_skipped_backwards";
 }
 
 /**

@@ -26,6 +26,19 @@ describe("isSkip", () => {
   it("returns false for logout", () => {
     expect(isSkip("logout")).toBe(false);
   });
+
+  // Apple Music skip reasons (lowercased from Apple's End Reason Type)
+  it("returns true for track_skipped_forwards (Apple)", () => {
+    expect(isSkip("track_skipped_forwards")).toBe(true);
+  });
+
+  it("returns true for track_skipped_backwards (Apple)", () => {
+    expect(isSkip("track_skipped_backwards")).toBe(true);
+  });
+
+  it("returns false for natural_end_of_track (Apple, not a skip)", () => {
+    expect(isSkip("natural_end_of_track")).toBe(false);
+  });
 });
 
 describe("normalizePlatform", () => {
