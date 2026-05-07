@@ -4,6 +4,8 @@
  * Shared across iTunes Lookup, MusicBrainz, and Spotify matchers.
  */
 
+const MAX_WAIT_MS = 10_000; // Safety cap: never sleep more than 10s
+
 export class RateLimiter {
   private minIntervalMs: number;
   private lastRequestAt = 0;
@@ -16,7 +18,8 @@ export class RateLimiter {
     const now = Date.now();
     const elapsed = now - this.lastRequestAt;
     if (elapsed < this.minIntervalMs) {
-      await new Promise((r) => setTimeout(r, this.minIntervalMs - elapsed));
+      const waitMs = Math.min(this.minIntervalMs - elapsed, MAX_WAIT_MS);
+      await new Promise((r) => setTimeout(r, waitMs));
     }
     this.lastRequestAt = Date.now();
   }

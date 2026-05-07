@@ -248,24 +248,78 @@ async function main() {
     const initialToken = await getSpotifyToken();
     console.log(`  ✓ Token acquired (${initialToken.slice(0, 8)}...)`);
     console.log(`[Step 6] Matching ${tracksToProcess.length} tracks to Spotify...`);
+    let loopIter = 0;
+    let timedOut = 0;
     for (const [cacheKey, events] of tracksToProcess) {
+      loopIter++;
+
       // Use cached match if available
       if (existingMatches.has(cacheKey)) {
         matchResults.set(cacheKey, existingMatches.get(cacheKey)!);
         skipped++;
+        if (skipped % 200 === 0) {
+          console.log(`  ... skipped ${skipped} cached (iter ${loopIter})`);
+        }
         continue;
       }
 
       const firstEvent = events[0];
-      const result = await matchTrack(firstEvent);
+      console.log(`  [iter ${loopIter}] matching: "${firstEvent.row.songName}" (${cacheKey.slice(0, 20)}...)`);
+
+      // Per-track timeout: 60 seconds max. If a single track hangs,
+      // skip it instead of blocking the entire run.
+      const TRACK_TIMEOUT_MS = 60_000;
+      let result: MatchResult;
+      try {
+        result = await Promise.race([
+          matchTrack(firstEvent),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("TRACK_TIMEOUT")), TRACK_TIMEOUT_MS),
+          ),
+        ]);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg === "TRACK_TIMEOUT") {
+          console.log(`  ⚠ TRACK TIMEOUT: "${firstEvent.row.songName}" (${cacheKey}) — skipping`);
+          timedOut++;
+          result = {
+            cacheKey,
+            appleTrackId: firstEvent.appleTrackId,
+            bestCandidate: null,
+            allCandidates: [],
+            itunesData: null,
+            isrc: null,
+            matchStatus: "unmatched",
+            originalSongName: firstEvent.row.songName,
+            originalArtistName: firstEvent.row.artistName,
+            originalAlbumName: firstEvent.row.albumName,
+          };
+        } else {
+          console.log(`  ⚠ TRACK ERROR: "${firstEvent.row.songName}" — ${msg}`);
+          result = {
+            cacheKey,
+            appleTrackId: firstEvent.appleTrackId,
+            bestCandidate: null,
+            allCandidates: [],
+            itunesData: null,
+            isrc: null,
+            matchStatus: "unmatched",
+            originalSongName: firstEvent.row.songName,
+            originalArtistName: firstEvent.row.artistName,
+            originalAlbumName: firstEvent.row.albumName,
+          };
+        }
+      }
+
       matchResults.set(cacheKey, result);
 
       // Write to apple_track_matches immediately (resumability)
+      console.log(`  [iter ${loopIter}] writing cache...`);
       await writeMatchToCache(result);
 
       processed++;
-      if (processed % 500 === 0 || processed === tracksToProcess.length) {
-        const total = tracksToProcess.length;
+      if (processed % 100 === 0 || processed === tracksToProcess.length - skipped) {
+        const total = tracksToProcess.length - skipped;
         const via = result.bestCandidate?.matchMethod ?? "none";
         const conf = result.bestCandidate?.confidence?.toFixed(2) ?? "0.00";
         console.log(
@@ -273,7 +327,7 @@ async function main() {
         );
       }
     }
-    console.log(`  ✓ ${processed} newly matched, ${skipped} from cache`);
+    console.log(`  ✓ ${processed} newly matched, ${skipped} from cache, ${timedOut} timed out`);
   }
 
   // ── Step 7: Write play rows to D1 ──
@@ -426,12 +480,15 @@ async function matchTrack(event: PlayEvent): Promise<MatchResult> {
   // match_method = 'isrc'. Stages 2+ do not run for this track.
   // The cascade is short-circuit, not best-of-N.
   if (appleTrackId) {
+    console.log(`    → iTunes Lookup (id=${appleTrackId})`);
     itunesData = await lookupTrack(appleTrackId);
 
     if (itunesData && !SKIP_MB) {
+      console.log(`    → MusicBrainz ISRC search`);
       isrc = await findIsrc(itunesData.artistName, itunesData.trackName);
 
       if (isrc) {
+        console.log(`    → Spotify ISRC search (${isrc})`);
         const token = await getSpotifyToken();
         const isrcMatch = await searchByIsrc(isrc, token);
         if (isrcMatch) {
@@ -458,6 +515,7 @@ async function matchTrack(event: PlayEvent): Promise<MatchResult> {
   const albumName = itunesData?.collectionName ?? (row.albumName || null);
   const durationMs = itunesData?.trackTimeMillis ?? null;
 
+  console.log(`    → Spotify text search: "${trackName}" by "${artistName}"`);
   const token = await getSpotifyToken();
   allCandidates = await searchByText(trackName, artistName, albumName, durationMs, token);
   bestCandidate = allCandidates[0] ?? null;
