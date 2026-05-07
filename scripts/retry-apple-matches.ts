@@ -90,6 +90,12 @@ async function main() {
     return;
   }
 
+  // Pre-acquire Spotify token so a hang here is visible in logs
+  console.log("Acquiring Spotify token...");
+  const initialToken = await getSpotifyToken();
+  console.log(`  ✓ Token acquired (${initialToken.slice(0, 8)}...)`);
+  console.log(`Retrying ${rows.length} tracks...`);
+
   // Counters
   let retried = 0;
   let newlyMatchedIsrc = 0;

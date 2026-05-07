@@ -7,6 +7,7 @@
 
 const MAX_RETRIES = 5;
 const BASE_DELAY_MS = 1000;
+const FETCH_TIMEOUT_MS = 30_000;
 
 function getConfig() {
   const token = process.env.CF_API_TOKEN;
@@ -42,14 +43,29 @@ async function d1Fetch(body: unknown): Promise<D1Response> {
   const url = getUrl();
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      clearTimeout(timer);
+    } catch (err) {
+      clearTimeout(timer);
+      // Timeout or network error — retry
+      if (attempt === MAX_RETRIES) {
+        throw new Error(`D1 fetch failed after ${MAX_RETRIES} retries: ${err}`);
+      }
+      await sleep(BASE_DELAY_MS * Math.pow(2, attempt));
+      continue;
+    }
 
     if (res.status === 429) {
       if (attempt === MAX_RETRIES) {
@@ -120,14 +136,28 @@ export async function batchWriteD1(
   const url = getUrl();
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      clearTimeout(timer);
+    } catch (err) {
+      clearTimeout(timer);
+      if (attempt === MAX_RETRIES) {
+        throw new Error(`D1 batch fetch failed after ${MAX_RETRIES} retries: ${err}`);
+      }
+      await sleep(BASE_DELAY_MS * Math.pow(2, attempt));
+      continue;
+    }
 
     if (res.status === 429) {
       if (attempt === MAX_RETRIES) {

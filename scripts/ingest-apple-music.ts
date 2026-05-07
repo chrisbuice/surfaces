@@ -95,6 +95,7 @@ async function main() {
 
   // ── Idempotency check ──
   if (!DRY_RUN) {
+    console.log("Checking D1 connection...");
     const [countRow] = await queryD1<{ count: number }>(
       "SELECT COUNT(*) as count FROM plays WHERE source = 'apple'",
     );
@@ -243,7 +244,10 @@ async function main() {
     }
     console.log(`  ✓ ${tracksToProcess.length} tracks (matching skipped)`);
   } else {
-    console.log("[Step 6] Matching tracks to Spotify...");
+    console.log("[Step 6] Acquiring Spotify token...");
+    const initialToken = await getSpotifyToken();
+    console.log(`  ✓ Token acquired (${initialToken.slice(0, 8)}...)`);
+    console.log(`[Step 6] Matching ${tracksToProcess.length} tracks to Spotify...`);
     for (const [cacheKey, events] of tracksToProcess) {
       // Use cached match if available
       if (existingMatches.has(cacheKey)) {

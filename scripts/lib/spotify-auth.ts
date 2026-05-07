@@ -7,6 +7,7 @@
 
 const TOKEN_URL = "https://accounts.spotify.com/api/token";
 const EXPIRY_BUFFER_S = 60;
+const FETCH_TIMEOUT_MS = 30_000;
 
 let cachedToken: string | null = null;
 let cachedExpiresAt = 0;
@@ -33,14 +34,27 @@ export async function getSpotifyToken(
   }
 
   const { clientId, clientSecret } = getSpotifyCredentials();
-  const res = await fetchFn(TOKEN_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
-    },
-    body: "grant_type=client_credentials",
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetchFn(TOKEN_URL, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+      },
+      body: "grant_type=client_credentials",
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Spotify token request timed out after ${FETCH_TIMEOUT_MS / 1000}s`);
+    }
+    throw err;
+  }
+  clearTimeout(timer);
 
   if (!res.ok) {
     const text = await res.text();
