@@ -6,7 +6,7 @@ import type { Env } from "../index";
 import { SpotifyClient } from "../spotify/client";
 import { startSession } from "../curation/agent";
 import { getTopFresh } from "../discovery/pool";
-import { getTimeMachine, getLostFavorites, getLostFavoritesCount, getSkipPenalizedTracks, getArtistAffinity, getOnThisDay } from "../listening/queries";
+import { getTimeMachine, getLostFavorites, getLostFavoritesCount, getSkipPenalizedTracks, getArtistAffinity, getOnThisDay, getDateRange } from "../listening/queries";
 import { generateQueue } from "../listening/queue";
 import { isSkip } from "../listening/helpers";
 import { ensureAnalysisPending } from "../lyrics_analysis/pending";
@@ -126,6 +126,19 @@ export function getToolDefinitions(): McpToolDefinition[] {
           limit: { type: "number", description: "Number of top tracks to return. Default 25." },
         },
         required: ["month", "day"],
+      },
+    },
+    {
+      name: "date_range",
+      description: "Top tracks and artists for a specific date or range of dates from your listening history. Use start_date == end_date for a single day. Returns aggregated totals AND a per-day breakdown. For 'this date across all years' use on_this_day instead; for a full month or year use time_machine.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          start_date: { type: "string", description: "Start of range, YYYY-MM-DD (US Eastern). Required." },
+          end_date: { type: "string", description: "End of range, YYYY-MM-DD (US Eastern), inclusive. Required. Use the same value as start_date for a single day." },
+          limit: { type: "number", description: "Number of top tracks/artists to return. Default 25." },
+        },
+        required: ["start_date", "end_date"],
       },
     },
     {
@@ -563,6 +576,18 @@ export async function callTool(
       if (!otdMonth || !otdDay) return { error: "month and day are required." };
       const otdLimit = (args.limit as number) ?? 25;
       return await getOnThisDay(env.DB, otdMonth, otdDay, otdLimit);
+    }
+
+    case "date_range": {
+      const startDate = args.start_date as string;
+      const endDate = args.end_date as string;
+      if (!startDate || !endDate) return { error: "start_date and end_date are required (YYYY-MM-DD)." };
+      const drLimit = (args.limit as number) ?? 25;
+      try {
+        return await getDateRange(env.DB, startDate, endDate, drLimit);
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : String(e) };
+      }
     }
 
     case "lost_favorites": {

@@ -85,6 +85,44 @@ export interface OnThisDayResult {
   topTracks: OnThisDayTrack[];
 }
 
+export interface DateRangeTrack {
+  track: string;
+  artist: string;
+  uri: string;          // canonical (most-played) URI for the song in the range
+  plays: number;
+  minutes: number;
+}
+
+export interface DateRangeArtist {
+  artist: string;
+  plays: number;
+  minutes: number;
+}
+
+export interface DateRangeDay {
+  date: string;         // YYYY-MM-DD (Eastern)
+  plays: number;
+  minutes: number;
+  topTrack: { track: string; artist: string; plays: number } | null;
+}
+
+export interface DateRangeResult {
+  source: "local_history";
+  startDate: string;          // requested start, echoed back as YYYY-MM-DD
+  endDate: string;            // requested end, echoed back
+  effectiveStartDate: string; // after clamping to dataset bounds
+  effectiveEndDate: string;
+  daysInRange: number;        // inclusive count of days in effective range
+  daysWithPlays: number;
+  totalPlays: number;
+  totalMinutes: number;
+  uniqueTracks: number;
+  uniqueArtists: number;
+  topTracks: DateRangeTrack[];
+  topArtists: DateRangeArtist[];
+  daily: DateRangeDay[];      // one entry per day in effective range, including zero-play days
+}
+
 export interface QueueCandidate {
   uri: string;
   track: string;

@@ -16,7 +16,7 @@
  *   See LISTENING_HISTORY.md "URI vs. song-level queries" for the full rule.
  */
 
-import type { TimeMachineResult, LostFavorite, AffinityRow, OnThisDayResult } from "./types";
+import type { TimeMachineResult, LostFavorite, AffinityRow, OnThisDayResult, DateRangeResult } from "./types";
 import reflectionsData from "./data/reflections.json";
 
 const SNAPSHOT_DATE = "2026-04-29";
@@ -553,4 +553,231 @@ export async function getOnThisDay(
     uniqueArtists: stats?.unique_artists ?? 0,
     topTracks: enrichedTracks,
   };
+}
+
+/**
+ * Date range: top tracks and artists for a specific date or contiguous range of dates.
+ *
+ * Day boundary uses US Eastern time: datetime(ts, 'unixepoch', '-5 hours').
+ * This is a fixed UTC-5 offset — the half-hour edge case around DST transitions
+ * (March/November only) is acceptable and documented.
+ *
+ * Aggregates at song level (track_name COLLATE NOCASE, artist_name COLLATE NOCASE),
+ * same as time_machine, on_this_day, and lost_favorites. Canonical URI = most-played
+ * URI for the song within the requested range.
+ *
+ * Requested dates are clamped to the dataset bounds (earliest play → today Eastern).
+ * If the entire range is outside the dataset, returns an empty result with zeroed counters.
+ */
+export async function getDateRange(
+  db: D1Database,
+  startDate: string,
+  endDate: string,
+  limit: number = 25,
+): Promise<DateRangeResult> {
+  // Validate date format
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(startDate)) throw new Error(`Invalid start_date format: "${startDate}". Expected YYYY-MM-DD.`);
+  if (!dateRegex.test(endDate)) throw new Error(`Invalid end_date format: "${endDate}". Expected YYYY-MM-DD.`);
+
+  // Validate range direction
+  if (startDate > endDate) throw new Error(`start_date (${startDate}) is after end_date (${endDate}).`);
+
+  // Find dataset bounds
+  const minDateRow = await db.prepare(
+    "SELECT date(datetime(MIN(ts), 'unixepoch', '-5 hours')) as min_date FROM plays"
+  ).first<{ min_date: string | null }>();
+  const datasetMin = minDateRow?.min_date;
+
+  // Today in Eastern time (fixed UTC-5)
+  const nowMs = Date.now();
+  const todayEastern = new Date(nowMs - 5 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  // If no data at all, or range is entirely outside dataset, return empty
+  if (!datasetMin) {
+    return emptyDateRangeResult(startDate, endDate);
+  }
+
+  // Clamp
+  const effectiveStartDate = startDate < datasetMin ? datasetMin : startDate;
+  const effectiveEndDate = endDate > todayEastern ? todayEastern : endDate;
+
+  if (effectiveStartDate > effectiveEndDate) {
+    return emptyDateRangeResult(startDate, endDate);
+  }
+
+  // Count days in range (inclusive)
+  const daysInRange = daysBetween(effectiveStartDate, effectiveEndDate) + 1;
+
+  const dateFilter = `date(datetime(ts, 'unixepoch', '-5 hours')) BETWEEN ? AND ?`;
+
+  // Aggregate stats
+  const statsSQL = `
+    SELECT COUNT(*) as total_plays,
+           SUM(minutes) as total_minutes,
+           (SELECT COUNT(*) FROM (
+             SELECT 1 FROM plays WHERE ${dateFilter}
+             GROUP BY track_name COLLATE NOCASE, artist_name COLLATE NOCASE
+           )) as unique_tracks,
+           COUNT(DISTINCT artist_name) as unique_artists
+    FROM plays WHERE ${dateFilter}
+  `;
+  const stats = await db.prepare(statsSQL)
+    .bind(effectiveStartDate, effectiveEndDate, effectiveStartDate, effectiveEndDate)
+    .first<{ total_plays: number; total_minutes: number; unique_tracks: number; unique_artists: number }>();
+
+  // Top tracks — song-level aggregation
+  const topTracksSQL = `
+    SELECT track_name, artist_name, COUNT(*) as plays, SUM(minutes) as mins
+    FROM plays WHERE ${dateFilter}
+    GROUP BY track_name COLLATE NOCASE, artist_name COLLATE NOCASE
+    ORDER BY plays DESC
+    LIMIT ?
+  `;
+  const topTracksRows = await db.prepare(topTracksSQL)
+    .bind(effectiveStartDate, effectiveEndDate, limit)
+    .all<{ track_name: string; artist_name: string; plays: number; mins: number }>();
+
+  // Canonical URI per top track (most-played within the range)
+  const topTracks = await Promise.all(
+    topTracksRows.results.map(async (t) => {
+      const canonicalSQL = `
+        SELECT spotify_track_uri, COUNT(*) as plays
+        FROM plays
+        WHERE ${dateFilter}
+          AND track_name = ? COLLATE NOCASE AND artist_name = ? COLLATE NOCASE
+        GROUP BY spotify_track_uri ORDER BY plays DESC LIMIT 1
+      `;
+      const canonical = await db.prepare(canonicalSQL)
+        .bind(effectiveStartDate, effectiveEndDate, t.track_name, t.artist_name)
+        .first<{ spotify_track_uri: string; plays: number }>();
+
+      return {
+        track: t.track_name,
+        artist: t.artist_name,
+        uri: canonical?.spotify_track_uri ?? "",
+        plays: t.plays,
+        minutes: Math.round(t.mins * 10) / 10,
+      };
+    }),
+  );
+
+  // Top artists
+  const topArtistsSQL = `
+    SELECT artist_name, COUNT(*) as plays, SUM(minutes) as mins
+    FROM plays WHERE ${dateFilter}
+    GROUP BY artist_name
+    ORDER BY plays DESC
+    LIMIT ?
+  `;
+  const topArtistsRows = await db.prepare(topArtistsSQL)
+    .bind(effectiveStartDate, effectiveEndDate, limit)
+    .all<{ artist_name: string; plays: number; mins: number }>();
+
+  const topArtists = topArtistsRows.results.map((a) => ({
+    artist: a.artist_name,
+    plays: a.plays,
+    minutes: Math.round(a.mins * 10) / 10,
+  }));
+
+  // Daily breakdown — per-day plays/minutes
+  const dailyStatsSQL = `
+    SELECT date(datetime(ts, 'unixepoch', '-5 hours')) as d,
+           COUNT(*) as plays, SUM(minutes) as mins
+    FROM plays
+    WHERE ${dateFilter}
+    GROUP BY d
+  `;
+  const dailyStatsRows = await db.prepare(dailyStatsSQL)
+    .bind(effectiveStartDate, effectiveEndDate)
+    .all<{ d: string; plays: number; mins: number }>();
+
+  const dailyStatsMap = new Map<string, { plays: number; mins: number }>();
+  for (const r of dailyStatsRows.results) {
+    dailyStatsMap.set(r.d, { plays: r.plays, mins: r.mins });
+  }
+
+  // Per-day top track: single query, group by day + song, then pick top per day in JS
+  const dailyTopSQL = `
+    SELECT date(datetime(ts, 'unixepoch', '-5 hours')) as d,
+           track_name, artist_name, COUNT(*) as plays
+    FROM plays
+    WHERE ${dateFilter}
+    GROUP BY d, track_name COLLATE NOCASE, artist_name COLLATE NOCASE
+  `;
+  const dailyTopRows = await db.prepare(dailyTopSQL)
+    .bind(effectiveStartDate, effectiveEndDate)
+    .all<{ d: string; track_name: string; artist_name: string; plays: number }>();
+
+  // Group by day, pick the one with most plays
+  const dailyTopMap = new Map<string, { track: string; artist: string; plays: number }>();
+  for (const r of dailyTopRows.results) {
+    const existing = dailyTopMap.get(r.d);
+    if (!existing || r.plays > existing.plays) {
+      dailyTopMap.set(r.d, { track: r.track_name, artist: r.artist_name, plays: r.plays });
+    }
+  }
+
+  // Build daily array, filling zero-play days
+  const daily = [];
+  let daysWithPlays = 0;
+  const cursor = new Date(effectiveStartDate + "T00:00:00Z");
+  const endDateObj = new Date(effectiveEndDate + "T00:00:00Z");
+  while (cursor <= endDateObj) {
+    const d = cursor.toISOString().split("T")[0];
+    const dayStats = dailyStatsMap.get(d);
+    const dayTop = dailyTopMap.get(d);
+    if (dayStats && dayStats.plays > 0) daysWithPlays++;
+    daily.push({
+      date: d,
+      plays: dayStats?.plays ?? 0,
+      minutes: Math.round((dayStats?.mins ?? 0) * 10) / 10,
+      topTrack: dayTop ?? null,
+    });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return {
+    source: "local_history",
+    startDate,
+    endDate,
+    effectiveStartDate,
+    effectiveEndDate,
+    daysInRange,
+    daysWithPlays,
+    totalPlays: stats?.total_plays ?? 0,
+    totalMinutes: Math.round((stats?.total_minutes ?? 0) * 10) / 10,
+    uniqueTracks: stats?.unique_tracks ?? 0,
+    uniqueArtists: stats?.unique_artists ?? 0,
+    topTracks,
+    topArtists,
+    daily,
+  };
+}
+
+function emptyDateRangeResult(startDate: string, endDate: string): DateRangeResult {
+  return {
+    source: "local_history",
+    startDate,
+    endDate,
+    effectiveStartDate: startDate,
+    effectiveEndDate: endDate,
+    daysInRange: 0,
+    daysWithPlays: 0,
+    totalPlays: 0,
+    totalMinutes: 0,
+    uniqueTracks: 0,
+    uniqueArtists: 0,
+    topTracks: [],
+    topArtists: [],
+    daily: [],
+  };
+}
+
+/** Inclusive day count between two YYYY-MM-DD strings. */
+function daysBetween(a: string, b: string): number {
+  const msPerDay = 86400000;
+  const da = new Date(a + "T00:00:00Z").getTime();
+  const db = new Date(b + "T00:00:00Z").getTime();
+  return Math.round((db - da) / msPerDay);
 }

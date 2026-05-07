@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { env } from "cloudflare:test";
-import { getTimeMachine, getLostFavorites, getMonthlyTop, getSkipCount, getSkipPenalizedTracks, getOnThisDay } from "../../src/listening/queries";
+import { getTimeMachine, getLostFavorites, getMonthlyTop, getSkipCount, getSkipPenalizedTracks, getOnThisDay, getDateRange } from "../../src/listening/queries";
 
 // Seed a small test dataset into the D1 plays table
 async function seedTestData(db: D1Database) {
@@ -168,6 +168,49 @@ async function seedTestData(db: D1Database) {
     "VALUES (?, 'iOS', 200000, 'US', 'Wrong Day Song', 'Wrong Artist', 'Wrong Album', " +
     "'spotify:track:wrongday', 'clickrow', 'trackdone', 0, 0, 2020, 7, 4, 23, 3.3)"
   ).bind(july3_late).run();
+
+  // --- date_range test data ---
+  // Three distinct Eastern-time dates: 2023-12-01, 2023-12-02, 2023-12-03
+  // (no plays on 2023-12-02 to test zero-play day)
+
+  // Dec 1, 2023: noon ET = 17:00 UTC — "Winter Song" by DR Artist (2 plays), "Snow" by DR Artist (1 play)
+  const dec1_noon = Math.floor(new Date("2023-12-01T17:00:00Z").getTime() / 1000);
+  for (let i = 0; i < 2; i++) {
+    await db.prepare(
+      "INSERT INTO plays (ts, platform, ms_played, conn_country, track_name, artist_name, " +
+      "album_name, spotify_track_uri, reason_start, reason_end, shuffle, offline, " +
+      "year, month, hour, local_hour, minutes) " +
+      "VALUES (?, 'iOS', 210000, 'US', 'Winter Song', 'DR Artist', 'DR Album', " +
+      "'spotify:track:dr_winter1', 'clickrow', 'trackdone', 0, 0, 2023, 12, 17, 12, 3.5)"
+    ).bind(dec1_noon + i * 3600).run();
+  }
+  await db.prepare(
+    "INSERT INTO plays (ts, platform, ms_played, conn_country, track_name, artist_name, " +
+    "album_name, spotify_track_uri, reason_start, reason_end, shuffle, offline, " +
+    "year, month, hour, local_hour, minutes) " +
+    "VALUES (?, 'iOS', 180000, 'US', 'Snow', 'DR Artist', 'DR Album', " +
+    "'spotify:track:dr_snow', 'clickrow', 'trackdone', 0, 0, 2023, 12, 17, 12, 3.0)"
+  ).bind(dec1_noon + 7200).run();
+
+  // Dec 3, 2023: "Winter Song" by DR Artist (1 play via different URI — re-release)
+  const dec3_noon = Math.floor(new Date("2023-12-03T17:00:00Z").getTime() / 1000);
+  await db.prepare(
+    "INSERT INTO plays (ts, platform, ms_played, conn_country, track_name, artist_name, " +
+    "album_name, spotify_track_uri, reason_start, reason_end, shuffle, offline, " +
+    "year, month, hour, local_hour, minutes) " +
+    "VALUES (?, 'iOS', 210000, 'US', 'Winter Song', 'DR Artist', 'DR Album Deluxe', " +
+    "'spotify:track:dr_winter2', 'clickrow', 'trackdone', 0, 0, 2023, 12, 17, 12, 3.5)"
+  ).bind(dec3_noon).run();
+
+  // Eastern-time boundary test: 4am UTC Dec 2 = 11pm ET Dec 1
+  const dec2_4amUTC = Math.floor(new Date("2023-12-02T04:00:00Z").getTime() / 1000);
+  await db.prepare(
+    "INSERT INTO plays (ts, platform, ms_played, conn_country, track_name, artist_name, " +
+    "album_name, spotify_track_uri, reason_start, reason_end, shuffle, offline, " +
+    "year, month, hour, local_hour, minutes) " +
+    "VALUES (?, 'iOS', 200000, 'US', 'Late Night', 'DR Artist', 'DR Album', " +
+    "'spotify:track:dr_late', 'clickrow', 'trackdone', 0, 0, 2023, 12, 4, 23, 3.3)"
+  ).bind(dec2_4amUTC).run();
 }
 
 describe("query helpers", () => {
@@ -342,6 +385,96 @@ describe("query helpers", () => {
       const result = await getOnThisDay(env.DB, 7, 4, 1);
       expect(result.topTracks).toHaveLength(1);
       expect(result.topTracks[0].track).toBe("Firework"); // most plays
+    });
+  });
+
+  describe("getDateRange", () => {
+    it("single day — start == end returns plays for only that day", async () => {
+      const result = await getDateRange(env.DB, "2023-12-01", "2023-12-01");
+      expect(result.source).toBe("local_history");
+      expect(result.startDate).toBe("2023-12-01");
+      expect(result.endDate).toBe("2023-12-01");
+      expect(result.daysInRange).toBe(1);
+      expect(result.daily).toHaveLength(1);
+      // 2 "Winter Song" + 1 "Snow" + 1 "Late Night" (11pm ET Dec 1) = 4
+      expect(result.totalPlays).toBe(4);
+      expect(result.daysWithPlays).toBe(1);
+    });
+
+    it("multi-day range — three-day window returns aggregated totals and daily array", async () => {
+      const result = await getDateRange(env.DB, "2023-12-01", "2023-12-03");
+      expect(result.daysInRange).toBe(3);
+      expect(result.daily).toHaveLength(3);
+      // Dec 1: 4 plays, Dec 2: 0 plays, Dec 3: 1 play = 5 total
+      expect(result.totalPlays).toBe(5);
+      expect(result.daysWithPlays).toBe(2);
+    });
+
+    it("zero-play day inside range — daily array still includes it", async () => {
+      const result = await getDateRange(env.DB, "2023-12-01", "2023-12-03");
+      const dec2 = result.daily.find(d => d.date === "2023-12-02");
+      expect(dec2).toBeDefined();
+      expect(dec2!.plays).toBe(0);
+      expect(dec2!.topTrack).toBeNull();
+    });
+
+    it("Eastern-time boundary — 4am UTC Dec 2 = 11pm ET Dec 1 is bucketed into Dec 1", async () => {
+      // "Late Night" at 4am UTC Dec 2 = 11pm ET Dec 1 should appear in Dec 1, not Dec 2
+      const resultDec1 = await getDateRange(env.DB, "2023-12-01", "2023-12-01");
+      const resultDec2 = await getDateRange(env.DB, "2023-12-02", "2023-12-02");
+      // Dec 1 should have the "Late Night" play
+      expect(resultDec1.totalPlays).toBe(4); // 2 Winter + 1 Snow + 1 Late Night
+      // Dec 2 should have zero plays
+      expect(resultDec2.totalPlays).toBe(0);
+    });
+
+    it("song-level aggregation — multiple URIs collapse into one row", async () => {
+      // "Winter Song" has plays on dr_winter1 (Dec 1, 2 plays) and dr_winter2 (Dec 3, 1 play)
+      const result = await getDateRange(env.DB, "2023-12-01", "2023-12-03");
+      const winterSong = result.topTracks.find(t => t.track === "Winter Song");
+      expect(winterSong).toBeDefined();
+      expect(winterSong!.plays).toBe(3); // 2 + 1 collapsed
+    });
+
+    it("canonical URI is most-played within the range", async () => {
+      // dr_winter1 has 2 plays in range, dr_winter2 has 1 play
+      const result = await getDateRange(env.DB, "2023-12-01", "2023-12-03");
+      const winterSong = result.topTracks.find(t => t.track === "Winter Song");
+      expect(winterSong).toBeDefined();
+      expect(winterSong!.uri).toBe("spotify:track:dr_winter1");
+    });
+
+    it("clamping below dataset — effectiveStartDate set to dataset minimum", async () => {
+      const result = await getDateRange(env.DB, "1990-01-01", "2023-12-03");
+      expect(result.startDate).toBe("1990-01-01"); // echoed back unchanged
+      // effectiveStartDate should be the earliest play in the dataset (not 1990)
+      expect(result.effectiveStartDate > "1990-01-01").toBe(true);
+    });
+
+    it("range entirely outside dataset — zeroed counters, empty arrays", async () => {
+      const result = await getDateRange(env.DB, "1990-01-01", "1990-12-31");
+      expect(result.startDate).toBe("1990-01-01");
+      expect(result.endDate).toBe("1990-12-31");
+      expect(result.daysInRange).toBe(0);
+      expect(result.totalPlays).toBe(0);
+      expect(result.topTracks).toEqual([]);
+      expect(result.topArtists).toEqual([]);
+      expect(result.daily).toEqual([]);
+    });
+
+    it("invalid date format — throws error", async () => {
+      await expect(getDateRange(env.DB, "2024/07/04", "2024/07/04")).rejects.toThrow("Invalid start_date format");
+      await expect(getDateRange(env.DB, "July 4 2024", "July 4 2024")).rejects.toThrow("Invalid start_date format");
+    });
+
+    it("inverted range — start_date > end_date throws error", async () => {
+      await expect(getDateRange(env.DB, "2024-07-04", "2024-07-01")).rejects.toThrow("start_date");
+    });
+
+    it("limit parameter — limit:1 returns exactly one entry in topTracks", async () => {
+      const result = await getDateRange(env.DB, "2023-12-01", "2023-12-03", 1);
+      expect(result.topTracks).toHaveLength(1);
+      expect(result.topArtists).toHaveLength(1);
     });
   });
 });
