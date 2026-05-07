@@ -37,24 +37,25 @@ const { values: args } = parseArgs({
     "data-dir": { type: "string" },
     force: { type: "boolean", default: false },
     "skip-musicbrainz": { type: "boolean", default: false },
+    "dry-run": { type: "boolean", default: false },
     limit: { type: "string" },
   },
 });
 
 const DATA_DIR = args["data-dir"];
 if (!DATA_DIR) {
-  console.error("Usage: ingest-apple-music --data-dir=/path/to/apple-music [--force] [--skip-musicbrainz] [--limit=N]");
+  console.error("Usage: ingest-apple-music --data-dir=/path/to/apple-music [--force] [--skip-musicbrainz] [--dry-run] [--limit=N]");
   process.exit(1);
 }
 const FORCE = args.force ?? false;
 const SKIP_MB = args["skip-musicbrainz"] ?? false;
+const DRY_RUN = args["dry-run"] ?? false;
 const LIMIT = args.limit ? parseInt(args.limit, 10) : undefined;
 
 // ── File paths ──
 
 const PLAY_ACTIVITY_PATH = `${DATA_DIR}/Apple Music Play Activity.csv`;
 const DAILY_TRACKS_PATH = `${DATA_DIR}/Apple Music - Play History Daily Tracks.csv`;
-const TRACK_PLAY_HISTORY_PATH = `${DATA_DIR}/Apple Music - Track Play History.csv`;
 const LIBRARY_TRACKS_PATH = `${DATA_DIR}/Apple Music Library Tracks.json`;
 
 // ── Types ──
@@ -88,22 +89,25 @@ async function main() {
   console.log(`  Data dir: ${DATA_DIR}`);
   console.log(`  Force: ${FORCE}`);
   console.log(`  Skip MusicBrainz: ${SKIP_MB}`);
+  console.log(`  Dry run: ${DRY_RUN}`);
   console.log(`  Limit: ${LIMIT ?? "none"}`);
   console.log();
 
   // ── Idempotency check ──
-  const [countRow] = await queryD1<{ count: number }>(
-    "SELECT COUNT(*) as count FROM plays WHERE source = 'apple'",
-  );
-  if (countRow.count > 0 && !FORCE) {
-    console.error(`❌ ${countRow.count} Apple rows already exist in plays. Use --force to delete and re-ingest.`);
-    process.exit(1);
-  }
-  if (FORCE && countRow.count > 0) {
-    console.log(`  🗑️  --force: deleting ${countRow.count} existing Apple rows...`);
-    await writeD1("DELETE FROM plays WHERE source = 'apple'");
-    await writeD1("DELETE FROM apple_track_matches");
-    console.log("  ✓ Cleared existing Apple data.");
+  if (!DRY_RUN) {
+    const [countRow] = await queryD1<{ count: number }>(
+      "SELECT COUNT(*) as count FROM plays WHERE source = 'apple'",
+    );
+    if (countRow.count > 0 && !FORCE) {
+      console.error(`❌ ${countRow.count} Apple rows already exist in plays. Use --force to delete and re-ingest.`);
+      process.exit(1);
+    }
+    if (FORCE && countRow.count > 0) {
+      console.log(`  Deleting ${countRow.count} existing Apple rows...`);
+      await writeD1("DELETE FROM plays WHERE source = 'apple'");
+      await writeD1("DELETE FROM apple_track_matches");
+      console.log("  ✓ Cleared existing Apple data.");
+    }
   }
 
   // ── Step 1: Build Daily Tracks lookup ──
@@ -113,10 +117,7 @@ async function main() {
 
   // ── Step 2: Build artist-recovery + album lookups ──
   console.log("[Step 2] Building artist-recovery and album lookups...");
-  const artistRecovery = await buildArtistRecoveryLookup(
-    TRACK_PLAY_HISTORY_PATH,
-    LIBRARY_TRACKS_PATH,
-  );
+  const artistRecovery = await buildArtistRecoveryLookup(LIBRARY_TRACKS_PATH);
   const albumLookup = await buildAlbumLookup(LIBRARY_TRACKS_PATH);
   console.log(`  ✓ ${artistRecovery.size} songs with artist data`);
   console.log(`  ✓ ${albumLookup.size} tracks with album data (for disambiguation)`);
@@ -156,7 +157,7 @@ async function main() {
   // ── Step 5: Check for existing matches (resumability) ──
   console.log("[Step 5] Loading existing match cache...");
   const existingMatches = new Map<string, MatchResult>();
-  const cachedRows = await queryD1<{
+  const cachedRows = DRY_RUN ? [] : await queryD1<{
     cache_key: string;
     apple_track_id: string | null;
     spotify_track_uri: string | null;
@@ -236,7 +237,9 @@ async function main() {
     matchResults.set(cacheKey, result);
 
     // Write to apple_track_matches immediately (resumability)
-    await writeMatchToCache(result);
+    if (!DRY_RUN) {
+      await writeMatchToCache(result);
+    }
 
     processed++;
     if (processed % 500 === 0 || processed === tracksToProcess.length) {
@@ -252,95 +255,106 @@ async function main() {
   console.log(`  ✓ ${processed} newly matched, ${skipped} from cache`);
 
   // ── Step 7: Write play rows to D1 ──
-  console.log("[Step 7] Writing play rows to D1...");
-  let rowsWritten = 0;
-  const batch: Array<{ sql: string; params: (string | number | null)[] }> = [];
+  let totalPlayRows = 0;
+  if (DRY_RUN) {
+    console.log("[Step 7] Dry run — counting play rows (no D1 writes)...");
+    for (const [cacheKey, events] of tracksToProcess) {
+      if (matchResults.has(cacheKey)) totalPlayRows += events.length;
+    }
+    console.log(`  ✓ ${totalPlayRows} play rows would be written`);
+  } else {
+    console.log("[Step 7] Writing play rows to D1...");
+    let rowsWritten = 0;
+    const batch: Array<{ sql: string; params: (string | number | null)[] }> = [];
 
-  // Only process events for tracks we matched (respects --limit)
-  for (const [cacheKey, events] of tracksToProcess) {
-    const match = matchResults.get(cacheKey);
-    if (!match) continue;
+    for (const [cacheKey, events] of tracksToProcess) {
+      const match = matchResults.get(cacheKey);
+      if (!match) continue;
 
-    for (const event of events) {
-      const row = event.row;
-      const ts = Math.floor(new Date(row.eventEndTimestamp).getTime() / 1000);
-      const d = new Date(row.eventEndTimestamp);
-      const year = d.getUTCFullYear();
-      const month = d.getUTCMonth() + 1;
-      const hour = d.getUTCHours();
-      // Approximate US Eastern: UTC - 5 (ignoring DST for simplicity)
-      const localHour = (hour - 5 + 24) % 24;
-      const minutes = row.playDurationMs / 60000;
-      const platform = normalizeApplePlatform(row.deviceType);
+      for (const event of events) {
+        const row = event.row;
+        const ts = Math.floor(new Date(row.eventEndTimestamp).getTime() / 1000);
+        const d = new Date(row.eventEndTimestamp);
+        const year = d.getUTCFullYear();
+        const month = d.getUTCMonth() + 1;
+        const hour = d.getUTCHours();
+        // Approximate US Eastern: UTC - 5 (ignoring DST for simplicity)
+        const localHour = (hour - 5 + 24) % 24;
+        const minutes = row.playDurationMs / 60000;
+        const platform = normalizeApplePlatform(row.deviceType);
 
-      // Resolution order for original_artist_name (decisions doc D6, amendment 3):
-      // 1. iTunes Lookup succeeded → use itunes_artist_name
-      // 2. Cross-reference returns exactly one artist → use it
-      // 3. Fallback → '' (empty string, never null)
-      let resolvedOriginalArtist = "";
-      if (match.itunesData) {
-        resolvedOriginalArtist = match.itunesData.artistName;
-      } else if (row.artistName) {
-        resolvedOriginalArtist = row.artistName;
-      }
+        // Resolution order for original_artist_name (decisions doc D6, amendment 3):
+        // 1. iTunes Lookup succeeded → use itunes_artist_name
+        // 2. Cross-reference returns exactly one artist → use it
+        // 3. Fallback → '' (empty string, never null)
+        let resolvedOriginalArtist = "";
+        if (match.itunesData) {
+          resolvedOriginalArtist = match.itunesData.artistName;
+        } else if (row.artistName) {
+          resolvedOriginalArtist = row.artistName;
+        }
 
-      batch.push({
-        sql: `INSERT INTO plays (
-          ts, platform, ms_played, conn_country, track_name, artist_name,
-          album_name, spotify_track_uri, reason_start, reason_end,
-          shuffle, offline, year, month, hour, local_hour, minutes,
-          source, apple_track_id, match_confidence, match_status,
-          original_song_name, original_album_name, original_artist_name
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [
-          ts,
-          platform,
-          row.playDurationMs,
-          "US", // conn_country — Apple export doesn't have this reliably
-          match.bestCandidate?.trackName ?? row.songName,
-          match.bestCandidate?.artistName ?? row.artistName,
-          match.bestCandidate?.albumName ?? row.albumName,
-          match.bestCandidate?.spotifyTrackUri ?? "",
-          row.sourceType.toLowerCase(),
-          row.endReasonType.toLowerCase(),
-          row.shuffle ? 1 : 0,
-          row.offline ? 1 : 0,
-          year,
-          month,
-          hour,
-          localHour,
-          Math.round(minutes * 1000) / 1000,
-          "apple",
-          event.appleTrackId,
-          match.bestCandidate?.confidence ?? null,
-          match.matchStatus,
-          row.songName,
-          row.albumName || null,
-          resolvedOriginalArtist,
-        ],
-      });
+        batch.push({
+          sql: `INSERT INTO plays (
+            ts, platform, ms_played, conn_country, track_name, artist_name,
+            album_name, spotify_track_uri, reason_start, reason_end,
+            shuffle, offline, year, month, hour, local_hour, minutes,
+            source, apple_track_id, match_confidence, match_status,
+            original_song_name, original_album_name, original_artist_name
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          params: [
+            ts,
+            platform,
+            row.playDurationMs,
+            "US", // conn_country — Apple export doesn't have this reliably
+            match.bestCandidate?.trackName ?? row.songName,
+            match.bestCandidate?.artistName ?? row.artistName,
+            match.bestCandidate?.albumName ?? row.albumName,
+            match.bestCandidate?.spotifyTrackUri ?? "",
+            row.sourceType.toLowerCase(),
+            row.endReasonType.toLowerCase(),
+            row.shuffle ? 1 : 0,
+            row.offline ? 1 : 0,
+            year,
+            month,
+            hour,
+            localHour,
+            Math.round(minutes * 1000) / 1000,
+            "apple",
+            event.appleTrackId,
+            match.bestCandidate?.confidence ?? null,
+            match.matchStatus,
+            row.songName,
+            row.albumName || null,
+            resolvedOriginalArtist,
+          ],
+        });
 
-      // Flush in batches of 100
-      if (batch.length >= 100) {
-        await batchWriteD1(batch.splice(0));
-        rowsWritten += 100;
-        if (rowsWritten % 1000 === 0) {
-          console.log(`  ... ${rowsWritten} rows written`);
+        // Flush in batches of 100
+        if (batch.length >= 100) {
+          await batchWriteD1(batch.splice(0));
+          rowsWritten += 100;
+          if (rowsWritten % 1000 === 0) {
+            console.log(`  ... ${rowsWritten} rows written`);
+          }
         }
       }
     }
+
+    // Flush remaining
+    if (batch.length > 0) {
+      const remaining = batch.length;
+      await batchWriteD1(batch.splice(0));
+      rowsWritten += remaining;
+    }
+
+    totalPlayRows = rowsWritten;
   }
 
-  // Flush remaining
-  if (batch.length > 0) {
-    await batchWriteD1(batch.splice(0));
-    rowsWritten += batch.length;
-  }
-
-  // Count actual rows written
-  const [finalCount] = await queryD1<{ count: number }>(
-    "SELECT COUNT(*) as count FROM plays WHERE source = 'apple'",
-  );
+  // Count actual rows written (or use local count for dry run)
+  const finalPlayCount = DRY_RUN
+    ? totalPlayRows
+    : (await queryD1<{ count: number }>("SELECT COUNT(*) as count FROM plays WHERE source = 'apple'"))[0].count;
 
   // ── Step 8: Print summary ──
   const matchedCount = [...matchResults.values()].filter((m) => m.matchStatus === "matched").length;
@@ -366,7 +380,7 @@ async function main() {
   console.log(`║  Review queue (0.70-0.90):${reviewCount.toString().padStart(7)}`);
   console.log(`║  Unmatched (<0.70):      ${unmatchedCount.toString().padStart(8)}`);
   console.log("║  ────────────────────────────────────────");
-  console.log(`║  Plays written to D1:    ${finalCount.count.toString().padStart(8)}`);
+  console.log(`║  Plays ${DRY_RUN ? "would write" : "written"} to D1:  ${finalPlayCount.toString().padStart(8)}`);
   console.log("╚══════════════════════════════════════════╝");
 }
 
@@ -414,7 +428,7 @@ async function matchTrack(event: PlayEvent): Promise<MatchResult> {
   // Stage 2: Text match via Spotify search
   const trackName = itunesData?.trackName ?? row.songName;
   const artistName = itunesData?.artistName ?? row.artistName;
-  const albumName = itunesData?.collectionName ?? row.albumName || null;
+  const albumName = itunesData?.collectionName ?? (row.albumName || null);
   const durationMs = itunesData?.trackTimeMillis ?? null;
 
   const token = await getSpotifyToken();

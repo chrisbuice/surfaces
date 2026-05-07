@@ -90,6 +90,13 @@ describe("parsePlayActivity — real header validation", () => {
   });
 });
 
+describe("buildDailyTracksLookup — real header validation", () => {
+  it("accepts the real Daily Tracks CSV header", async () => {
+    const map = await buildDailyTracksLookup(`${FIXTURES}/daily-tracks-real-header.csv`);
+    expect(map.size).toBe(0); // no data rows, just header validation
+  });
+});
+
 describe("buildDailyTracksLookup", () => {
   it("builds lookup keyed by date+song_lower", async () => {
     const map = await buildDailyTracksLookup(`${FIXTURES}/daily-tracks.csv`);
@@ -112,23 +119,16 @@ describe("buildDailyTracksLookup", () => {
 });
 
 describe("buildArtistRecoveryLookup", () => {
-  it("builds song→artist set from Track Play History", async () => {
-    const map = await buildArtistRecoveryLookup(
-      `${FIXTURES}/track-play-history.csv`,
-      `${FIXTURES}/library-tracks.json`,
-    );
+  it("builds song→artist set from Library Tracks JSON", async () => {
+    const map = await buildArtistRecoveryLookup(`${FIXTURES}/library-tracks.json`);
 
     expect(map.has("dreams")).toBe(true);
     expect(map.get("dreams")!.has("Fleetwood Mac")).toBe(true);
   });
 
-  it("handles missing library file gracefully", async () => {
-    const map = await buildArtistRecoveryLookup(
-      `${FIXTURES}/track-play-history.csv`,
-      `${FIXTURES}/nonexistent.json`,
-    );
-    // Should still return data from Track Play History
-    expect(map.has("dreams")).toBe(true);
+  it("handles missing file gracefully", async () => {
+    const map = await buildArtistRecoveryLookup(`${FIXTURES}/nonexistent.json`);
+    expect(map.size).toBe(0);
   });
 });
 

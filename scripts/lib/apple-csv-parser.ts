@@ -67,11 +67,8 @@ const DAILY_TRACKS_REQUIRED = [
   "Date Played",
 ];
 
-const TRACK_PLAY_HISTORY_REQUIRED = [
-  "Track Identifier",
-  "Song Name",
-  "Artist Name",
-];
+// Note: Track Play History CSV only has (Track Name, Last Played Date, Is User Initiated)
+// — no artist, no track ID. Artist recovery comes entirely from Library Tracks JSON.
 
 // ── Header validation ──
 
@@ -292,33 +289,18 @@ function extractSongFromDescription(description: string): string {
 // ── Artist recovery lookup ──
 
 /**
- * Build an artist-recovery lookup from Track Play History + Library Tracks.
- * Maps song_lower → Set of artist names for disambiguation.
+ * Build an artist-recovery lookup from Library Tracks JSON.
+ * Maps song_lower → Set of artist names.
+ *
+ * Note: Track Play History CSV was originally planned as a secondary source,
+ * but the real CSV only has (Track Name, Last Played Date, Is User Initiated)
+ * — no artist, no track ID. Artist recovery comes entirely from Library Tracks.
  */
 export async function buildArtistRecoveryLookup(
-  tphPath: string,
   libPath: string,
 ): Promise<Map<string, Set<string>>> {
   const map = new Map<string, Set<string>>();
 
-  // Track Play History: has (Track Identifier, Song Name, Artist Name)
-  let headerValidated = false;
-  for await (const { headers, row } of streamCSV(tphPath)) {
-    if (!headerValidated) {
-      validateHeaders(headers, TRACK_PLAY_HISTORY_REQUIRED, "Apple Music - Track Play History.csv");
-      headerValidated = true;
-    }
-    const obj = rowToObject(headers, row);
-    const song = (obj["Song Name"] ?? "").toLowerCase().trim();
-    const artist = obj["Artist Name"] ?? "";
-    if (song && artist) {
-      const set = map.get(song) ?? new Set<string>();
-      set.add(artist);
-      map.set(song, set);
-    }
-  }
-
-  // Library Tracks JSON: disambiguates (song, album) → artist
   try {
     const fs = await import("node:fs/promises");
     const raw = await fs.readFile(libPath, "utf-8");
@@ -337,8 +319,7 @@ export async function buildArtistRecoveryLookup(
       }
     }
   } catch {
-    // Library Tracks is optional — log and continue
-    console.warn(`Warning: could not read Library Tracks at ${libPath}, skipping artist recovery from library`);
+    console.warn(`Warning: could not read Library Tracks at ${libPath}, skipping artist recovery`);
   }
 
   return map;
