@@ -28,7 +28,7 @@ import { lookupTrack, type ItunesTrack } from "./lib/itunes-lookup";
 import { findIsrc } from "./lib/musicbrainz-isrc";
 import { searchByIsrc, searchByText, type SpotifyMatchCandidate } from "./lib/spotify-matcher";
 import { getSpotifyToken } from "./lib/spotify-auth";
-import { queryD1, writeD1, batchWriteD1 } from "../stack/lyrics-backfill/lib/d1";
+import { queryD1, writeD1 } from "../stack/lyrics-backfill/lib/d1";
 
 // ── CLI args ──
 
@@ -348,9 +348,12 @@ async function main() {
           ],
         });
 
-        // Flush in batches of 100
+        // Flush in batches of 100 (one writeD1 per row — D1 HTTP API
+        // doesn't support array-of-statements in a single call)
         if (batch.length >= 100) {
-          await batchWriteD1(batch.splice(0));
+          for (const stmt of batch.splice(0)) {
+            await writeD1(stmt.sql, stmt.params);
+          }
           rowsWritten += 100;
           if (rowsWritten % 1000 === 0) {
             console.log(`  ... ${rowsWritten} rows written`);
@@ -362,7 +365,9 @@ async function main() {
     // Flush remaining
     if (batch.length > 0) {
       const remaining = batch.length;
-      await batchWriteD1(batch.splice(0));
+      for (const stmt of batch.splice(0)) {
+        await writeD1(stmt.sql, stmt.params);
+      }
       rowsWritten += remaining;
     }
 
