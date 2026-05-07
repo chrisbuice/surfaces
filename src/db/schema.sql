@@ -19,7 +19,14 @@ CREATE TABLE IF NOT EXISTS plays (
   month INTEGER NOT NULL,
   hour INTEGER NOT NULL,                        -- UTC hour
   local_hour INTEGER NOT NULL,                  -- US Eastern hour
-  minutes REAL NOT NULL                         -- ms_played / 60000
+  minutes REAL NOT NULL,                        -- ms_played / 60000
+  source TEXT NOT NULL DEFAULT 'spotify',       -- 'spotify' | 'apple' | future: 'lastfm', 'manual'
+  apple_track_id TEXT,
+  match_confidence REAL,
+  match_status TEXT,
+  original_song_name TEXT,
+  original_album_name TEXT,
+  original_artist_name TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_plays_ts ON plays(ts);
 CREATE INDEX IF NOT EXISTS idx_plays_year_month ON plays(year, month);
@@ -27,6 +34,44 @@ CREATE INDEX IF NOT EXISTS idx_plays_artist ON plays(artist_name);
 CREATE INDEX IF NOT EXISTS idx_plays_artist_year ON plays(artist_name, year);
 CREATE INDEX IF NOT EXISTS idx_plays_uri ON plays(spotify_track_uri);
 CREATE INDEX IF NOT EXISTS idx_plays_reason_end ON plays(reason_end);
+CREATE INDEX IF NOT EXISTS idx_plays_source ON plays(source);
+CREATE INDEX IF NOT EXISTS idx_plays_source_year_month ON plays(source, year, month);
+CREATE INDEX IF NOT EXISTS idx_plays_apple_track_id ON plays(apple_track_id);
+CREATE INDEX IF NOT EXISTS idx_plays_match_status ON plays(match_status);
+
+-- =========================================================
+-- APPLE TRACK MATCHES (per-track Spotify-match cache)
+-- =========================================================
+CREATE TABLE IF NOT EXISTS apple_track_matches (
+  cache_key TEXT PRIMARY KEY,
+  apple_track_id TEXT,
+  spotify_track_uri TEXT,
+  spotify_track_name TEXT,
+  spotify_artist_name TEXT,
+  spotify_album_name TEXT,
+  spotify_duration_ms INTEGER,
+  match_confidence REAL,
+  match_method TEXT,                     -- 'isrc' | 'text' | 'manual'
+  match_status TEXT NOT NULL,
+  itunes_artist_name TEXT,
+  itunes_track_name TEXT,
+  itunes_album_name TEXT,
+  itunes_duration_ms INTEGER,
+  itunes_release_date TEXT,
+  itunes_genre TEXT,
+  musicbrainz_isrc TEXT,
+  original_song_name TEXT NOT NULL,
+  original_album_name TEXT,
+  original_artist_name TEXT,
+  first_seen_at INTEGER NOT NULL,
+  last_match_attempt_at INTEGER NOT NULL,
+  match_attempts INTEGER NOT NULL DEFAULT 1,
+  reviewed_by_human INTEGER NOT NULL DEFAULT 0,
+  notes TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_atm_status ON apple_track_matches(match_status);
+CREATE INDEX IF NOT EXISTS idx_atm_spotify_uri ON apple_track_matches(spotify_track_uri);
+CREATE INDEX IF NOT EXISTS idx_atm_apple_id ON apple_track_matches(apple_track_id);
 
 -- =========================================================
 -- USER & AUTH
