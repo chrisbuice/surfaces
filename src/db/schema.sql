@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS apple_track_matches (
   first_seen_at INTEGER NOT NULL,
   last_match_attempt_at INTEGER NOT NULL,
   match_attempts INTEGER NOT NULL DEFAULT 1,
+  musicbrainz_attempts INTEGER NOT NULL DEFAULT 0,
   reviewed_by_human INTEGER NOT NULL DEFAULT 0,
   notes TEXT
 );

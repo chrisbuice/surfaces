@@ -272,6 +272,8 @@ Step 8: Print summary
 2. **ISRC enrichment:** The Phase 5 monthly retry job (`scripts/retry-apple-matches.ts`) runs the full cascade — with timeouts — against `unmatched` and `review` rows. This spreads MusicBrainz load across months instead of concentrating it in one 3-hour window, and naturally recovers from transient failures.
 3. **Net effect:** Same final match rate (85-95%), but the initial ingest completes in minutes instead of hours, and the ISRC pass is resilient to MB flakiness.
 
+**Limitation:** The retry script does not validate or refresh already-matched rows. If Spotify de-lists a track post-match, the play row will reference a stale URI. This is a known limitation; a separate match-validation job is future work.
+
 ---
 
 ## Implementation phases
