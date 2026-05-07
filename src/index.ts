@@ -36,6 +36,7 @@ export interface Env {
   // unset, the endpoint refuses submissions outright.
   SURFACES_SECRET?: string;
   VOYAGE_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
   // OAuth token storage — bound to a separate KV namespace
   OAUTH_KV: KVNamespace;
   // Injected at runtime by OAuthProvider (not a real binding)
@@ -2139,8 +2140,208 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
           });
         }
 
-        default:
+        case "/api/ripples/current": {
+          if (request.method !== "GET") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          const rippleRow = await env.DB.prepare(
+            `SELECT generated_at, window_start, window_end, composite_familiarity, total_plays_in_window, payload
+             FROM ripples_snapshot ORDER BY generated_at DESC LIMIT 1`,
+          ).first<{
+            generated_at: string;
+            window_start: string;
+            window_end: string;
+            composite_familiarity: number;
+            total_plays_in_window: number;
+            payload: string;
+          }>();
+
+          if (!rippleRow) {
+            return Response.json({ error: "No ripples snapshot available" }, { status: 404 });
+          }
+
+          const ripplePayload = JSON.parse(rippleRow.payload);
+          // Surface single `fact` field per track (llm if available, else fallback)
+          const surfaceFact = (item: { fact_llm: string | null; fact_fallback: string }) =>
+            item.fact_llm ?? item.fact_fallback;
+
+          return new Response(
+            JSON.stringify({
+              generated_at: rippleRow.generated_at,
+              window_start: rippleRow.window_start,
+              window_end: rippleRow.window_end,
+              composite_familiarity: rippleRow.composite_familiarity,
+              total_plays_in_window: rippleRow.total_plays_in_window,
+              new_arrivals: ripplePayload.new_arrivals.map((item: any) => ({
+                title: item.title,
+                artist: item.artist,
+                album_art_url: item.album_art_url,
+                familiarity_score: item.familiarity_score,
+                ripple_score: item.ripple_score,
+                lifetime_plays: item.lifetime_plays,
+                plays_in_window: item.plays_in_window,
+                fact: surfaceFact(item),
+              })),
+              returning_waves: ripplePayload.returning_waves.map((item: any) => ({
+                title: item.title,
+                artist: item.artist,
+                album_art_url: item.album_art_url,
+                familiarity_score: item.familiarity_score,
+                ripple_score: item.ripple_score,
+                lifetime_plays: item.lifetime_plays,
+                plays_in_window: item.plays_in_window,
+                fact: surfaceFact(item),
+              })),
+            }),
+            {
+              status: 200,
+              headers: {
+                "Content-Type": "application/json",
+                "Cache-Control": "public, max-age=300, s-maxage=300",
+                "Access-Control-Allow-Origin": "*",
+              },
+            },
+          );
+        }
+
+        case "/api/ripples/regenerate": {
+          if (request.method !== "POST") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          const regenBearer = request.headers.get("Authorization")?.replace("Bearer ", "");
+          const regenAuth = await verifyAccessJwt(request, env);
+          const regenHasJwt = regenAuth.ok && (
+            regenAuth.email === env.ACCESS_ALLOWED_EMAIL ||
+            regenAuth.common_name === env.ACCESS_ALLOWED_SERVICE_TOKEN
+          );
+          const regenHasToken = regenBearer === env.SHORTCUT_TOKEN;
+          if (!regenHasJwt && !regenHasToken) {
+            return new Response("Unauthorized", { status: 401 });
+          }
+
+          if (!env.ANTHROPIC_API_KEY) {
+            return Response.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 });
+          }
+
+          const { generateRipplesSnapshot } = await import("./ripples/generate");
+          const regenSpotify = new SpotifyClient(env);
+          const snapshot = await generateRipplesSnapshot(env.DB, regenSpotify, env.ANTHROPIC_API_KEY);
+          return Response.json(snapshot);
+        }
+
+        // ── Apple Music match review endpoints ──
+
+        case "/api/listening/apple-matches": {
+          if (request.method !== "GET") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          const { listAppleMatches } = await import("./listening/apple-match-queries");
+          const amStatus = url.searchParams.get("status") ?? "review";
+          const amLimit = Math.min(parseInt(url.searchParams.get("limit") ?? "10", 10) || 10, 50);
+          const amOffset = parseInt(url.searchParams.get("offset") ?? "0", 10) || 0;
+          const amResult = await listAppleMatches(env.DB, amStatus, amLimit, amOffset);
+          return Response.json(amResult);
+        }
+
+        case "/api/listening/apple-matches/count": {
+          if (request.method !== "GET") {
+            return new Response("Method not allowed", { status: 405 });
+          }
+          const { countAppleMatches } = await import("./listening/apple-match-queries");
+          const countStatus = url.searchParams.get("status");
+          if (!countStatus) {
+            return Response.json({ error: "status parameter required" }, { status: 400 });
+          }
+          const amCount = await countAppleMatches(env.DB, countStatus);
+          return Response.json({ count: amCount });
+        }
+
+        default: {
+          // Dynamic route: POST /api/listening/apple-matches/:cache_key
+          if (url.pathname.startsWith("/api/listening/apple-matches/") && request.method === "POST") {
+            const amCacheKey = decodeURIComponent(url.pathname.slice("/api/listening/apple-matches/".length));
+            if (!amCacheKey || amCacheKey === "count") {
+              return new Response("Not found", { status: 404 });
+            }
+
+            const {
+              getAppleMatch, confirmMatch, skipMatch, markUnmatchable,
+            } = await import("./listening/apple-match-queries");
+
+            const match = await getAppleMatch(env.DB, amCacheKey);
+            if (!match) {
+              return Response.json({ error: "Match not found" }, { status: 404 });
+            }
+
+            const body = await request.json() as {
+              action: "match" | "skip" | "unmatchable" | "search";
+              spotify_track_uri?: string;
+              query?: string;
+            };
+
+            switch (body.action) {
+              case "match": {
+                if (!body.spotify_track_uri) {
+                  return Response.json({ error: "spotify_track_uri required for match action" }, { status: 400 });
+                }
+                // Look up the Spotify track metadata
+                const spotify = new SpotifyClient(env);
+                const trackId = body.spotify_track_uri.replace("spotify:track:", "");
+                const trackData = await spotify.get<{
+                  name: string;
+                  artists: Array<{ name: string }>;
+                  album: { name: string };
+                  duration_ms: number;
+                }>(`/v1/tracks/${trackId}`);
+                await confirmMatch(
+                  env.DB, amCacheKey,
+                  body.spotify_track_uri,
+                  trackData.name,
+                  trackData.artists.map((a: { name: string }) => a.name).join(", "),
+                  trackData.album.name,
+                  trackData.duration_ms,
+                );
+                return Response.json({ ok: true, action: "matched" });
+              }
+              case "skip": {
+                await skipMatch(env.DB, amCacheKey);
+                return Response.json({ ok: true, action: "skipped" });
+              }
+              case "unmatchable": {
+                await markUnmatchable(env.DB, amCacheKey);
+                return Response.json({ ok: true, action: "permanently_unmatched" });
+              }
+              case "search": {
+                if (!body.query) {
+                  return Response.json({ error: "query required for search action" }, { status: 400 });
+                }
+                // Re-search Spotify with the user's query
+                const searchSpotify = new SpotifyClient(env);
+                const searchResult = await searchSpotify.get<{
+                  tracks: { items: Array<{
+                    uri: string;
+                    name: string;
+                    artists: Array<{ name: string }>;
+                    album: { name: string };
+                    duration_ms: number;
+                  }> };
+                }>(`/v1/search?q=${encodeURIComponent(body.query)}&type=track&limit=5`);
+                const candidates = (searchResult.tracks?.items ?? []).map((t) => ({
+                  spotify_track_uri: t.uri,
+                  track_name: t.name,
+                  artist_name: t.artists.map((a) => a.name).join(", "),
+                  album_name: t.album.name,
+                  duration_ms: t.duration_ms,
+                }));
+                return Response.json({ ok: true, candidates });
+              }
+              default:
+                return Response.json({ error: "Unknown action" }, { status: 400 });
+            }
+          }
+
           return new Response("Not found", { status: 404 });
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -2266,6 +2467,17 @@ export default {
       }
 
       await pruneOldObservations(env.DB, 30 * 24 * 60 * 60);
+
+      // Ripples: generate daily snapshot of current listening obsessions.
+      // Runs after sync + taste rebuild so play data and affinities are fresh.
+      if (env.ANTHROPIC_API_KEY) {
+        try {
+          const { generateRipplesSnapshot } = await import("./ripples/generate");
+          await generateRipplesSnapshot(env.DB, spotify, env.ANTHROPIC_API_KEY);
+        } catch (err) {
+          console.error(`[Ripples] snapshot generation failed: ${err}`);
+        }
+      }
 
       // OAuth KV cleanup: all keys (token:, refresh:, grant:, code:) are
       // stored with KV TTLs by the library, so Cloudflare auto-expires them.
