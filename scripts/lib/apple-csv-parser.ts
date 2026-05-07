@@ -240,9 +240,14 @@ export async function buildDailyTracksLookup(
     const trackId = obj["Track Identifier"] ?? "";
     const description = obj["Track Description"] ?? "";
     const playCount = parseInt(obj["Play Count"] ?? "0", 10) || 0;
-    const date = obj["Date Played"] ?? "";
+    const rawDate = obj["Date Played"] ?? "";
 
-    if (!trackId || !date) continue;
+    if (!trackId || !rawDate) continue;
+
+    // Normalize date: Apple uses YYYYMMDD format, we need YYYY-MM-DD
+    const date = rawDate.length === 8
+      ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
+      : rawDate;
 
     // Extract song name from description ("Artist — Song" or "Artist - Song")
     // The key uses the full description's song portion, but for matching

@@ -218,41 +218,59 @@ async function main() {
   console.log(`  ✓ ${existingMatches.size} cached matches`);
 
   // ── Step 6: Match each unique track ──
-  console.log("[Step 6] Matching tracks to Spotify...");
   const matchResults = new Map<string, MatchResult>();
   let processed = 0;
   let skipped = 0;
   const tracksToProcess = LIMIT ? [...trackGroups.entries()].slice(0, LIMIT) : [...trackGroups.entries()];
 
-  for (const [cacheKey, events] of tracksToProcess) {
-    // Use cached match if available
-    if (existingMatches.has(cacheKey)) {
-      matchResults.set(cacheKey, existingMatches.get(cacheKey)!);
-      skipped++;
-      continue;
+  if (DRY_RUN) {
+    console.log("[Step 6] Dry run — skipping Spotify matching...");
+    // In dry-run mode, create placeholder results so we can count play rows
+    for (const [cacheKey, events] of tracksToProcess) {
+      const firstEvent = events[0];
+      matchResults.set(cacheKey, {
+        cacheKey,
+        appleTrackId: firstEvent.appleTrackId,
+        bestCandidate: null,
+        allCandidates: [],
+        itunesData: null,
+        isrc: null,
+        matchStatus: "unmatched",
+        originalSongName: firstEvent.row.songName,
+        originalArtistName: firstEvent.row.artistName,
+        originalAlbumName: firstEvent.row.albumName,
+      });
     }
+    console.log(`  ✓ ${tracksToProcess.length} tracks (matching skipped)`);
+  } else {
+    console.log("[Step 6] Matching tracks to Spotify...");
+    for (const [cacheKey, events] of tracksToProcess) {
+      // Use cached match if available
+      if (existingMatches.has(cacheKey)) {
+        matchResults.set(cacheKey, existingMatches.get(cacheKey)!);
+        skipped++;
+        continue;
+      }
 
-    const firstEvent = events[0];
-    const result = await matchTrack(firstEvent);
-    matchResults.set(cacheKey, result);
+      const firstEvent = events[0];
+      const result = await matchTrack(firstEvent);
+      matchResults.set(cacheKey, result);
 
-    // Write to apple_track_matches immediately (resumability)
-    if (!DRY_RUN) {
+      // Write to apple_track_matches immediately (resumability)
       await writeMatchToCache(result);
-    }
 
-    processed++;
-    if (processed % 500 === 0 || processed === tracksToProcess.length) {
-      const total = tracksToProcess.length;
-      const via = result.bestCandidate?.matchMethod ?? "none";
-      const conf = result.bestCandidate?.confidence?.toFixed(2) ?? "0.00";
-      console.log(
-        `  [${processed}/${total}] track="${firstEvent.row.songName}" via=${via} confidence=${conf}`,
-      );
+      processed++;
+      if (processed % 500 === 0 || processed === tracksToProcess.length) {
+        const total = tracksToProcess.length;
+        const via = result.bestCandidate?.matchMethod ?? "none";
+        const conf = result.bestCandidate?.confidence?.toFixed(2) ?? "0.00";
+        console.log(
+          `  [${processed}/${total}] track="${firstEvent.row.songName}" via=${via} confidence=${conf}`,
+        );
+      }
     }
+    console.log(`  ✓ ${processed} newly matched, ${skipped} from cache`);
   }
-
-  console.log(`  ✓ ${processed} newly matched, ${skipped} from cache`);
 
   // ── Step 7: Write play rows to D1 ──
   let totalPlayRows = 0;
