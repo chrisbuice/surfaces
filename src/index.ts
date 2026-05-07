@@ -2173,6 +2173,7 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
               composite_familiarity: rippleRow.composite_familiarity,
               total_plays_in_window: rippleRow.total_plays_in_window,
               new_arrivals: ripplePayload.new_arrivals.map((item: any) => ({
+                track_id: item.track_id,
                 title: item.title,
                 artist: item.artist,
                 album_art_url: item.album_art_url,
@@ -2183,6 +2184,7 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
                 fact: surfaceFact(item),
               })),
               returning_waves: ripplePayload.returning_waves.map((item: any) => ({
+                track_id: item.track_id,
                 title: item.title,
                 artist: item.artist,
                 album_art_url: item.album_art_url,

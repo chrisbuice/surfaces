@@ -1,6 +1,7 @@
 name = "spotify-agent"
 main = "src/index.ts"
 compatibility_date = "2025-04-28"
+compatibility_flags = ["nodejs_compat"]
 
 # ── D1 database ──
 [[d1_databases]]
