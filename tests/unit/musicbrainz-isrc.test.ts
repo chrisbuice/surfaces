@@ -53,13 +53,15 @@ describe("findIsrc", () => {
     expect(result).toBeNull();
   });
 
-  it("returns null on API error", async () => {
+  it("retries on 503 and returns null after exhaustion", { timeout: 30000 }, async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response("Service Unavailable", { status: 503 }),
     );
 
     const result = await findIsrc("Fleetwood Mac", "Dreams", mockFetch);
     expect(result).toBeNull();
+    // 1 initial + 2 retries = 3 calls
+    expect(mockFetch).toHaveBeenCalledTimes(3);
   });
 
   it("sends correct User-Agent header", async () => {

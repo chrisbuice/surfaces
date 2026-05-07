@@ -29,11 +29,12 @@ const limiter = new RateLimiter(15); // 15 req/sec
 // ── Public API ──
 
 const MAX_RETRIES = 3;
+const FETCH_TIMEOUT_MS = 30_000;
 
 /**
  * Look up a single track by Apple track ID.
  * Returns null on 404 or if the track isn't found in the response.
- * Retries on 5xx errors.
+ * Retries on 5xx errors and timeouts.
  */
 export async function lookupTrack(
   appleTrackId: string,
@@ -46,9 +47,12 @@ export async function lookupTrack(
 
     let res: Response;
     try {
-      res = await fetchFn(url);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      res = await fetchFn(url, { signal: controller.signal });
+      clearTimeout(timer);
     } catch {
-      // Network error — retry
+      // Network error or timeout — retry
       if (attempt === MAX_RETRIES) return null;
       await sleep(1000 * Math.pow(2, attempt));
       continue;

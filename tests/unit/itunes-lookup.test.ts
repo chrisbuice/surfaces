@@ -85,7 +85,8 @@ describe("lookupTrack", () => {
     );
 
     await lookupTrack("594061860", mockFetch);
-    expect(mockFetch).toHaveBeenCalledWith(
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe(
       "https://itunes.apple.com/lookup?id=594061860&entity=song",
     );
   });

@@ -43,6 +43,7 @@ const limiter = new RateLimiter(25); // 25 req/sec
 
 const SPOTIFY_API = "https://api.spotify.com/v1";
 const MAX_RETRIES = 3;
+const FETCH_TIMEOUT_MS = 30_000;
 
 // ── ISRC search ──
 
@@ -169,10 +170,15 @@ async function spotifyFetch<T>(
 
     let res: Response;
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
       res = await fetchFn(url, {
+        signal: controller.signal,
         headers: { Authorization: `Bearer ${token}` },
       });
+      clearTimeout(timer);
     } catch {
+      // Network error or timeout — retry
       if (attempt === MAX_RETRIES) return null;
       await sleep(1000 * Math.pow(2, attempt));
       continue;
