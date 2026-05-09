@@ -7,6 +7,7 @@
  */
 
 import { SpotifyClient } from "../spotify/client";
+import { SpotifyCooldownError, SpotifyDisabledError } from "../spotify/rate-guard";
 import { insertPollObservation, insertPlayEvent } from "../db/queries";
 
 interface PlayerState {
@@ -29,9 +30,12 @@ export async function handlePoll(env: { DB: D1Database; KV: KVNamespace; SPOTIFY
 
   let data: PlayerState | null = null;
   try {
-    // Use /me/player for full state including device info
     data = await spotify.get<PlayerState>("/v1/me/player");
-  } catch {
+  } catch (err) {
+    if (err instanceof SpotifyCooldownError || err instanceof SpotifyDisabledError) {
+      // Cooldown/kill-switch active — skip poll entirely, don't call backfill
+      return;
+    }
     // 204 (nothing playing) comes back as undefined from our client
     data = null;
   }
@@ -214,7 +218,10 @@ async function backfillFromRecentlyPlayed(
 
     // Update watermark to the newest entry
     await kv.put("recently_played:watermark", rp.items[0].played_at);
-  } catch {
-    // Don't let backfill failures break the regular poll
+  } catch (err) {
+    // Cooldown errors are expected — don't log as failures
+    if (err instanceof SpotifyCooldownError || err instanceof SpotifyDisabledError) return;
+    // Other backfill failures shouldn't break the regular poll
+    console.error(`backfill: ${err}`);
   }
 }

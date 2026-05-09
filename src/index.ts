@@ -4,6 +4,7 @@ import { handleLogin, handleCallback, refreshAccessToken } from "./auth/spotify-
 import { getTokens, saveTokens } from "./auth/tokens";
 import { verifyAccessJwt } from "./auth/access-jwt";
 import { SpotifyClient } from "./spotify/client";
+import { SpotifyCooldownError, SpotifyDisabledError } from "./spotify/rate-guard";
 import { handlePoll } from "./tracker/poll";
 import { derivePlayEvents } from "./tracker/derive";
 import { getRecentPollObservations, getRecentPlayEvents, pruneOldObservations } from "./db/queries";
@@ -35,6 +36,9 @@ export interface Env {
   // verifies it before accepting a submission. Optional in dev — when
   // unset, the endpoint refuses submissions outright.
   SURFACES_SECRET?: string;
+  // Spotify playlist ID for "Sent to Surfaces". Created once via
+  // POST /debug/create-submission-playlist, then stored as a secret.
+  SUBMISSION_PLAYLIST_ID?: string;
   VOYAGE_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   // OAuth token storage — bound to a separate KV namespace
@@ -505,17 +509,15 @@ const defaultHandler: ExportedHandler<Env> = {
         }
 
         case "/api/submit-track": {
-          // Spec §7.3. Public endpoint, but auth-gated via X-Surfaces-Secret
-          // (chrisbuice.com's Pages Function attaches it). Insert-only.
-          // Behavior: never show an error to the submitter — even on D1
-          // failure we return a friendly 200 with a "queued" body so the
-          // chrisbuice.com page can always show success.
+          // Auth-gated via X-Surfaces-Secret (chrisbuice.com's Pages
+          // Function attaches it). Validates input, fetches track metadata,
+          // adds to Spotify playlist, and dual-writes to both `submissions`
+          // (for nightly digest) and `track_submissions` (richer audit log).
+          // Never shows Spotify errors to the submitter.
           if (request.method !== "POST") {
             return new Response("Method not allowed", { status: 405 });
           }
           if (!env.SURFACES_SECRET) {
-            // Refuse outright when unconfigured rather than accepting
-            // unauthenticated traffic. Avoids accidentally-public POSTs.
             return new Response("Endpoint not configured", { status: 503 });
           }
           const headerSecret = request.headers.get("X-Surfaces-Secret");
@@ -523,32 +525,90 @@ const defaultHandler: ExportedHandler<Env> = {
             return new Response("Unauthorized", { status: 401 });
           }
 
-          let parsed: { track_id?: unknown; from?: unknown; note?: unknown };
+          let parsed: Record<string, unknown>;
           try {
             parsed = await request.json();
           } catch {
             return new Response("Invalid JSON", { status: 400 });
           }
 
-          const rawTrack = typeof parsed.track_id === "string" ? parsed.track_id : "";
-          const { canonicalizeTrackId, insertSubmission } = await import("./submissions/queries");
-          const trackId = canonicalizeTrackId(rawTrack);
-          if (!trackId) {
-            return new Response("Invalid track_id", { status: 400 });
+          const {
+            canonicalizeTrackId, insertSubmission,
+            validateSubmitInput, isValidationError,
+            insertTrackSubmission,
+          } = await import("./submissions/queries");
+
+          const validated = validateSubmitInput(parsed);
+          if (isValidationError(validated)) {
+            return Response.json(validated, { status: 400 });
           }
 
-          // Optional fields are trimmed, capped at sane lengths, and
-          // collapsed to null when empty so the digest renders cleanly.
-          const trimmedFrom = typeof parsed.from === "string"
-            ? parsed.from.trim().slice(0, 80) : "";
-          const trimmedNote = typeof parsed.note === "string"
-            ? parsed.note.trim().slice(0, 300) : "";
+          // Canonicalize for the legacy submissions table (stores spotify:track:... URIs)
+          const canonicalTrackId = canonicalizeTrackId(validated.track_id)!;
+
+          // Capture request metadata
+          const submitterIp = request.headers.get("CF-Connecting-IP") ?? null;
+          const userAgent = request.headers.get("User-Agent") ?? null;
+
+          // Fetch track metadata from Spotify (best-effort — nulls are fine)
+          let trackName: string | null = null;
+          let artistName: string | null = null;
+          const spotify = new SpotifyClient(env);
+          try {
+            const track = await spotify.get<{
+              name: string;
+              artists: Array<{ name: string }>;
+            }>(`/v1/tracks/${validated.track_id}`);
+            trackName = track.name;
+            artistName = track.artists.map(a => a.name).join(", ");
+          } catch (err) {
+            console.warn(`submit-track: metadata fetch failed for ${validated.track_id}: ${err}`);
+          }
+
+          // Add to Spotify playlist (if configured)
+          let spotifyAddStatus: "ok" | "failed" | "skipped" = "skipped";
+          let spotifyError: string | null = null;
+          if (env.SUBMISSION_PLAYLIST_ID) {
+            try {
+              await spotify.post(
+                `/v1/playlists/${env.SUBMISSION_PLAYLIST_ID}/tracks`,
+                { uris: [`spotify:track:${validated.track_id}`] },
+              );
+              spotifyAddStatus = "ok";
+            } catch (err) {
+              spotifyAddStatus = "failed";
+              spotifyError = String(err);
+              console.error(
+                `submit-track: playlist add failed for ${validated.track_id}: ${err}`,
+              );
+            }
+          }
+
+          // Dual-write: legacy submissions table (for nightly digest) +
+          // track_submissions (richer audit log with playlist outcome).
+          try {
+            // Legacy table — keeps digest workflow intact
+            await insertSubmission(env.DB, {
+              track_id: canonicalTrackId,
+              submitter_name: validated.from,
+              note: validated.note,
+            });
+          } catch (err) {
+            console.error(`submit-track: legacy submissions insert failed: ${err}`);
+          }
 
           try {
-            const id = await insertSubmission(env.DB, {
-              track_id: trackId,
-              submitter_name: trimmedFrom || null,
-              note: trimmedNote || null,
+            const id = await insertTrackSubmission(env.DB, {
+              track_id: validated.track_id,
+              track_name: trackName,
+              artist_name: artistName,
+              from_name: validated.from,
+              note: validated.note,
+              email: validated.email,
+              submitter_ip: submitterIp,
+              user_agent: userAgent,
+              spotify_add_status: spotifyAddStatus,
+              spotify_error: spotifyError,
             });
             return Response.json({
               ok: true,
@@ -556,11 +616,9 @@ const defaultHandler: ExportedHandler<Env> = {
               message: "Added to the discovery pool — I'll see it next time I run a session.",
             });
           } catch (err) {
-            // Per spec §7.3 failure mode: never show an error to a
-            // submitter. Log the underlying error for our own visibility,
-            // return a friendly 200 so the chrisbuice.com page always
-            // shows success.
-            console.error(`submissions: insert failed: ${err}`);
+            // Never show an error to the submitter. Log for our visibility,
+            // return a friendly 200 so the page always shows success.
+            console.error(`submit-track: track_submissions insert failed: ${err}`);
             return Response.json({
               ok: true,
               queued: true,
@@ -2431,14 +2489,36 @@ export default {
 
       // Daily at 5am UTC (1am ET): sync recent plays, derive, rebuild taste + affinities, audio backfill, prune
       const spotify = new SpotifyClient(env);
+      let spotifyCooldown = false;
 
       // Sync recent plays from Spotify into the plays table (before taste rebuild)
-      const { syncRecentPlays } = await import("./listening/sync");
-      await syncRecentPlays(env.DB, spotify, env.KV);
+      try {
+        const { syncRecentPlays } = await import("./listening/sync");
+        await syncRecentPlays(env.DB, spotify, env.KV);
+      } catch (err) {
+        if (err instanceof SpotifyCooldownError || err instanceof SpotifyDisabledError) {
+          console.log(`[5am cron] Spotify cooldown active, skipping Spotify-dependent steps`);
+          spotifyCooldown = true;
+        } else {
+          console.error(`[5am cron] sync failed: ${err}`);
+        }
+      }
 
       const snapshotId = await getLatestSnapshotId(env.DB);
       await derivePlayEvents(env.DB, snapshotId);
-      await rebuildTasteModel(env.DB, spotify, env.SPOTIFY_USER_ID);
+
+      if (!spotifyCooldown) {
+        try {
+          await rebuildTasteModel(env.DB, spotify, env.SPOTIFY_USER_ID);
+        } catch (err) {
+          if (err instanceof SpotifyCooldownError || err instanceof SpotifyDisabledError) {
+            console.log(`[5am cron] Spotify cooldown hit during taste rebuild`);
+            spotifyCooldown = true;
+          } else {
+            console.error(`[5am cron] taste rebuild failed: ${err}`);
+          }
+        }
+      }
       await rebuildAffinities(env.DB);
 
       // Audio features backfill — runs after taste rebuild so newly-scored
@@ -2455,29 +2535,37 @@ export default {
       // taste/audio rebuild so the curation engine sees them on the very
       // next session. Failures are logged but never raise — submissions
       // are non-critical to the rest of the nightly chain.
-      try {
-        const { syncSubmissionsToFreshPool } = await import("./submissions/fresh_pool_sync");
-        const subResult = await syncSubmissionsToFreshPool(env.DB, spotify);
-        if (subResult.candidates > 0) {
-          console.log(
-            `submissions: synced ${subResult.added} added, ` +
-            `${subResult.already_present} already present, ${subResult.rejected} rejected`,
-          );
+      if (!spotifyCooldown) {
+        try {
+          const { syncSubmissionsToFreshPool } = await import("./submissions/fresh_pool_sync");
+          const subResult = await syncSubmissionsToFreshPool(env.DB, spotify);
+          if (subResult.candidates > 0) {
+            console.log(
+              `submissions: synced ${subResult.added} added, ` +
+              `${subResult.already_present} already present, ${subResult.rejected} rejected`,
+            );
+          }
+        } catch (err) {
+          if (err instanceof SpotifyCooldownError || err instanceof SpotifyDisabledError) {
+            spotifyCooldown = true;
+          } else {
+            console.error(`submissions: fresh_pool sync failed: ${err}`);
+          }
         }
-      } catch (err) {
-        console.error(`submissions: fresh_pool sync failed: ${err}`);
       }
 
       await pruneOldObservations(env.DB, 30 * 24 * 60 * 60);
 
       // Ripples: generate daily snapshot of current listening obsessions.
       // Runs after sync + taste rebuild so play data and affinities are fresh.
-      if (env.ANTHROPIC_API_KEY) {
+      if (env.ANTHROPIC_API_KEY && !spotifyCooldown) {
         try {
           const { generateRipplesSnapshot } = await import("./ripples/generate");
           await generateRipplesSnapshot(env.DB, spotify, env.ANTHROPIC_API_KEY);
         } catch (err) {
-          console.error(`[Ripples] snapshot generation failed: ${err}`);
+          if (!(err instanceof SpotifyCooldownError || err instanceof SpotifyDisabledError)) {
+            console.error(`[Ripples] snapshot generation failed: ${err}`);
+          }
         }
       }
 
@@ -2488,18 +2576,32 @@ export default {
 
     if (cron === "0 10 * * *") {
       // Daily at 10am UTC (6am ET): discovery agent, then constellation rebuild.
-      // Both run after the 1am ET taste rebuild + audio backfill so they see
-      // the freshest artist_taste data. The constellation runs after discovery
-      // so a future change that has discovery write artist rows still flows in.
       const spotify = new SpotifyClient(env);
-      await runDiscoveryAgent(env.DB, spotify, undefined, env.LASTFM_API_KEY);
+      let tenAmCooldown = false;
 
-      const { runConstellationCron } = await import("./constellation/cron");
       try {
-        const summary = await runConstellationCron(env.DB, spotify, env.KV, env.SPOTIFY_USER_ID);
-        console.log(`constellation: rebuilt — ${summary.nodes} nodes, ${summary.edges} edges`);
+        await runDiscoveryAgent(env.DB, spotify, undefined, env.LASTFM_API_KEY);
       } catch (err) {
-        console.error(`constellation: rebuild failed: ${err}`);
+        if (err instanceof SpotifyCooldownError || err instanceof SpotifyDisabledError) {
+          console.log(`[10am cron] Spotify cooldown active, skipping Spotify-dependent steps`);
+          tenAmCooldown = true;
+        } else {
+          console.error(`[10am cron] discovery failed: ${err}`);
+        }
+      }
+
+      if (!tenAmCooldown) {
+        const { runConstellationCron } = await import("./constellation/cron");
+        try {
+          const summary = await runConstellationCron(env.DB, spotify, env.KV, env.SPOTIFY_USER_ID);
+          console.log(`constellation: rebuilt — ${summary.nodes} nodes, ${summary.edges} edges`);
+        } catch (err) {
+          if (err instanceof SpotifyCooldownError || err instanceof SpotifyDisabledError) {
+            tenAmCooldown = true;
+          } else {
+            console.error(`constellation: rebuild failed: ${err}`);
+          }
+        }
       }
 
       // Rebuild /surfaces page data (listening-by-month + top-artists).
@@ -2531,9 +2633,15 @@ export default {
       const needsFollowup = await env.KV.get("sync:needs_followup");
       if (needsFollowup) {
         await env.KV.delete("sync:needs_followup");
-        const spotify = new SpotifyClient(env);
-        const { syncRecentPlays } = await import("./listening/sync");
-        await syncRecentPlays(env.DB, spotify, env.KV);
+        try {
+          const spotify = new SpotifyClient(env);
+          const { syncRecentPlays } = await import("./listening/sync");
+          await syncRecentPlays(env.DB, spotify, env.KV);
+        } catch (err) {
+          if (!(err instanceof SpotifyCooldownError || err instanceof SpotifyDisabledError)) {
+            console.error(`[2min cron] sync follow-up failed: ${err}`);
+          }
+        }
       }
 
       // On the hour (minute 0): capture an ambient context snapshot

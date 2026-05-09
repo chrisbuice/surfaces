@@ -43,11 +43,22 @@ async function fetchTrackWithRetry(
     });
 
     if (resp.status === 429) {
+      const retryAfter = parseInt(resp.headers.get("Retry-After") ?? "5", 10);
+      if (retryAfter > 60) {
+        // Large Retry-After: write cooldown file and exit (R6/R7)
+        const { writeFileSync, mkdirSync, existsSync } = await import("node:fs");
+        const { homedir } = await import("node:os");
+        const { join } = await import("node:path");
+        const dir = join(homedir(), ".surfaces");
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, "spotify-cooldown"), String(Date.now() + retryAfter * 1000));
+        console.error(`Spotify 429 with Retry-After ${retryAfter}s — cooldown set, exiting`);
+        process.exit(1);
+      }
       if (attempt === MAX_RETRIES) {
         console.error(`  Spotify 429 after ${MAX_RETRIES} retries for ${trackId}`);
         return "error";
       }
-      const retryAfter = parseInt(resp.headers.get("Retry-After") ?? "5", 10);
       console.log(`  Spotify 429 — waiting ${retryAfter}s (attempt ${attempt + 1}/${MAX_RETRIES})`);
       await sleep(retryAfter * 1000);
       continue;

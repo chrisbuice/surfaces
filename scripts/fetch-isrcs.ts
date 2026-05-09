@@ -103,6 +103,12 @@ async function main() {
 
       if (resp.status === 429) {
         const retryAfter = parseInt(resp.headers.get("Retry-After") ?? "5", 10);
+        if (retryAfter > 60) {
+          const { setSpotifyCooldown } = await import("./lib/spotify-rate-guard");
+          setSpotifyCooldown(retryAfter, "fetch-isrcs");
+          console.error(`Spotify 429 with Retry-After ${retryAfter}s — cooldown set, exiting`);
+          process.exit(1);
+        }
         console.log(`  Rate limited. Waiting ${retryAfter}s...`);
         await sleep(retryAfter * 1000);
         i--; // retry this one

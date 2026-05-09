@@ -19,8 +19,9 @@
 import { parseArgs } from "node:util";
 import { lookupTrack } from "./lib/itunes-lookup";
 import { findIsrc } from "./lib/musicbrainz-isrc";
-import { searchByIsrc, searchByText, type SpotifyMatchCandidate } from "./lib/spotify-matcher";
+import { searchByIsrc, searchByText, SpotifyCooldownError, type SpotifyMatchCandidate } from "./lib/spotify-matcher";
 import { getSpotifyToken } from "./lib/spotify-auth";
+import { assertSpotifyAllowed } from "./lib/spotify-rate-guard";
 import { queryD1, writeD1 } from "../stack/lyrics-backfill/lib/d1";
 
 // ── CLI args ──
@@ -90,7 +91,20 @@ async function main() {
     return;
   }
 
-  // Pre-acquire Spotify token so a hang here is visible in logs
+  // Pre-flight: check cooldown/kill-switch before any Spotify calls
+  console.log("Checking Spotify rate limit status...");
+  try {
+    assertSpotifyAllowed();
+    console.log("  ✓ No cooldown or kill-switch active");
+  } catch (err) {
+    if (err instanceof SpotifyCooldownError) {
+      console.error(`❌ ${err.message}`);
+      console.error("   Exiting. Re-run after the cooldown expires.");
+      process.exit(1);
+    }
+    throw err;
+  }
+
   console.log("Acquiring Spotify token...");
   const initialToken = await getSpotifyToken();
   console.log(`  ✓ Token acquired (${initialToken.slice(0, 8)}...)`);

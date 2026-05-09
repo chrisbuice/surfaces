@@ -5,6 +5,8 @@
  * Uses SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET from env.
  */
 
+import { setSpotifyCooldown, setSpotifyKillSwitch } from "./spotify-rate-guard";
+
 const TOKEN_URL = "https://accounts.spotify.com/api/token";
 const EXPIRY_BUFFER_S = 60;
 const FETCH_TIMEOUT_MS = 30_000;
@@ -56,10 +58,13 @@ export async function getSpotifyToken(
   }
   clearTimeout(timer);
 
+  // R3: token endpoint 429 → 24h cooldown + kill-switch, no retry
   if (res.status === 429) {
-    const retryAfter = parseInt(res.headers.get("retry-after") ?? "0", 10);
+    const TWENTY_FOUR_HOURS = 86400;
+    setSpotifyCooldown(TWENTY_FOUR_HOURS, "token_client_credentials");
+    setSpotifyKillSwitch("token_client_credentials");
     throw new Error(
-      `Spotify token endpoint 429: retry after ${retryAfter}s (~${(retryAfter / 3600).toFixed(1)}h)`,
+      `Spotify token endpoint 429: cooldown set for 24h, kill-switch activated`,
     );
   }
 

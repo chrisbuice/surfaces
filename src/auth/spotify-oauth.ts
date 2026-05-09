@@ -8,6 +8,7 @@
  */
 
 import { saveTokens } from "./tokens";
+import { setSpotifyCooldown, setSpotifyKillSwitch, SpotifyCooldownError } from "../spotify/rate-guard";
 
 const SCOPES = [
   "user-read-private",
@@ -135,6 +136,14 @@ export async function refreshAccessToken(env: Env, refreshToken: string): Promis
     },
     body,
   });
+
+  // R3: token endpoint 429 → 24h cooldown + kill-switch, no retry
+  if (resp.status === 429) {
+    const TWENTY_FOUR_HOURS = 86400;
+    await setSpotifyCooldown(env.KV, TWENTY_FOUR_HOURS, "token_refresh");
+    await setSpotifyKillSwitch(env.KV, "token_refresh");
+    throw new SpotifyCooldownError(Date.now() + TWENTY_FOUR_HOURS * 1000);
+  }
 
   if (!resp.ok) {
     const text = await resp.text();

@@ -5,11 +5,22 @@
  *   1. ISRC search (confidence = 1.00, match_method = 'isrc')
  *   2. Text search with fuzzy scoring (confidence formula from decisions §D7 Stage 2)
  *
- * Uses client_credentials auth (public catalog reads only).
+ * Uses the file-based rate-guard for cooldown/kill-switch defense.
+ * All fetch calls go through spotifyFetch() which checks the guard
+ * before every request.
  */
 
 import * as fuzzball from "fuzzball";
 import { RateLimiter } from "./rate-limiter";
+import {
+  assertSpotifyAllowed,
+  setSpotifyCooldown,
+  SpotifyCooldownError,
+  SpotifyServerError,
+} from "./spotify-rate-guard";
+
+// Re-export for callers that need to catch these
+export { SpotifyCooldownError, SpotifyServerError } from "./spotify-rate-guard";
 
 // ── Types ──
 
@@ -39,36 +50,16 @@ interface SpotifySearchResponse {
 
 // ── Rate limiting ──
 
-/**
- * Thrown when Spotify returns 429 with a Retry-After header.
- * The caller (ingest script) uses this to drive the global circuit breaker.
- */
-export class SpotifyRateLimitError extends Error {
-  retryAfterSeconds: number;
-  constructor(retryAfter: number) {
-    super(`Spotify 429: retry after ${retryAfter}s (~${(retryAfter / 3600).toFixed(1)}h)`);
-    this.name = "SpotifyRateLimitError";
-    this.retryAfterSeconds = retryAfter;
-  }
-}
-
-const limiter = new RateLimiter(10); // 10 req/sec (reduced from 25 to avoid tripping per-hour ceiling)
+const limiter = new RateLimiter(10); // 10 req/sec
 
 const SPOTIFY_API = "https://api.spotify.com/v1";
 const MAX_RETRIES = 3;
 const FETCH_TIMEOUT_MS = 30_000;
-// Don't wait more than 30s on a single retry — if Retry-After is longer,
-// throw SpotifyRateLimitError and let the caller decide.
-const MAX_RETRY_WAIT_MS = 30_000;
 
 // ── ISRC search ──
 
 /**
  * Search Spotify by ISRC. Returns a single match with confidence 1.00 or null.
- *
- * ISRC short-circuit: success here means confidence = 1.00 and
- * match_method = 'isrc'. Stages 2+ do not run for this track.
- * The cascade is short-circuit, not best-of-N.
  */
 export async function searchByIsrc(
   isrc: string,
@@ -136,43 +127,11 @@ export async function searchByText(
   }).sort((a, b) => b.confidence - a.confidence);
 }
 
-// ── Pre-flight rate limit check ──
-
-/**
- * Make a single cheap Spotify API call to check if we're rate-limited.
- * Throws SpotifyRateLimitError if 429, returns normally otherwise.
- */
-export async function checkSpotifyRateLimit(
-  token: string,
-  fetchFn: typeof fetch = fetch,
-): Promise<void> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetchFn(`${SPOTIFY_API}/search?q=test&type=track&limit=1`, {
-      signal: controller.signal,
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    clearTimeout(timer);
-    if (res.status === 429) {
-      const retryAfter = parseInt(res.headers.get("retry-after") ?? "0", 10);
-      throw new SpotifyRateLimitError(retryAfter || 3600);
-    }
-  } catch (err) {
-    clearTimeout(timer);
-    if (err instanceof SpotifyRateLimitError) throw err;
-    // Network error on pre-flight is not fatal — let the main loop handle it
-  }
-}
-
 // ── Scoring ──
 
 /**
  * Compute match confidence per decisions §D7 Stage 2:
  *   confidence = 0.6 × title_ratio + 0.3 × artist_ratio + 0.1 × duration_score
- *
- * title_ratio and artist_ratio use fuzzball.token_sort_ratio (0–100) / 100.
- * duration_score: 1.0 if within 3 seconds, scales down linearly, 0 if >30s diff.
  */
 export function scoreCandidate(
   candidate: { trackName: string; artistName: string; durationMs: number },
@@ -188,7 +147,7 @@ export function scoreCandidate(
     target.artistName.toLowerCase(),
   ) / 100;
 
-  let durationScore = 0.5; // default if no target duration
+  let durationScore = 0.5;
   if (target.durationMs != null && target.durationMs > 0) {
     const diffMs = Math.abs(candidate.durationMs - target.durationMs);
     if (diffMs <= 3000) {
@@ -203,13 +162,16 @@ export function scoreCandidate(
   return Math.round((0.6 * titleRatio + 0.3 * artistRatio + 0.1 * durationScore) * 100) / 100;
 }
 
-// ── Internal fetch with retry ──
+// ── Internal fetch with guard ──
 
 async function spotifyFetch<T>(
   url: string,
   token: string,
   fetchFn: typeof fetch,
 ): Promise<T | null> {
+  // Chokepoint: check cooldown + kill-switch before any HTTP call
+  assertSpotifyAllowed();
+
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     await limiter.wait();
 
@@ -229,26 +191,21 @@ async function spotifyFetch<T>(
       continue;
     }
 
+    // 429: set persistent cooldown and throw — no cap, full Retry-After
     if (res.status === 429) {
       const retryAfterRaw = res.headers.get("retry-after");
-      const retryAfterSec = retryAfterRaw ? parseInt(retryAfterRaw, 10) : 0;
-      const waitMs = retryAfterSec > 0
-        ? retryAfterSec * 1000
-        : 2000 * Math.pow(2, attempt);
+      const retryAfterSec = retryAfterRaw ? parseInt(retryAfterRaw, 10) : 3600;
+      setSpotifyCooldown(retryAfterSec, `spotifyFetch ${url.split("?")[0]}`);
+      throw new SpotifyCooldownError(Date.now() + retryAfterSec * 1000);
+    }
 
-      // If Retry-After is longer than we're willing to wait per-request,
-      // throw so the caller's circuit breaker can handle it globally.
-      if (waitMs > MAX_RETRY_WAIT_MS) {
-        throw new SpotifyRateLimitError(retryAfterSec || Math.ceil(waitMs / 1000));
-      }
-
-      if (attempt === MAX_RETRIES) {
-        throw new SpotifyRateLimitError(retryAfterSec || 60);
-      }
-
-      console.log(`    Spotify 429 — waiting ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/${MAX_RETRIES})`);
-      await sleep(waitMs);
+    // 5xx: retry with backoff
+    if (res.status >= 500 && attempt < MAX_RETRIES) {
+      await sleep(1000 * Math.pow(2, attempt));
       continue;
+    }
+    if (res.status >= 500) {
+      throw new SpotifyServerError(`Spotify ${res.status} after ${MAX_RETRIES} retries`);
     }
 
     if (!res.ok) return null;
