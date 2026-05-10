@@ -184,7 +184,7 @@ On 429 from `accounts.spotify.com/api/token` (in `src/auth/spotify-oauth.ts`):
 2. Set the kill-switch (`spotify:disabled = true`) — a token-level ban means nothing will work
 3. Fire D11 notification with `caller="token_refresh"`
 4. **Do not retry.** The next call will short-circuit on the kill-switch.
-5. Manual intervention required to clear: `wrangler kv:key delete --binding=KV spotify:disabled`
+5. Manual intervention required to clear: `wrangler kv key delete --binding=KV --remote spotify:disabled`
 
 Test case: mock 429 on token refresh → verify cooldown set to 24h, kill-switch set, `SpotifyCooldownError` thrown.
 
@@ -253,8 +253,8 @@ After merge and deploy:
 | Step | Action | Gate | On 429 |
 |---|---|---|---|
 | Hour 0 | Merge + deploy Worker. Cron continues but now respects cooldown/kill-switch. | — | N/A |
-| Hour 24+ from last 429 | Clear cooldown: `npx wrangler kv:key delete --binding=KV spotify:cooldown_until` | No 429s in Worker logs | N/A |
-| A | Watch Worker logs for 1 hour. Confirm poll cron succeeds. | No errors for 1 hour | Set kill-switch (`npx wrangler kv:key put --binding=KV spotify:disabled true`), alert Chris. Cron continues but short-circuits. |
+| Hour 24+ from last 429 | Clear cooldown: `npx wrangler kv key delete --binding=KV --remote spotify:cooldown_until` | No 429s in Worker logs | N/A |
+| A | Watch Worker logs for 1 hour. Confirm poll cron succeeds. | No errors for 1 hour | Set kill-switch (`npx wrangler kv key put --binding=KV --remote spotify:disabled true`), alert Chris. Cron continues but short-circuits. |
 | B | grimmauldplace: `apple-ingest --limit=50 --skip-musicbrainz` | Summary shows matches, no 429 | Script exits 1, cooldown file written. Don't restart automatically. |
 | C | grimmauldplace: `apple-ingest` full (no limit) | Completes without 429 | Script exits 1, cooldown file written. Don't restart automatically. |
 | D | Re-enable discovery agent if disabled | No 429 in next daily run | Set kill-switch, alert Chris. |
@@ -262,18 +262,21 @@ After merge and deploy:
 ### 2.9 Kill-switch commands
 
 **Worker (KV) — binding is `KV` per wrangler.toml line 15:**
+
+> **Warning:** Wrangler v4+ defaults to the **local** KV simulator. Always pass `--remote` when checking or modifying production cooldown/kill-switch state. Without it, you'll be reading/writing a local dev namespace and the live Worker will be unaffected.
+
 ```bash
 # Disable all Spotify calls
-npx wrangler kv:key put --binding=KV spotify:disabled true
+npx wrangler kv key put --binding=KV --remote spotify:disabled true
 
 # Re-enable
-npx wrangler kv:key delete --binding=KV spotify:disabled
+npx wrangler kv key delete --binding=KV --remote spotify:disabled
 
 # Check cooldown
-npx wrangler kv:key get --binding=KV spotify:cooldown_until
+npx wrangler kv key get --binding=KV --remote spotify:cooldown_until
 
 # Clear cooldown manually
-npx wrangler kv:key delete --binding=KV spotify:cooldown_until
+npx wrangler kv key delete --binding=KV --remote spotify:cooldown_until
 ```
 
 **grimmauldplace (file):**
