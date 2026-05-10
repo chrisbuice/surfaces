@@ -33,10 +33,10 @@ export async function handlePoll(env: { DB: D1Database; KV: KVNamespace; SPOTIFY
     data = await spotify.get<PlayerState>("/v1/me/player");
   } catch (err) {
     if (err instanceof SpotifyCooldownError || err instanceof SpotifyDisabledError) {
-      // Cooldown/kill-switch active — skip poll entirely, don't call backfill
       return;
     }
-    // 204 (nothing playing) comes back as undefined from our client
+    const e = err instanceof Error ? err : new Error(String(err));
+    console.error(`POLL_ERROR name=${e.name} message=${e.message}`, err);
     data = null;
   }
 
@@ -219,9 +219,8 @@ async function backfillFromRecentlyPlayed(
     // Update watermark to the newest entry
     await kv.put("recently_played:watermark", rp.items[0].played_at);
   } catch (err) {
-    // Cooldown errors are expected — don't log as failures
     if (err instanceof SpotifyCooldownError || err instanceof SpotifyDisabledError) return;
-    // Other backfill failures shouldn't break the regular poll
-    console.error(`backfill: ${err}`);
+    const e = err instanceof Error ? err : new Error(String(err));
+    console.error(`POLL_BACKFILL_ERROR name=${e.name} message=${e.message}`, err);
   }
 }

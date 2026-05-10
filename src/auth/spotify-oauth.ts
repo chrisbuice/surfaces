@@ -147,7 +147,8 @@ export async function refreshAccessToken(env: Env, refreshToken: string): Promis
 
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`Token refresh failed: ${text}`);
+    console.error(`TOKEN_REFRESH_ERROR status=${resp.status} body=${text}`);
+    throw new Error(`Token refresh failed (${resp.status}): ${text}`);
   }
 
   const data = (await resp.json()) as {

@@ -115,11 +115,22 @@ export class SpotifyClient {
 
       // 401: refresh token once, retry once
       if (resp.status === 401 && attempt === 0) {
+        console.error(`TOKEN_REFRESH_TRIGGERED caller=${method} ${path}`);
         const tokens = await getTokens(this.env.KV);
-        if (!tokens) throw new Error("No tokens available for refresh");
-        const refreshed = await refreshAccessToken(this.env, tokens.refreshToken);
-        await saveTokens(this.env.KV, refreshed);
-        token = refreshed.accessToken;
+        if (!tokens) {
+          console.error(`TOKEN_REFRESH_ERROR no tokens in KV`);
+          throw new Error("No tokens available for refresh");
+        }
+        try {
+          const refreshed = await refreshAccessToken(this.env, tokens.refreshToken);
+          await saveTokens(this.env.KV, refreshed);
+          token = refreshed.accessToken;
+          console.error(`TOKEN_REFRESH_OK new token acquired`);
+        } catch (refreshErr) {
+          const e = refreshErr instanceof Error ? refreshErr : new Error(String(refreshErr));
+          console.error(`TOKEN_REFRESH_ERROR name=${e.name} message=${e.message}`);
+          throw refreshErr;
+        }
         continue;
       }
 
