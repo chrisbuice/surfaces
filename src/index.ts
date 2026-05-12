@@ -571,7 +571,7 @@ const defaultHandler: ExportedHandler<Env> = {
           if (env.SUBMISSION_PLAYLIST_ID) {
             try {
               await spotify.post(
-                `/v1/playlists/${env.SUBMISSION_PLAYLIST_ID}/tracks`,
+                `/v1/playlists/${env.SUBMISSION_PLAYLIST_ID}/items`,
                 { uris: [`spotify:track:${validated.track_id}`] },
               );
               spotifyAddStatus = "ok";
