@@ -661,3 +661,73 @@ Ideas spotted during discovery, not in scope for this plan:
 - **Binge detector** — alert when a single track crosses 30 plays in a week. The `binges` data has 20 historical examples.
 - **Year-in-review generator** — structured summary of any year: top tracks, new discoveries, total hours, skip rate, obsessions, reflections. Good Wrapped-style output.
 - **Never-stale core in startSession** — extend the 14-artist boost (already shipping in `generate_queue`) to the existing `startSession` curation agent's track selection.
+
+---
+
+# Spotify Auth Health Plan (Oct 2026)
+
+**Status: APPROVED ("go with your recommendations"). D1, D2, D3 all in scope: commit 1 = core + D1, commit 2 = D2 heartbeat, commit 3 = D3 scope trim.**
+
+**Refinement:** alert dedupe key is `spotify:auth_alert:<kind>:<authorized_at>` (TTL ~200d) so each threshold fires once per authorization cycle and a re-login resets it. `broken`/stale alerts use a 24h TTL (repeat daily until fixed). The key is written only after a successful send.
+
+## Why
+
+Spotify deleted the old developer app. From then until Oct 10, 2026 the worker could not refresh its token (`invalid_client`), and nothing told anyone: `handlePoll` catches every error, logs it, and writes an empty `is_playing=0` observation each minute. The nightly email is skipped when nothing was played. Result: about three months of silent data loss.
+
+Spotify now also expires every refresh token six months after the user first authorizes (enforced Jun 18, 2026 for new apps, Jul 20 for existing ones). Refreshing does NOT extend the window, and Spotify does not report when a token was issued, so we have to record it ourselves. Without this work the same silent outage recurs around April 2027.
+
+## Scope
+
+**In scope (task 7):** record authorization time; classify auth failures; stop retrying on them; email before expiry and on failure; expose status on MCP `stats` and `/api/dashboard-stats`.
+
+**Now in scope (separate commits):** D2 heartbeat, D3 scope trim. **Still not in scope:** adaptive polling, quota (`QUOTA_EXCEEDED`) handling.
+
+## Design
+
+### 1. Record when the user authorized
+- New KV key `spotify:authorized_at` (unix seconds), written ONLY in the `/auth/callback` success path, never in `saveTokens` (refresh calls that too, and must not reset the clock).
+- Callback also deletes `spotify:auth_broken` (see 2).
+- Bootstrap: the current login predates this change, so no timestamp exists. One re-login after deploy (30 seconds) seeds it.
+
+### 2. Classify and stop on auth failures
+- In `refreshAccessToken` (`src/auth/spotify-oauth.ts`): on a 400 whose body error is `invalid_grant` (token expired/revoked) or `invalid_client` (app deleted or bad credentials), do not retry. Write `spotify:auth_broken` = `{ reason, at }` and throw a new `SpotifyAuthError`.
+- `SpotifyClient.request` (`src/spotify/client.ts`): before using or refreshing a token, if `spotify:auth_broken` is set, throw `SpotifyAuthError` immediately with no HTTP call. Today a dead login costs about 1,440 failing token requests per day, which risks a token-endpoint 429 and the existing 24-hour kill-switch.
+- Define `SpotifyAuthError extends SpotifyDisabledError`. Nine existing catch sites (`src/index.ts` cron blocks, `src/tracker/poll.ts`) already treat that class as "skip quietly", so none of them need editing. Side effect, intended: `handlePoll` stops inserting fake `is_playing=0` rows while auth is broken, so gaps in the data are real gaps.
+
+### 3. Alerts (new `src/auth/auth-health.ts`)
+- Pure function `evaluateAuthHealth({ authorizedAt, authBroken, now })` returns `{ status, daysSinceAuth, daysUntilExpiry, alert }`.
+- `AUTH_LIFETIME_DAYS = 180` (conservative; Spotify says six months).
+- Statuses: `ok`, `expiring` (from day 150), `broken`, `unknown` (no timestamp yet).
+- Warning emails at day 150, 165 and 175, and one when broken. Each is deduplicated with a KV key `spotify:auth_alert:<kind>` (TTL 7 days for warnings, 24 hours for broken), so the daily check cannot spam.
+- Runs inside the existing `0 0 * * *` (8pm ET) cron block, next to the nightly summary. No new cron trigger, no `wrangler.toml` change.
+- Email via the existing Resend path (`RESEND_API_KEY`, `NOTIFICATION_EMAIL`, sender `FROM_EMAIL`). Body: what happened, days left, and the link `https://spotify-agent.chrisbuice.workers.dev/auth/login`. Subject begins "Action needed:".
+- Refactor needed: `summary.ts` has the Resend call inline. Extract a small `sendEmail(resendApiKey, to, subject, html)` and reuse it from both places (behavior-preserving).
+
+### 4. Visibility (MCP and dashboard are both first-class)
+- Add `spotify_auth: { status, authorized_at, days_until_expiry }` to the MCP `stats` tool output and to `/api/dashboard-stats`, with the existing `source` provenance convention ("From local state").
+- Add `/debug/auth-health` returning the raw evaluation (the `/debug/*` routes are already behind Cloudflare Access).
+
+## Tests (required by CLAUDE.md)
+New file `tests/unit/auth-health.test.ts`, vitest + miniflare KV, matching `oauth.test.ts` style:
+1. `evaluateAuthHealth`: boundaries at days 149/150/165/175/180, missing timestamp, broken flag overrides.
+2. `refreshAccessToken`: 400 `invalid_grant` and 400 `invalid_client` set `auth_broken`, throw `SpotifyAuthError`, make exactly one HTTP call. A 429 still triggers the existing 24-hour cooldown. A 500 is not classified as auth.
+3. `SpotifyClient`: with `auth_broken` set, makes zero fetch calls and throws `SpotifyAuthError`.
+4. `/auth/callback` success writes `authorized_at` and clears `auth_broken`; a plain refresh does not touch `authorized_at`.
+5. Alert dedupe: second evaluation within the TTL sends nothing.
+6. `handlePoll` with `SpotifyAuthError` inserts no observation row.
+Existing regression checks in `CLAUDE.md` (260,331 plays, top artist, 633 lost favorites, `is_skip`) must still pass. Run `npm run test:all` plus `npx tsc --noEmit`.
+
+## Rollout
+1. PR from a feature branch; merge to `main` (Workers Builds auto-deploys the worker; this repo does not touch chrisbuice.com).
+2. Visit `/auth/login` once to seed `authorized_at`.
+3. Verify `/debug/auth-health` shows `ok` with about 180 days left.
+4. Chris sets a calendar reminder for about day 150 as a backup to the emails.
+
+## Decisions needed from Chris
+- **D1:** Stop writing empty `is_playing=0` observations while auth is broken (the subclass approach does this automatically). Recommended: yes.
+- **D2:** Also add a general heartbeat (`spotify:last_ok_at` updated at most every 10 minutes; daily check emails if it is older than 24 hours). It would have caught this outage whatever the cause. Slightly beyond the literal task. Recommended: yes, as a separate commit in the same PR.
+- **D3:** Bundle the OAuth scope trim (drop `user-read-email`, `user-library-modify`) into this deploy, so the one re-login covers both? Recommended: yes, as its own commit.
+
+## Risks
+- Spotify's exact `invalid_grant` response shape for an expired token comes from their blog post, not a live test. The classifier keys on the documented `error` field, and the unit tests use that shape.
+- If Resend is down or `NOTIFICATION_EMAIL` is unset, alerts fail quietly. Mitigation: log the failure, show status on the dashboard and `/debug/auth-health`, and use the calendar reminder.

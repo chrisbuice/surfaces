@@ -12,6 +12,7 @@ import { processFeedback } from "./curation/feedback";
 import { rebuildAffinities } from "./context/affinity";
 import { captureContext as captureContextSnapshot, getLatestSnapshotId } from "./context/capture";
 import { generateAndSendSummary } from "./email/summary";
+import { getAuthHealth, runAuthHealthCheck, AUTHORIZED_AT_KEY } from "./auth/auth-health";
 import { startSession } from "./curation/agent";
 import { rebuildTasteModel } from "./taste/model";
 import { runDiscoveryAgent } from "./discovery/agent";
@@ -625,6 +626,16 @@ const defaultHandler: ExportedHandler<Env> = {
               message: "Got it — queued, try again later if you don't see it surface.",
             });
           }
+        }
+
+        case "/debug/auth-health": {
+          const health = await getAuthHealth(env.KV);
+          const authorizedAt = await env.KV.get(AUTHORIZED_AT_KEY);
+          return Response.json({
+            ...health,
+            authorized_at: authorizedAt ? new Date(parseInt(authorizedAt, 10)).toISOString() : null,
+            source: "local_state",
+          });
         }
 
         case "/debug/recent-observations": {
@@ -1641,6 +1652,8 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
           for (const row of poolStats.results) pool[row.status] = row.cnt;
 
           // ── Taste model health ──
+          const authHealth = await getAuthHealth(env.KV);
+          const authorizedAtRaw = await env.KV.get(AUTHORIZED_AT_KEY);
           const tasteHealth = await env.DB.prepare(`
             SELECT COUNT(*) as tracks_scored,
                    MAX(refreshed_at) as last_rebuilt
@@ -1668,6 +1681,12 @@ document.querySelectorAll('#t th').forEach((th,col)=>{
               today: { played: freshToday?.played ?? 0, completed: freshToday?.completed ?? 0, skipped: freshToday?.skipped ?? 0 },
               week: { played: freshWeek?.played ?? 0, completed: freshWeek?.completed ?? 0, skipped: freshWeek?.skipped ?? 0 },
               pool: { fresh: pool.fresh ?? 0, queued: pool.queued ?? 0, played: pool.played ?? 0, liked: pool.liked ?? 0, skipped: pool.skipped ?? 0 },
+            },
+            spotify_auth: {
+              status: authHealth.status,
+              authorized_at: authorizedAtRaw ? new Date(parseInt(authorizedAtRaw, 10)).toISOString() : null,
+              days_until_expiry: authHealth.daysUntilExpiry,
+              source: "local_state",
             },
             tasteModel: {
               tracksScored: tasteHealth?.tracks_scored ?? 0,
@@ -2669,6 +2688,14 @@ export default {
     if (cron === "0 0 * * *") {
       // Midnight UTC (8pm ET): send nightly listening summary
       await generateAndSendSummary(env.DB, env.RESEND_API_KEY, env.NOTIFICATION_EMAIL);
+
+      // Auth health: warn before the 6-month refresh-token cliff, or if it already broke.
+      // Isolated so a failure here can never block (or be blocked by) the summary.
+      try {
+        await runAuthHealthCheck(env);
+      } catch (err) {
+        console.error(`AUTH_HEALTH_CHECK_ERROR ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
   },

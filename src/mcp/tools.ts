@@ -9,6 +9,7 @@ import { getTopFresh } from "../discovery/pool";
 import { getTimeMachine, getLostFavorites, getLostFavoritesCount, getSkipPenalizedTracks, getArtistAffinity, getOnThisDay, getDateRange } from "../listening/queries";
 import { generateQueue } from "../listening/queue";
 import { isSkip } from "../listening/helpers";
+import { getAuthHealth, AUTHORIZED_AT_KEY } from "../auth/auth-health";
 import { ensureAnalysisPending } from "../lyrics_analysis/pending";
 import { cosineSimilarity } from "../lyrics_analysis/cosine";
 import { embedQuery } from "../lyrics_analysis/voyage";
@@ -514,7 +515,15 @@ export async function callTool(
       const abandoned = totals?.abandoned ?? 0;
       // Skip rate excludes abandoned from both numerator and denominator
       const ratedPlays = total - abandoned;
+      const authHealth = await getAuthHealth(env.KV);
+      const authorizedAtRaw = await env.KV.get(AUTHORIZED_AT_KEY);
       return {
+        spotify_auth: {
+          status: authHealth.status,
+          authorized_at: authorizedAtRaw ? new Date(parseInt(authorizedAtRaw, 10)).toISOString() : null,
+          days_until_expiry: authHealth.daysUntilExpiry,
+          source: "local_state",
+        },
         period,
         totalPlays: total,
         completed,
