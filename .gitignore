@@ -14,3 +14,8 @@ stack/**/.env
 repo_audit_report.txt
 repo_audit_v2.txt
 repo_audit_*.txt
+
+# Personal taste data from the lyric experiment (keep local; previously committed by mistake)
+scripts/experiment/blind-ratings.csv
+scripts/experiment/candidates.json
+stack/lyrics-analysis/blind-ratings.csv
