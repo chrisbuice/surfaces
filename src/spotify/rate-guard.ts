@@ -12,6 +12,7 @@
 
 const COOLDOWN_KEY = "spotify:cooldown_until";
 const DISABLED_KEY = "spotify:disabled";
+export const AUTH_BROKEN_KEY = "spotify:auth_broken";
 
 // ── Exception types ──
 
@@ -29,6 +30,22 @@ export class SpotifyDisabledError extends Error {
   constructor() {
     super("Spotify API disabled via kill-switch (spotify:disabled)");
     this.name = "SpotifyDisabledError";
+  }
+}
+
+/**
+ * Refresh token is dead (invalid_grant / invalid_client). Nothing will work until
+ * Chris re-authorizes at /auth/login. Subclasses SpotifyDisabledError on purpose:
+ * every existing catch site already treats that as "skip quietly", so callers
+ * (including handlePoll) stop recording fake observations without any edits.
+ */
+export class SpotifyAuthError extends SpotifyDisabledError {
+  reason: string;
+  constructor(reason: string) {
+    super();
+    this.name = "SpotifyAuthError";
+    this.message = `Spotify authorization is broken (${reason}). Re-login at /auth/login.`;
+    this.reason = reason;
   }
 }
 
@@ -52,6 +69,18 @@ export async function assertSpotifyAllowed(kv: KVNamespace): Promise<void> {
   const disabled = await kv.get(DISABLED_KEY);
   if (disabled) {
     throw new SpotifyDisabledError();
+  }
+
+  // Auth broken — refresh token rejected; no HTTP call can succeed until re-login
+  const authBroken = await kv.get(AUTH_BROKEN_KEY);
+  if (authBroken) {
+    let reason = "unknown";
+    try {
+      reason = (JSON.parse(authBroken) as { reason?: string }).reason ?? reason;
+    } catch {
+      // malformed flag — still treat as broken
+    }
+    throw new SpotifyAuthError(reason);
   }
 
   // Cooldown — set by 429 responses

@@ -5,8 +5,7 @@
  * via Resend (free transactional email API).
  */
 
-const RESEND_API = "https://api.resend.com/emails";
-const FROM_EMAIL = "Surfaces <spotify-agent@amberglow.ai>";
+import { sendEmail } from "./send";
 
 interface DailySummary {
   totalTracks: number;
@@ -54,24 +53,8 @@ export async function generateAndSendSummary(
   const subject = `🎵 ${subjectParts.join(" · ")} — ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "America/New_York" })}`;
 
   try {
-    const resp = await fetch(RESEND_API, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: FROM_EMAIL,
-        to: [toEmail],
-        subject,
-        html,
-      }),
-    });
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      return { sent: false, error: `Resend API error: ${resp.status} ${text}` };
-    }
+    const result = await sendEmail(resendApiKey, toEmail, subject, html);
+    if (!result.sent) return result;
 
     // Mark today's submissions as notified now that the digest landed.
     if (summary.submissions.length > 0) {

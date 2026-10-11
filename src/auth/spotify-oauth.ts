@@ -8,7 +8,13 @@
  */
 
 import { saveTokens } from "./tokens";
-import { setSpotifyCooldown, setSpotifyKillSwitch, SpotifyCooldownError } from "../spotify/rate-guard";
+import {
+  setSpotifyCooldown,
+  setSpotifyKillSwitch,
+  SpotifyCooldownError,
+  SpotifyAuthError,
+} from "../spotify/rate-guard";
+import { markAuthorized, markAuthBroken } from "./auth-health";
 
 const SCOPES = [
   "user-read-private",
@@ -110,6 +116,8 @@ export async function handleCallback(request: Request, env: Env): Promise<Respon
     refreshToken: data.refresh_token,
     expiresAt: Math.floor(Date.now() / 1000) + data.expires_in,
   });
+  // A real login: start the 180-day clock and clear any broken flag.
+  await markAuthorized(env.KV);
 
   return new Response(
     "Spotify auth complete! Tokens saved. You can close this tab.",
@@ -148,6 +156,19 @@ export async function refreshAccessToken(env: Env, refreshToken: string): Promis
   if (!resp.ok) {
     const text = await resp.text();
     console.error(`TOKEN_REFRESH_ERROR status=${resp.status} body=${text}`);
+    if (resp.status === 400) {
+      // Only these two mean "re-login required". Anything else 4xx/5xx stays a plain error.
+      let code = "";
+      try {
+        code = (JSON.parse(text) as { error?: string }).error ?? "";
+      } catch {
+        // non-JSON body — not classifiable
+      }
+      if (code === "invalid_grant" || code === "invalid_client") {
+        await markAuthBroken(env.KV, code);
+        throw new SpotifyAuthError(code);
+      }
+    }
     throw new Error(`Token refresh failed (${resp.status}): ${text}`);
   }
 
