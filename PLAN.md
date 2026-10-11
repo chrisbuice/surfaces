@@ -731,3 +731,101 @@ Existing regression checks in `CLAUDE.md` (260,331 plays, top artist, 633 lost f
 ## Risks
 - Spotify's exact `invalid_grant` response shape for an expired token comes from their blog post, not a live test. The classifier keys on the documented `error` field, and the unit tests use that shape.
 - If Resend is down or `NOTIFICATION_EMAIL` is unset, alerts fail quietly. Mitigation: log the failure, show status on the dashboard and `/debug/auth-health`, and use the calendar reminder.
+
+---
+
+# Descope grimmauldplace (Oct 2026)
+
+## Why
+
+Chris is dropping the grimmauldplace home server. Surfaces has to run on
+Cloudflare (Workers + D1) alone, with Chris's Mac or a Claude session
+used only for one-off jobs. Nothing may depend on a box that is always on
+at home.
+
+## What depends on grimmauldplace today
+
+| Dependent | What it does | Status today |
+|---|---|---|
+| Apple Music ingest (`scripts/ingest-apple-music.ts`) | One-shot load of ~20.5K Apple plays into `plays` | Built, never run. Needs `CF_API_TOKEN` + Spotify client creds, which only exist on the server |
+| Apple match retry (`scripts/retry-apple-matches.ts`) | Monthly re-match of `unmatched`/`review` rows, ISRC via MusicBrainz | Built, never scheduled |
+| Lyrics pending queue (`src/lyrics_analysis/pending.ts`) | MCP tools mark tracks `pending`; a server cron analyzes them every ~10 min | Without the server, rows stay `pending` forever |
+| Lyrics bulk backfill / analysis (`stack/lyrics-backfill`, `stack/lyrics-analysis`) | One-time bulk lyrics, credits, ISRC, embeddings | Containers built; bulk-run status unknown |
+| Token broker (`src/index.ts` ~line 248) | Hands Spotify tokens to server containers | Dead once the server is gone |
+| Offload plan steps 1–3 (D1 backups, ETL, constellation) | Not started | Cancel |
+| Outside the repo: Cloudflare Tunnel `grimmauld`, Uptime Kuma at `dobby.chrisbuice.com` | Monitoring | Chris's call; not code |
+
+## Plan
+
+### A. Apple Music ingest — no server, no new secrets (do first)
+
+Split "load the plays" from "match them to Spotify". The chart only needs
+`source`, `year`, `month`; matching can come later and slowly.
+
+1. **Generate the load as a SQL file** from the export (in a Claude session
+   or on the Mac). Reuses the existing parser: Option B filter, Daily
+   Tracks track-ID recovery, Library Tracks artist recovery. Every row is
+   inserted with `source='apple'`, `match_status='unmatched'`,
+   `spotify_track_uri=''`, and `original_*` populated. Plus one
+   `apple_track_matches` row per unique track (8,670) as the matching queue.
+   - Add an `--emit-sql=<path>` mode to `ingest-apple-music.ts` that
+     replaces D1 HTTP writes and Spotify calls. Matching flags still
+     work when credentials *are* present.
+2. **Apply it from the Mac** with the wrangler login Chris already has:
+   `npx wrangler d1 execute spotify-agent-db --remote --file=apple-plays.sql`.
+   No `CF_API_TOKEN` to mint, nothing to copy off the server.
+   Precheck that migrations 015/016 are applied:
+   `npx wrangler d1 execute spotify-agent-db --remote --command "SELECT name FROM pragma_table_info('plays') WHERE name='source'"`.
+3. **Undo** if it goes wrong: `DELETE FROM plays WHERE source='apple'; DELETE FROM apple_track_matches;`
+   (same thing `--force` does today).
+
+### B. Apple matching moves into the Worker (replaces the monthly retry job)
+
+A new cron branch on the existing `0 5 * * *` daily run (or hourly if
+throughput is too low) processes a small batch of `apple_track_matches`
+rows: iTunes Lookup → MusicBrainz ISRC (1 req/s, 30s timeouts) → Spotify
+ISRC search → text fallback. Uses the Worker's existing Spotify client and
+rate-guard, not a second HTTP layer. Updates `apple_track_matches` and the
+matching `plays` rows. Batch size bounded by Worker CPU/subrequest limits
+(~40 tracks/run → ~8,670 tracks in ~7–8 weeks daily, ~9 days hourly).
+`scripts/retry-apple-matches.ts` is deleted.
+
+### C. Lyrics pending queue
+
+Option 1 (recommended): a Worker cron (every 10 min) processes a few
+`pending` rows using the same steps the container ran (LRCLIB → analysis →
+Voyage embed). Per-track work is small enough for a Worker.
+Option 2: freeze — stop calling `ensureAnalysisPending`, and have the MCP
+tools say "not analyzed" instead of queueing.
+Bulk backfill containers are retired either way; anything unbacked-filled
+gets picked up lazily by Option 1.
+
+### D. Cleanup
+
+- Remove the token broker route and its secret checks.
+- Delete `stack/` and the `@deprecated` laptop scripts once B and C land.
+- Mark Offload plan steps 1–3 cancelled in `PROJECT_STATUS.md`; update
+  `decisions_apple_music_ingest.md` D14/D15 and Phase 5.
+- **D1 backups** (was Offload step 1): use D1 Time Travel (built in,
+  30-day point-in-time restore on paid Workers) instead of a server job.
+
+## Tests (required by CLAUDE.md)
+
+- `--emit-sql`: given fixture CSVs, emitted SQL inserts the expected row
+  count with `source='apple'` and escapes quotes in song titles.
+- Worker matcher: batch picks only `unmatched`/`review` rows, respects the
+  batch cap, writes confidence/status, updates linked `plays` rows.
+- Lyrics cron (if Option 1): processes at most N rows, marks failures
+  with incremented `attempts`.
+
+## Order
+
+A (unblocks the chart today) → merge `feat/apple-music-ribbon` in both
+repos → B → C → D.
+
+## Decisions needed from Chris
+
+1. OK to load Apple plays **unmatched first** (chart and top-artists use
+   Apple's own artist spelling until matching catches up)?
+2. Lyrics queue: Option 1 (Worker cron) or Option 2 (freeze)?
+3. Matching cadence: daily (slow, ~2 months) or hourly (~9 days)?
