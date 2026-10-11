@@ -16,16 +16,14 @@ import {
 } from "../spotify/rate-guard";
 import { markAuthorized, markAuthBroken } from "./auth-health";
 
-const SCOPES = [
+export const SCOPES = [
   "user-read-private",
-  "user-read-email",
   "user-read-playback-state",
   "user-modify-playback-state",
   "user-read-currently-playing",
   "user-read-recently-played",
   "user-top-read",
   "user-library-read",
-  "user-library-modify",
   "user-follow-read",
   "playlist-read-private",
   "playlist-read-collaborative",

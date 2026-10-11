@@ -218,3 +218,16 @@ describe("runAuthHealthCheck", () => {
     expect(body.subject).toContain("lost its Spotify authorization");
   });
 });
+
+describe("OAuth scopes", () => {
+  it("does not request unused scopes (least privilege)", async () => {
+    const { SCOPES } = await import("../../src/auth/spotify-oauth");
+    const list = SCOPES.split(" ");
+    expect(list).not.toContain("user-read-email");
+    expect(list).not.toContain("user-library-modify");
+    // scopes the code does rely on
+    for (const s of ["user-read-recently-played", "user-modify-playback-state", "playlist-modify-private", "user-library-read", "user-follow-read"]) {
+      expect(list).toContain(s);
+    }
+  });
+});
