@@ -731,3 +731,38 @@ Existing regression checks in `CLAUDE.md` (260,331 plays, top artist, 633 lost f
 ## Risks
 - Spotify's exact `invalid_grant` response shape for an expired token comes from their blog post, not a live test. The classifier keys on the documented `error` field, and the unit tests use that shape.
 - If Resend is down or `NOTIFICATION_EMAIL` is unset, alerts fail quietly. Mitigation: log the failure, show status on the dashboard and `/debug/auth-health`, and use the calendar reminder.
+
+# CI and Build Repair Plan (Oct 2026)
+
+**Status: PLAN ONLY. No code changes until Chris says "go".**
+
+## Problem
+`CI` (GitHub Actions) and `Workers Builds` have been red on `main` since May 2026. Cause: five JSON files imported at build time live in `src/listening/data/` and are gitignored (`data/` rule), so a clean checkout fails `tsc`, and 9 test files fail to load (`Cannot find module './data/reflections.json'`). Consequences: no green signal on any PR, and push-to-main does **not** deploy. Production only changes via manual `npx wrangler deploy` from a machine that has the files.
+
+Files imported: `never_stale_core.json`, `reflections.json`, `companions.json` (verify the full list in step 1).
+
+## Hard constraint
+Do NOT let Workers Builds deploy stub data to production. A green auto-deploy built from empty stubs would silently replace the real reflections/companions with nothing. Any fix must keep "stub data" away from the deploy path.
+
+## Options
+| Option | CI green | Auto-deploy safe | Effort | Notes |
+|---|---|---|---|---|
+| A. CI-only stubs + keep deploys manual | Yes | Yes (auto-deploy stays off) | Small | Stub generator runs only in the GitHub Action. Disable the Workers Builds trigger in the CF dashboard so `main` stops showing a red build. |
+| B. Commit the real JSON | Yes | Yes | Tiny | Exposes taste data (reflections = representative tracks, companions = co-listening graph) in a public repo. Same concern as PR #2. Only OK if the repo goes private. |
+| C. Load at runtime from D1/KV/R2 | Yes | Yes | Large | Right long-term design (data out of the bundle, auto-deploy works anywhere), but touches queue/queries/dashboard. Separate plan. |
+
+## Recommendation
+**A now, C later.**
+
+1. Inventory every gitignored import in `src/` (grep `./data/`), record exact shapes from the TypeScript usage.
+2. Add `scripts/stub-listening-data.mjs`: for each missing file, write a minimal valid JSON of the right shape. Never overwrite an existing file.
+3. Run it only in `.github/workflows/ci.yml` before `tsc`/`vitest` (not in `package.json` build/predeploy scripts).
+4. Make the type-check step blocking again if it is clean once stubs exist (currently `continue-on-error`).
+5. Quarantine tests that assert real-data regressions (`music_only == 260_331`, top artist, `lost_favorites == 633`): they need the real dataset. Mark them to skip when the file is a stub, and keep running them locally. Per CLAUDE.md they must always pass where the data exists; this does not weaken that.
+6. Chris: disable the Workers Builds Git trigger in the Cloudflare dashboard (Workers > spotify-agent > Settings > Builds) or leave it red; document `npx wrangler deploy` as the deploy path in README (the README deploy section is currently wrong).
+7. Verify: CI green on a PR; local full suite unchanged with real data; `git grep` shows no stub file committed.
+
+## Decisions for Chris
+- D1. Option A (recommended) vs B (needs private repo).
+- D2. Disable the Workers Builds trigger (recommended) vs leave red.
+- D3. Make `tsc` blocking in CI once green (recommended yes).
