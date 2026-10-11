@@ -13,7 +13,18 @@
 
 export interface ListeningByMonthResult {
   generated_at: string;
-  months: Array<{ month: string; plays: number }>;
+  /**
+   * `plays` is the all-source total and stays for backward compatibility
+   * (older Ribbon builds read only this field). `plays_spotify` and
+   * `plays_other` split it by source — "other" is every non-Spotify
+   * source (Apple Music today), per decisions_apple_music_ingest.md D9.
+   */
+  months: Array<{
+    month: string;
+    plays: number;
+    plays_spotify: number;
+    plays_other: number;
+  }>;
 }
 
 export interface TopArtistEntry {
@@ -39,26 +50,33 @@ export const KV_TTL_SECONDS = 26 * 60 * 60; // 26 hours, same as constellation
 // ── Builders ──
 
 /**
- * Aggregate play counts per calendar month across the full history.
+ * Aggregate play counts per calendar month across the full history,
+ * split into Spotify vs. every other source.
  * Returns ~180 rows (Dec 2011 → present).
  */
 export async function buildListeningByMonth(
   db: D1Database,
 ): Promise<ListeningByMonthResult> {
   const sql = `
-    SELECT year, month, COUNT(*) as plays
+    SELECT
+      year,
+      month,
+      COUNT(*) as plays,
+      SUM(CASE WHEN source = 'spotify' THEN 1 ELSE 0 END) as plays_spotify
     FROM plays
     GROUP BY year, month
     ORDER BY year, month
   `;
   const rows = await db.prepare(sql)
-    .all<{ year: number; month: number; plays: number }>();
+    .all<{ year: number; month: number; plays: number; plays_spotify: number }>();
 
   return {
     generated_at: new Date().toISOString(),
     months: rows.results.map((r) => ({
       month: `${r.year}-${String(r.month).padStart(2, "0")}`,
       plays: r.plays,
+      plays_spotify: r.plays_spotify,
+      plays_other: r.plays - r.plays_spotify,
     })),
   };
 }
