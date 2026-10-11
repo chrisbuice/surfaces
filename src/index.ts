@@ -12,6 +12,7 @@ import { processFeedback } from "./curation/feedback";
 import { rebuildAffinities } from "./context/affinity";
 import { captureContext as captureContextSnapshot, getLatestSnapshotId } from "./context/capture";
 import { generateAndSendSummary } from "./email/summary";
+import { runHeartbeatCheck, LAST_OK_KEY } from "./spotify/heartbeat";
 import { getAuthHealth, runAuthHealthCheck, AUTHORIZED_AT_KEY } from "./auth/auth-health";
 import { startSession } from "./curation/agent";
 import { rebuildTasteModel } from "./taste/model";
@@ -631,8 +632,10 @@ const defaultHandler: ExportedHandler<Env> = {
         case "/debug/auth-health": {
           const health = await getAuthHealth(env.KV);
           const authorizedAt = await env.KV.get(AUTHORIZED_AT_KEY);
+          const lastOk = await env.KV.get(LAST_OK_KEY);
           return Response.json({
             ...health,
+            last_ok_at: lastOk ? new Date(parseInt(lastOk, 10)).toISOString() : null,
             authorized_at: authorizedAt ? new Date(parseInt(authorizedAt, 10)).toISOString() : null,
             source: "local_state",
           });
@@ -2695,6 +2698,11 @@ export default {
         await runAuthHealthCheck(env);
       } catch (err) {
         console.error(`AUTH_HEALTH_CHECK_ERROR ${err instanceof Error ? err.message : String(err)}`);
+      }
+      try {
+        await runHeartbeatCheck(env);
+      } catch (err) {
+        console.error(`HEARTBEAT_CHECK_ERROR ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 

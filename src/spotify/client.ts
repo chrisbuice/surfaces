@@ -17,6 +17,7 @@ import {
   SpotifyCooldownError,
   SpotifyServerError,
 } from "./rate-guard";
+import { recordSpotifySuccess } from "./heartbeat";
 
 const SPOTIFY_BASE = "https://api.spotify.com";
 const MAX_RETRIES = 3;
@@ -146,6 +147,7 @@ export class SpotifyClient {
       }
 
       if (resp.status === 204) {
+        await recordSpotifySuccess(this.env.KV);
         return undefined as T;
       }
 
@@ -153,6 +155,8 @@ export class SpotifyClient {
         const text = await resp.text();
         throw new Error(`Spotify API ${method} ${path} failed (${resp.status}): ${text}`);
       }
+
+      await recordSpotifySuccess(this.env.KV);
 
       const contentType = resp.headers.get("content-type") ?? "";
       if (!contentType.includes("application/json")) {
