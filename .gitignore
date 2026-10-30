@@ -5,9 +5,13 @@ dist/
 *.log
 .DS_Store
 data/
+.claude/settings.local.json
 
 # Lyric analysis experiment (personal taste data, keep local)
 docs/experiments/lyric-analysis-2026-05/
+# Loved-line and cover-detection experiments: full song lyrics + taste data (keep local)
+docs/experiments/loved-line-2026-05/
+docs/experiments/cover-detection-2026-05/
 
 # Stack container secrets (live only on grimmauldplace)
 stack/**/.env
