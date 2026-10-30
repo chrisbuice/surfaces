@@ -15,6 +15,27 @@ import {
 import { getPlaylistTracksViaEmbed } from "../spotify/embed";
 import { syncSeasonalPlaylists } from "./seasonal";
 import { computeTasteScore, computeArtistTasteScore } from "./score";
+import { artistNamesFromPoll, parseArtistIds } from "../tracker/artists";
+
+/**
+ * Upsert for artist_taste. An empty incoming name never overwrites a stored
+ * one: artists only seen via a track (not in top/followed lists) used to have
+ * their name wiped to "" on every rebuild, which blanked them in the email.
+ */
+export const ARTIST_TASTE_UPSERT_SQL = `
+        INSERT INTO artist_taste (artist_id, artist_name, in_top_artists_short, in_top_artists_medium, in_top_artists_long, is_followed, total_plays, unique_tracks_played, taste_score, refreshed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(artist_id) DO UPDATE SET
+          artist_name = CASE WHEN excluded.artist_name != '' THEN excluded.artist_name ELSE artist_taste.artist_name END,
+          in_top_artists_short = excluded.in_top_artists_short,
+          in_top_artists_medium = excluded.in_top_artists_medium,
+          in_top_artists_long = excluded.in_top_artists_long,
+          is_followed = excluded.is_followed,
+          total_plays = excluded.total_plays,
+          unique_tracks_played = excluded.unique_tracks_played,
+          taste_score = excluded.taste_score,
+          refreshed_at = excluded.refreshed_at
+      `;
 
 interface TrackAccumulator {
   track_name: string;
@@ -70,8 +91,13 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient, 
 
   // ── Build track accumulators ──
   const tracks = new Map<string, TrackAccumulator>();
+  // Artist names seen on track objects, so track-only artists get a real name.
+  const artistNameHints = new Map<string, string>();
 
   function ensureTrack(t: SpotifyTrack): TrackAccumulator {
+    for (const a of t.artists) {
+      if (a.id && a.name && !artistNameHints.has(a.id)) artistNameHints.set(a.id, a.name);
+    }
     let acc = tracks.get(t.id);
     if (!acc) {
       acc = {
@@ -136,17 +162,20 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient, 
 
   // ── Add tracks from play history (so every played track gets a score) ──
   const playedTracks = await db.prepare(`
-    SELECT DISTINCT pe.track_id, po.track_name, po.artist_ids, po.album_id
+    SELECT DISTINCT pe.track_id, po.track_name, po.artist_ids, po.album_id,
+           MAX(po.artist_name) as artist_name
     FROM play_events pe
     LEFT JOIN poll_observations po ON po.track_id = pe.track_id
     WHERE po.track_name IS NOT NULL
     GROUP BY pe.track_id
-  `).all<{ track_id: string; track_name: string; artist_ids: string; album_id: string | null }>();
+  `).all<{ track_id: string; track_name: string; artist_ids: string; album_id: string | null; artist_name: string | null }>();
 
   for (const row of playedTracks.results) {
+    for (const [id, name] of artistNamesFromPoll(row.artist_ids, row.artist_name)) {
+      if (!artistNameHints.has(id)) artistNameHints.set(id, name);
+    }
     if (!tracks.has(row.track_id)) {
-      let artistIds: string[] = [];
-      try { artistIds = JSON.parse(row.artist_ids); } catch { /* skip */ }
+      const artistIds = parseArtistIds(row.artist_ids);
       tracks.set(row.track_id, {
         track_name: row.track_name,
         artist_ids: artistIds,
@@ -190,7 +219,7 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient, 
     for (const artistId of acc.artist_ids) {
       if (!artists.has(artistId)) {
         artists.set(artistId, {
-          artist_name: "",
+          artist_name: artistNameHints.get(artistId) ?? "",
           in_top_artists_short: false,
           in_top_artists_medium: false,
           in_top_artists_long: false,
@@ -260,20 +289,7 @@ export async function rebuildTasteModel(db: D1Database, spotify: SpotifyClient, 
     });
 
     artistBatch.push(
-      db.prepare(`
-        INSERT INTO artist_taste (artist_id, artist_name, in_top_artists_short, in_top_artists_medium, in_top_artists_long, is_followed, total_plays, unique_tracks_played, taste_score, refreshed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(artist_id) DO UPDATE SET
-          artist_name = excluded.artist_name,
-          in_top_artists_short = excluded.in_top_artists_short,
-          in_top_artists_medium = excluded.in_top_artists_medium,
-          in_top_artists_long = excluded.in_top_artists_long,
-          is_followed = excluded.is_followed,
-          total_plays = excluded.total_plays,
-          unique_tracks_played = excluded.unique_tracks_played,
-          taste_score = excluded.taste_score,
-          refreshed_at = excluded.refreshed_at
-      `).bind(
+      db.prepare(ARTIST_TASTE_UPSERT_SQL).bind(
         artistId, acc.artist_name,
         acc.in_top_artists_short ? 1 : 0,
         acc.in_top_artists_medium ? 1 : 0,

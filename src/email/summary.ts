@@ -6,18 +6,27 @@
  */
 
 import { sendEmail } from "./send";
+import { artistNamesFromPoll, parseArtistIds } from "../tracker/artists";
 
-interface DailySummary {
+const USER_TZ = "America/New_York";
+
+export interface DailySummary {
+  /** Window covered by the summary (rolling 24h ending at send time), epoch ms. */
+  windowStartMs: number;
+  windowEndMs: number;
   totalTracks: number;
   totalMinutes: number;
   completed: number;
+  /** Always 0 for live-tracked plays: Spotify's API can't tell a skip from a pause (see tracker/derive.ts). */
   skipped: number;
   abandoned: number;
-  skipRate: number;
+  replayed: number;
+  /** abandoned / totalTracks, as a whole percentage. Mixes skips with pauses that never resumed. */
+  abandonRate: number;
   topTracks: Array<{ name: string; count: number }>;
   topArtists: Array<{ name: string; count: number }>;
   freshTracksPlayed: number;
-  freshTracksSkipped: number;
+  freshTracksAbandoned: number;
   freshTracksCompleted: number;
   contextBreakdown: {
     weather: Record<string, number>;
@@ -50,7 +59,7 @@ export async function generateAndSendSummary(
   if (summary.submissions.length > 0) {
     subjectParts.push(`${summary.submissions.length} new ${summary.submissions.length === 1 ? "submission" : "submissions"}`);
   }
-  const subject = `🎵 ${subjectParts.join(" · ")} — ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "America/New_York" })}`;
+  const subject = `🎵 ${subjectParts.join(" · ")} — 24h to ${formatEt(summary.windowEndMs)}`;
 
   try {
     const result = await sendEmail(resendApiKey, toEmail, subject, html);
@@ -68,14 +77,19 @@ export async function generateAndSendSummary(
   }
 }
 
-async function buildSummary(db: D1Database): Promise<DailySummary> {
-  const since = Math.floor(Date.now() / 1000) - 24 * 3600;
+export async function buildSummary(db: D1Database, nowMs: number = Date.now()): Promise<DailySummary> {
+  const since = Math.floor(nowMs / 1000) - 24 * 3600;
 
-  // Play events from last 24 hours
+  // Play events from last 24 hours. Artist IDs and names come from the
+  // poller's own observations so tracks first heard today still count —
+  // track_taste is only rebuilt once a day (1am ET). MAX() prefers
+  // observations that recorded artist data over older rows that didn't.
   const events = await db.prepare(`
     SELECT pe.track_id, pe.classification, pe.duration_listened_ms, pe.device_type,
            COALESCE(tt.track_name, po.track_name) as track_name,
-           tt.primary_artist_id
+           tt.primary_artist_id,
+           MAX(po.artist_ids) as poll_artist_ids,
+           MAX(po.artist_name) as poll_artist_name
     FROM play_events pe
     LEFT JOIN track_taste tt ON tt.track_id = pe.track_id
     LEFT JOIN poll_observations po ON po.track_id = pe.track_id
@@ -85,6 +99,7 @@ async function buildSummary(db: D1Database): Promise<DailySummary> {
   `).bind(since).all<{
     track_id: string; classification: string; duration_listened_ms: number;
     device_type: string | null; track_name: string | null; primary_artist_id: string | null;
+    poll_artist_ids: string | null; poll_artist_name: string | null;
   }>();
 
   const rows = events.results;
@@ -93,9 +108,8 @@ async function buildSummary(db: D1Database): Promise<DailySummary> {
   const completed = rows.filter(r => r.classification === "completed").length;
   const skipped = rows.filter(r => r.classification === "skipped").length;
   const abandoned = rows.filter(r => r.classification === "abandoned").length;
-  // Skip rate excludes abandoned from both numerator and denominator
-  const ratedTracks = totalTracks - abandoned;
-  const skipRate = ratedTracks > 0 ? Math.round(skipped / ratedTracks * 100) : 0;
+  const replayed = rows.filter(r => r.classification === "replayed").length;
+  const abandonRate = totalTracks > 0 ? Math.round(abandoned / totalTracks * 100) : 0;
 
   // Top tracks by play count
   const trackCounts = new Map<string, { name: string; count: number }>();
@@ -107,19 +121,29 @@ async function buildSummary(db: D1Database): Promise<DailySummary> {
   }
   const topTracks = [...trackCounts.values()].sort((a, b) => b.count - a.count).slice(0, 5);
 
-  // Top artists
-  const artistIds = [...new Set(rows.map(r => r.primary_artist_id).filter(Boolean))];
+  // Top artists, counted by primary artist ID (never by name).
+  // Name priority: artist_taste (Spotify's canonical name) → name recovered
+  // from the poll → the track's full artist credit. Never blank, never a raw ID.
   const artistCounts = new Map<string, { name: string; count: number }>();
+  const pollNames = new Map<string, string>();
   for (const r of rows) {
-    if (!r.primary_artist_id) continue;
-    const entry = artistCounts.get(r.primary_artist_id) ?? { name: r.primary_artist_id, count: 0 };
+    const artistId = parseArtistIds(r.poll_artist_ids)[0] || r.primary_artist_id || null;
+    if (!artistId) continue;
+    for (const [id, name] of artistNamesFromPoll(r.poll_artist_ids, r.poll_artist_name)) {
+      if (!pollNames.has(id)) pollNames.set(id, name);
+    }
+    const fallbackName = r.poll_artist_name?.trim() || "Unknown artist";
+    const entry = artistCounts.get(artistId) ?? { name: fallbackName, count: 0 };
     entry.count++;
-    artistCounts.set(r.primary_artist_id, entry);
+    artistCounts.set(artistId, entry);
   }
-  // Resolve artist names
-  if (artistIds.length > 0) {
+  for (const [id, name] of pollNames) {
+    const entry = artistCounts.get(id);
+    if (entry) entry.name = name;
+  }
+  if (artistCounts.size > 0) {
     const artistNames = await db.prepare(
-      "SELECT artist_id, artist_name FROM artist_taste"
+      "SELECT artist_id, artist_name FROM artist_taste WHERE artist_name != ''"
     ).all<{ artist_id: string; artist_name: string }>();
     for (const an of artistNames.results) {
       const entry = artistCounts.get(an.artist_id);
@@ -139,7 +163,7 @@ async function buildSummary(db: D1Database): Promise<DailySummary> {
   `).bind(since).all<{ source: string; classification: string }>();
   const freshTracksPlayed = freshEvents.results.length;
   const freshTracksCompleted = freshEvents.results.filter(r => r.classification === "completed").length;
-  const freshTracksSkipped = freshEvents.results.filter(r => r.classification === "skipped").length;
+  const freshTracksAbandoned = freshEvents.results.filter(r => r.classification === "abandoned").length;
 
   // Context breakdown from snapshots linked to play events
   const contextRows = await db.prepare(`
@@ -172,9 +196,10 @@ async function buildSummary(db: D1Database): Promise<DailySummary> {
   ).bind(since).first<{ count: number }>();
 
   return {
-    totalTracks, totalMinutes, completed, skipped, abandoned, skipRate,
+    windowStartMs: since * 1000, windowEndMs: nowMs,
+    totalTracks, totalMinutes, completed, skipped, abandoned, replayed, abandonRate,
     topTracks, topArtists,
-    freshTracksPlayed, freshTracksSkipped, freshTracksCompleted,
+    freshTracksPlayed, freshTracksAbandoned, freshTracksCompleted,
     contextBreakdown,
     modesSessions: sessions.results,
     newInPool: newPool?.count ?? 0,
@@ -198,17 +223,35 @@ async function loadNewSubmissions(db: D1Database): Promise<DailySummary["submiss
   }
 }
 
-function renderEmail(s: DailySummary): string {
+/** e.g. "Thu, Oct 29, 8 PM" in the user's timezone. */
+export function formatEt(ms: number): string {
+  return new Date(ms).toLocaleString("en-US", {
+    weekday: "short", month: "short", day: "numeric",
+    hour: "numeric", minute: new Date(ms).getUTCMinutes() === 0 ? undefined : "2-digit",
+    timeZone: USER_TZ,
+  });
+}
+
+export function renderEmail(s: DailySummary): string {
   const contextLine = (label: string, data: Record<string, number>) => {
     const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
     if (entries.length === 0) return "";
     return `<tr><td style="color:#666;padding:6px 0;font-size:14px;">${label}</td><td style="padding:6px 0;font-size:14px;color:#333;">${entries.map(([k, v]) => `${k} (${v})`).join(", ")}</td></tr>`;
   };
 
+  // Only list outcomes that happened; "skipped" is structurally 0 for live plays.
+  const outcomes = [
+    `${s.completed} completed`,
+    ...(s.skipped > 0 ? [`${s.skipped} skipped`] : []),
+    `${s.abandoned} abandoned`,
+    ...(s.replayed > 0 ? [`${s.replayed} replayed`] : []),
+  ];
+
   return `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:500px;margin:0 auto;background:#ffffff;color:#333;padding:28px;border-radius:12px;">
   <div style="margin-bottom:24px;">
     <span style="font-size:22px;font-weight:700;color:#191414;">Daily Listening Summary</span>
+    <div style="font-size:13px;color:#999;margin-top:4px;">${formatEt(s.windowStartMs)} – ${formatEt(s.windowEndMs)} ET</div>
   </div>
 
   <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
@@ -224,33 +267,34 @@ function renderEmail(s: DailySummary): string {
       </td>
       <td width="4"></td>
       <td width="33%" style="background:#f5f5f5;padding:16px 8px;border-radius:8px;text-align:center;">
-        <div style="font-size:32px;font-weight:700;color:${s.skipRate > 30 ? "#e74c3c" : "#1db954"};">${s.skipRate}%</div>
-        <div style="font-size:13px;color:#666;margin-top:4px;">skip rate</div>
+        <div style="font-size:32px;font-weight:700;color:#1db954;">${s.abandonRate}%</div>
+        <div style="font-size:13px;color:#666;margin-top:4px;">abandoned</div>
       </td>
     </tr>
   </table>
 
-  ${s.completed + s.skipped + s.abandoned > 0 ? `
+  ${s.totalTracks > 0 ? `
   <div style="margin-bottom:24px;font-size:14px;color:#666;">
-    ${s.completed} completed &middot; ${s.skipped} skipped &middot; ${s.abandoned} abandoned
+    ${outcomes.join(" &middot; ")}
+    <div style="font-size:12px;color:#999;margin-top:4px;">Abandoned = stopped before 80%. Spotify can't tell a skip from a pause, so this includes both.</div>
   </div>` : ""}
 
   ${s.topTracks.length > 0 ? `
   <div style="font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;border-bottom:2px solid #f0f0f0;padding-bottom:6px;">Most Played</div>
   <table style="width:100%;margin-bottom:24px;">
-    ${s.topTracks.map(t => `<tr><td style="padding:6px 0;font-size:15px;color:#333;">${t.name}</td><td style="padding:6px 0;font-size:15px;color:#1db954;text-align:right;font-weight:600;">${t.count}x</td></tr>`).join("")}
+    ${s.topTracks.map(t => `<tr><td style="padding:6px 0;font-size:15px;color:#333;">${escapeHtml(t.name)}</td><td style="padding:6px 0;font-size:15px;color:#1db954;text-align:right;font-weight:600;">${t.count}x</td></tr>`).join("")}
   </table>` : ""}
 
   ${s.topArtists.length > 0 ? `
   <div style="font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;border-bottom:2px solid #f0f0f0;padding-bottom:6px;">Top Artists</div>
   <table style="width:100%;margin-bottom:24px;">
-    ${s.topArtists.map(a => `<tr><td style="padding:6px 0;font-size:15px;color:#333;">${a.name}</td><td style="padding:6px 0;font-size:15px;color:#1db954;text-align:right;font-weight:600;">${a.count} plays</td></tr>`).join("")}
+    ${s.topArtists.map(a => `<tr><td style="padding:6px 0;font-size:15px;color:#333;">${escapeHtml(a.name)}</td><td style="padding:6px 0;font-size:15px;color:#1db954;text-align:right;font-weight:600;">${a.count} ${a.count === 1 ? "play" : "plays"}</td></tr>`).join("")}
   </table>` : ""}
 
   ${s.freshTracksPlayed > 0 ? `
   <div style="font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 10px;border-bottom:2px solid #f0f0f0;padding-bottom:6px;">Discovery</div>
   <div style="margin-bottom:24px;font-size:14px;color:#333;">
-    ${s.freshTracksPlayed} fresh tracks played &middot; ${s.freshTracksCompleted} completed &middot; ${s.freshTracksSkipped} skipped
+    ${s.freshTracksPlayed} fresh tracks played &middot; ${s.freshTracksCompleted} completed &middot; ${s.freshTracksAbandoned} abandoned
     ${s.newInPool > 0 ? `<br style="margin-top:4px;">${s.newInPool} new candidates added to pool` : ""}
   </div>` : s.newInPool > 0 ? `
   <div style="margin-bottom:24px;font-size:14px;color:#666;">

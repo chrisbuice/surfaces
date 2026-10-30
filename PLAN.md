@@ -661,6 +661,8 @@ Ideas spotted during discovery, not in scope for this plan:
 - **Binge detector** — alert when a single track crosses 30 plays in a week. The `binges` data has 20 historical examples.
 - **Year-in-review generator** — structured summary of any year: top tracks, new discoveries, total hours, skip rate, obsessions, reflections. Good Wrapped-style output.
 - **Never-stale core in startSession** — extend the 14-artist boost (already shipping in `generate_queue`) to the existing `startSession` curation agent's track selection.
+- **Store poll artist names as a JSON array** — `poll_observations.artist_name` joins names with ", ", so names containing a comma ("Tyler, The Creator") can't be matched to their artist ID (`src/tracker/artists.ts` gives up in that case). A sibling `artist_names` JSON column would make the mapping exact. Spotted while fixing blank artists in the nightly email (Oct 2026).
+- **Nightly email send time across DST** — the summary cron is `0 0 * * *` UTC, so it lands at 8 PM ET in summer and 7 PM ET after DST ends. The email now labels its actual window, but if 8 PM year-round matters, add a second cron and gate on ET hour.
 
 ---
 
