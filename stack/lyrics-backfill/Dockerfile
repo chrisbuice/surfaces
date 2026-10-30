@@ -8,6 +8,6 @@ COPY package.json package-lock.json ./
 RUN npm install --omit=dev
 
 COPY lib/ lib/
-COPY main.ts phase-isrc.ts phase-lyrics.ts phase-credits.ts ./
+COPY main.ts phase-isrc.ts phase-lyrics.ts phase-credits.ts phase-seed-pending.ts ./
 
 ENTRYPOINT ["tsx", "main.ts"]
